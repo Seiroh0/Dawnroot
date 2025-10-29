@@ -1,0 +1,19 @@
+[gd_scene load_steps=2 format=3 uid="uid://camxwt2kq5n8f"]
+
+[ext_resource type="Script" path="res://scripts/enemies/heavy_enemy.gd" id="1_heavy"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_1"]
+radius = 14.0
+height = 32.0
+
+[node name="HeavyEnemy" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 11
+script = ExtResource("1_heavy")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -16)
+shape = SubResource("CapsuleShape2D_1")
+
+[node name="AnimSprite" type="AnimatedSprite2D" parent="."]
+position = Vector2(0, -18)

@@ -1,0 +1,45 @@
+# Godot editor cache and temporary files
+.godot/
+.import/
+.export/
+.cache/
+
+# Build outputs
+bin/
+build/
+dist/
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# VS Code
+.vscode/
+
+# Logs and backups
+*.log
+*.tmp
+*.bak
+*.old
+*.swp
+
+# Compiled or generated files
+*.pyc
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Godot specific generated imports
+*.import
+*.translation
+*.md5
+
+# Project-specific settings (optional, wenn du sie nicht teilen willst)
+project_metadata.cfg
+editor_layout.cfg
+
+# Ignoriere Windows-reservierte Dateien
+/nul
