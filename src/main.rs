@@ -19,6 +19,7 @@ use constants::*;
 pub enum GameState {
     #[default]
     Title,
+    WellIntro,
     Playing,
     Paused,
     Shop,

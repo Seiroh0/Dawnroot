@@ -2,13 +2,13 @@
 
 A horizontal side-scrolling roguelike platformer built with **Bevy 0.15** (Rust).
 
-Explore procedurally generated rooms, fight enemies with melee attacks and spells, collect loot, and survive through floors of increasing difficulty.
+Descend through the ancient well into procedurally generated dungeon floors. Fight enemies with sword and spells, collect loot, buy upgrades, and survive through floors of increasing difficulty.
 
 ---
 
 ## Gameplay
 
-Run through rooms from left to right, clear enemies, collect gold, buy upgrades in shops, and defeat the boss at the end of each floor. Death means starting over -- roguelike style.
+Press SPACE on the title screen to watch your character approach the well and leap into the depths. Clear rooms from left to right, defeat enemies, gather gold, visit shops, and face the boss at the end of each floor. Death means starting over -- roguelike style.
 
 **Room Types:** Start, Combat, Treasure, Shop, Boss
 
@@ -32,57 +32,47 @@ Run through rooms from left to right, clear enemies, collect gold, buy upgrades 
 
 ## Features
 
-- Horizontal platforming with coyote time, jump buffering, and variable jump height
-- Melee combat + 4 spell system (Fireball, Ice Shards, Lightning, Shield) with mana and cooldowns
-- Dash with invincibility frames
-- 4 enemy types: Ground (patrol + chase), Flying (wave + follow), Turret (aim + shoot), Charger (detect + rush)
-- Boss fights at the end of each floor
-- Loot drops (gold, health, mana) with magnet pickup
-- In-room shop for upgrades
-- Particle effects for combat feedback
-- Screen shake on hits
-- Procedural room generation with multiple templates
+- **Well Intro Cutscene** -- animated sequence of the player jumping into the well before gameplay begins
+- **Multi-part Procedural Sprites** -- player, enemies, and bosses built from layered colored rectangles with animated body parts
+- **Tight Platforming** -- coyote time, jump buffering, variable jump height, squash/stretch on land
+- **Melee + 4 Spells** -- sword with swing arc, Fireball (trail particles), Ice Shards (spread shot), Lightning (AoE bolt lines), Shield (rotating barrier)
+- **Dash** with i-frames and afterimage trail
+- **5 Enemy Types** -- Goblin (patrol + chase), Bat (wave + wing flap), Stone Turret (aim + shoot), Boar (detect + charge), Boss (large multi-part)
+- **Decorated Dungeons** -- torches with flickering glow, crystals, stalactites, mushrooms, moss/cracks, varied palettes per room type
+- **8 Combat Room Templates** -- staircase, multi-level arena, pit bridges, towers, zigzag, floating islands, elevated walkways, tunnel
+- **Loot & Shop** -- gold/health/mana drops with magnet pickup, in-room shop for upgrades
+- **Particle Effects** -- enemy death bursts, damage flash, landing dust, confetti on room clear, spell trails
+- **Screen Shake** on combat hits
+- **Meta-Progression** -- persistent upgrades between runs
 
 ---
 
 ## Tech Stack
 
 - **Engine:** Bevy 0.15
-- **Language:** Rust
-- **AI Tools:** Claude (coding assistance)
+- **Language:** Rust (Edition 2024)
 
 ---
 
 ## Project Structure
 
 ```
-Dawnroot/
-├── assets/          # Sprites, audio, backgrounds
-├── src/
-│   ├── main.rs      # App setup, game states, resources
-│   ├── constants.rs  # All game constants
-│   ├── player.rs    # Player movement, melee, dash, physics
-│   ├── room.rs      # Room generation, templates, transitions
-│   ├── enemy.rs     # Enemy types and AI
-│   ├── combat.rs    # Collision and damage systems
-│   ├── spell.rs     # Spell system (4 spells)
-│   ├── hud.rs       # UI overlay
-│   ├── camera.rs    # Camera follow + screen shake
-│   ├── effects.rs   # Particle effects
-│   ├── animation.rs # Sprite animation state machine
-│   ├── loot.rs      # Drop and pickup system
-│   ├── shop.rs      # In-room shop
-│   └── title.rs     # Title screen
-├── Cargo.toml
-├── LICENSE
-└── README.md
+src/
+├── main.rs       # App setup, GameState, RunData, MetaProgression
+├── constants.rs  # All numeric constants (physics, spells, layout)
+├── title.rs      # Title screen + WellIntro cutscene animation
+├── player.rs     # Multi-part player, movement, melee, dash, physics
+├── room.rs       # Room generation, 8+ templates, decorations (torches, crystals)
+├── enemy.rs      # 5 enemy types with multi-part sprites and AI animations
+├── combat.rs     # Melee/spell/projectile collision and damage
+├── spell.rs      # 4 spells with enhanced visuals (fire trail, frost, bolts, shield ring)
+├── effects.rs    # Particles, afterimages, dust, confetti, flash effects
+├── hud.rs        # UI overlay (health, mana, gold, floor, spells)
+├── camera.rs     # Camera follow + screen shake
+├── animation.rs  # Generic frame-based animation support
+├── loot.rs       # Drop and pickup system with magnet
+└── shop.rs       # In-room shop purchases
 ```
-
----
-
-## Development Status
-
-Work in progress. Currently using placeholder colored rectangles -- sprite art, audio, and meta-progression save/load are next.
 
 ---
 
