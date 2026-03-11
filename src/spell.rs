@@ -607,7 +607,7 @@ fn update_fire_trails(
 fn update_shield_visual(
     player_q: Query<&Transform, With<Player>>,
     mut ring_q: Query<(&mut Transform, &mut ShieldRing, &Children, &ShieldBuff), Without<Player>>,
-    mut seg_q: Query<(&mut Transform, &ShieldVisual), Without<ShieldRing>>,
+    mut seg_q: Query<(&mut Transform, &ShieldVisual), (Without<ShieldRing>, Without<Player>)>,
     time: Res<Time>,
 ) {
     let Ok(player_tf) = player_q.get_single() else { return };
