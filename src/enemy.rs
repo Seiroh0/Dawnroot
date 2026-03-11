@@ -788,8 +788,8 @@ fn animate_charger_enemies(
 /// Rotate the turret eye to point toward the player.
 fn animate_turret_eye(
     turret_q: Query<(&Transform, &Children), With<TurretEnemy>>,
-    mut eye_q: Query<&mut Transform, (With<TurretEye>, Without<TurretEnemy>)>,
-    player_q: Query<&Transform, (With<Player>, Without<TurretEnemy>)>,
+    mut eye_q: Query<&mut Transform, (With<TurretEye>, Without<TurretEnemy>, Without<Player>)>,
+    player_q: Query<&Transform, (With<Player>, Without<TurretEnemy>, Without<TurretEye>)>,
 ) {
     let player_pos = player_q.get_single().map(|t| t.translation).ok();
 
