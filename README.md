@@ -1,79 +1,105 @@
-# 🌄 Dawnroot
-*A minimalist autumn descent inspired by Downwell.*
+# Dawnroot
 
-**Dawnroot** is a work-in-progress vertical action game inspired by *Downwell*, featuring warm autumn tones, free community assets, and code written with the help of **Claude Sonnet 4.5**.  
-The game is built entirely using open tools and is currently under active development — all visuals, features, and gameplay elements are subject to change.
+A horizontal side-scrolling roguelike platformer built with **Bevy 0.15** (Rust).
 
----
-
-## 🎮 Gameplay
-Descend through glowing autumn roots and caverns, blasting enemies and dodging obstacles as you fall deeper.  
-The focus is on smooth, responsive gameplay and an organic atmosphere rather than high difficulty.
+Explore procedurally generated rooms, fight enemies with melee attacks and spells, collect loot, and survive through floors of increasing difficulty.
 
 ---
 
-## ✨ Features
-- Fluid, arcade-style vertical gameplay inspired by *Downwell*  
-- Warm, autumn-themed visual palette  
-- 100% free and open community assets  
-- Designed and coded collaboratively with AI assistance  
-- Simple, responsive controls and fast restart flow  
+## Gameplay
+
+Run through rooms from left to right, clear enemies, collect gold, buy upgrades in shops, and defeat the boss at the end of each floor. Death means starting over -- roguelike style.
+
+**Room Types:** Start, Combat, Treasure, Shop, Boss
 
 ---
 
-## 🕹️ Controls
+## Controls
+
 | Action | Key |
 |--------|-----|
-| Move left | `A` / `←` |
-| Move right | `D` / `→` |
-| Jump / Shoot | `Space` |
-| Pause / Menu | `Esc` |
+| Move | `A` / `D` or Arrow Keys |
+| Jump | `Space` / `W` / `Up` |
+| Melee Attack | `J` / Left Click |
+| Dash | `Left Shift` |
+| Spell 1 (Fireball) | `1` |
+| Spell 2 (Ice Shards) | `2` |
+| Spell 3 (Lightning) | `3` |
+| Spell 4 (Shield) | `4` |
+| Buy (Shop) | `E` |
 
 ---
 
-## 🧩 Tech Stack
-- **Engine:** Godot  
-- **Language:** GDScript  
-- **IDE:** Visual Studio Code  
-- **AI Tools:** Claude Sonnet 4.5 (for coding assistance)
+## Features
+
+- Horizontal platforming with coyote time, jump buffering, and variable jump height
+- Melee combat + 4 spell system (Fireball, Ice Shards, Lightning, Shield) with mana and cooldowns
+- Dash with invincibility frames
+- 4 enemy types: Ground (patrol + chase), Flying (wave + follow), Turret (aim + shoot), Charger (detect + rush)
+- Boss fights at the end of each floor
+- Loot drops (gold, health, mana) with magnet pickup
+- In-room shop for upgrades
+- Particle effects for combat feedback
+- Screen shake on hits
+- Procedural room generation with multiple templates
 
 ---
 
-## 🚧 Development Status
-Dawnroot is currently a **work in progress**.  
-Expect frequent updates, refactors, and visual adjustments as gameplay evolves.
+## Tech Stack
+
+- **Engine:** Bevy 0.15
+- **Language:** Rust
+- **AI Tools:** Claude (coding assistance)
 
 ---
 
-## 🗂️ Project Structure
+## Project Structure
 
+```
 Dawnroot/
-├── assets/ # Art, audio, and other media
-├── scenes/ # Godot scene files (.tscn)
-├── scripts/ # GDScript source files
-├── .godot/ # Editor cache (ignored by Git)
+├── assets/          # Sprites, audio, backgrounds
+├── src/
+│   ├── main.rs      # App setup, game states, resources
+│   ├── constants.rs  # All game constants
+│   ├── player.rs    # Player movement, melee, dash, physics
+│   ├── room.rs      # Room generation, templates, transitions
+│   ├── enemy.rs     # Enemy types and AI
+│   ├── combat.rs    # Collision and damage systems
+│   ├── spell.rs     # Spell system (4 spells)
+│   ├── hud.rs       # UI overlay
+│   ├── camera.rs    # Camera follow + screen shake
+│   ├── effects.rs   # Particle effects
+│   ├── animation.rs # Sprite animation state machine
+│   ├── loot.rs      # Drop and pickup system
+│   ├── shop.rs      # In-room shop
+│   └── title.rs     # Title screen
+├── Cargo.toml
 ├── LICENSE
 └── README.md
-
-
----
-
-## 💬 Contributing
-Suggestions, feedback, or pull requests are welcome!  
-If you’d like to contribute, please open an issue first to discuss major changes.
+```
 
 ---
 
-## 📜 License
-This project is released under the **MIT License**.  
-See the [LICENSE](./LICENSE) file for details.
+## Development Status
+
+Work in progress. Currently using placeholder colored rectangles -- sprite art, audio, and meta-progression save/load are next.
 
 ---
 
-## 🌐 Links
-- 🎮 GitHub: [https://github.com/Seiroh0/Dawnroot](https://github.com/Seiroh0/Dawnroot)
-- 🧠 Inspired by: [Downwell](https://store.steampowered.com/app/360740/Downwell/)
+## Building
+
+```bash
+cargo run
+```
+
+Requires Rust toolchain. Uses `dynamic_linking` for fast dev builds.
 
 ---
 
-> 🍂 *Dive into the roots of dawn — where warmth meets gravity.*
+## License
+
+MIT License. See [LICENSE](./LICENSE).
+
+---
+
+> *Enter the roots of dawn.*

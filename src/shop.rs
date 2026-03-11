@@ -1,0 +1,117 @@
+use bevy::prelude::*;
+use crate::{GameState, RunData, PlayingEntity, room::{RoomState, RoomType}};
+
+pub struct ShopPlugin;
+
+impl Plugin for ShopPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            Update,
+            shop_interaction.run_if(in_state(GameState::Playing)),
+        );
+    }
+}
+
+#[derive(Component)]
+#[allow(dead_code)]
+struct ShopItem {
+    name: String,
+    cost: i32,
+    effect: ShopEffect,
+}
+
+#[derive(Clone)]
+#[allow(dead_code)]
+enum ShopEffect {
+    HealFull,
+    MaxHpUp,
+    DamageUp,
+    ManaUp,
+}
+
+#[derive(Resource)]
+struct ShopSpawned(bool);
+
+fn shop_interaction(
+    mut commands: Commands,
+    room_state: Res<RoomState>,
+    mut run: ResMut<RunData>,
+    keys: Res<ButtonInput<KeyCode>>,
+    shop_items: Query<(Entity, &ShopItem, &Transform)>,
+    player_q: Query<&Transform, (With<crate::player::Player>, Without<ShopItem>)>,
+    mut player_mut: Query<&mut crate::player::Player>,
+    shop_spawned: Option<Res<ShopSpawned>>,
+) {
+    if room_state.current_type != RoomType::Shop { return; }
+
+    // Spawn shop items if not yet spawned
+    if shop_spawned.map_or(true, |s| !s.0) {
+        commands.insert_resource(ShopSpawned(true));
+        let items = vec![
+            ("Heal Full", 30, ShopEffect::HealFull),
+            ("+1 Max HP", 50, ShopEffect::MaxHpUp),
+            ("+Mana Pool", 40, ShopEffect::ManaUp),
+        ];
+
+        for (i, (name, cost, effect)) in items.into_iter().enumerate() {
+            let x = 250.0 + i as f32 * 200.0;
+            commands.spawn((
+                Sprite {
+                    color: Color::srgb(0.8, 0.7, 0.3),
+                    custom_size: Some(Vec2::new(30.0, 30.0)),
+                    ..default()
+                },
+                Transform::from_xyz(x, 100.0, crate::constants::Z_PICKUPS),
+                ShopItem {
+                    name: name.to_string(),
+                    cost,
+                    effect,
+                },
+                PlayingEntity,
+            ));
+
+            // Price label
+            commands.spawn((
+                Text2d::new(format!("{}: {}g", name, cost)),
+                TextFont { font_size: 12.0, ..default() },
+                TextColor(Color::srgb(0.9, 0.85, 0.5)),
+                Transform::from_xyz(x, 130.0, crate::constants::Z_HUD),
+                PlayingEntity,
+            ));
+        }
+    }
+
+    // Purchase on E key when near item
+    if !keys.just_pressed(KeyCode::KeyE) { return; }
+    let Ok(p_tf) = player_q.get_single() else { return };
+
+    for (entity, item, tf) in &shop_items {
+        let dist = (p_tf.translation.xy() - tf.translation.xy()).length();
+        if dist < 50.0 && run.gold >= item.cost {
+            run.gold -= item.cost;
+
+            match &item.effect {
+                ShopEffect::HealFull => {
+                    if let Ok(mut player) = player_mut.get_single_mut() {
+                        player.health = player.max_health;
+                    }
+                }
+                ShopEffect::MaxHpUp => {
+                    if let Ok(mut player) = player_mut.get_single_mut() {
+                        player.max_health += 1;
+                        player.health += 1;
+                    }
+                }
+                ShopEffect::ManaUp => {
+                    if let Ok(mut player) = player_mut.get_single_mut() {
+                        player.max_mana += 20.0;
+                        player.mana += 20.0;
+                    }
+                }
+                ShopEffect::DamageUp => {}
+            }
+
+            commands.entity(entity).despawn_recursive();
+        }
+    }
+}

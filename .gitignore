@@ -1,13 +1,6 @@
-# Godot editor cache and temporary files
-.godot/
-.import/
-.export/
-.cache/
-
-# Build outputs
-bin/
-build/
-dist/
+# Rust / Cargo
+/target/
+Cargo.lock
 
 # OS / Editor junk
 .DS_Store
@@ -17,6 +10,10 @@ desktop.ini
 # VS Code
 .vscode/
 
+# Claude / AI
+.claude/
+CLAUDE.md
+
 # Logs and backups
 *.log
 *.tmp
@@ -24,22 +21,10 @@ desktop.ini
 *.old
 *.swp
 
-# Compiled or generated files
-*.pyc
-*.obj
-*.exe
-*.dll
-*.so
-*.dylib
-
-# Godot specific generated imports
+# Old Godot files (removed)
+.godot/
+.import/
+.export/
 *.import
 *.translation
 *.md5
-
-# Project-specific settings (optional, wenn du sie nicht teilen willst)
-project_metadata.cfg
-editor_layout.cfg
-
-# Ignoriere Windows-reservierte Dateien
-/nul
