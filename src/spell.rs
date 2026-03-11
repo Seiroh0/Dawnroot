@@ -155,12 +155,7 @@ struct TrailParticle {
 fn init_spell_slots(mut commands: Commands) {
     commands.spawn((
         SpellSlots {
-            slots: [
-                Some(SpellId::Fireball),
-                Some(SpellId::IceShards),
-                Some(SpellId::Lightning),
-                Some(SpellId::Shield),
-            ],
+            slots: [None, None, None, None],
             cooldowns: [0.0; SPELL_SLOT_COUNT],
         },
         PlayingEntity,

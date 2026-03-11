@@ -150,11 +150,22 @@ cargo run
 
 ## Roadmap
 
+- [x] Multi-part procedural player sprite with walk, jump, dash animations
+- [x] 5 enemy types with animated sprites (Goblin, Bat, Turret, Boar, Boss)
+- [x] 4 spell system with visual trails and effects
+- [x] Well intro cutscene with walk + jump animation
+- [x] 8 combat room templates with decorations
+- [x] Room lock mechanic (enemies must be defeated to proceed)
+- [x] Particle effects (death, damage, confetti, dust, afterimages)
 - [ ] Spritesheet art (replace procedural rectangles)
-- [ ] Audio (background music + SFX)
+- [ ] Audio engine (background music + SFX per action)
 - [ ] Save / Load for meta-progression
 - [ ] More floor templates & enemy variants
-- [ ] Game balance pass
+- [ ] Advanced room decorations (water, lava, moving platforms)
+- [ ] NPC dialogue system
+- [ ] Game balance pass & difficulty scaling
+- [ ] Controller / gamepad support
+- [ ] Screen transitions & fade effects between rooms
 
 ---
 

@@ -268,11 +268,25 @@ fn handle_title_input(
 
 // ── Well Intro cutscene ───────────────────────────────────────────
 
+/// Marks every entity that belongs to the WellIntro cutscene.
 #[derive(Component, Clone, Copy)]
 struct IntroEntity;
 
+/// Root entity of the animated intro character (invisible collision hull).
 #[derive(Component)]
 struct IntroPlayer;
+
+/// Marks every visible child sprite of the intro character for alpha-fading.
+#[derive(Component)]
+struct IntroPlayerPart;
+
+/// Left leg of the intro character.
+#[derive(Component)]
+struct IntroLegL;
+
+/// Right leg of the intro character.
+#[derive(Component)]
+struct IntroLegR;
 
 #[derive(Component)]
 struct DarknessOverlay;
@@ -341,17 +355,125 @@ fn setup_well_intro(mut commands: Commands) {
         Transform::from_xyz(0.0, well_base_y + 30.0, Z_BACKGROUND + 6.0), IntroEntity,
     ));
 
-    // Intro player (starts off-screen left)
+    // ── Intro player: invisible root + child body parts ──────────────
+    //
+    // The root holds the position / scale used for the jump arc and walk
+    // bob. All visible pixels live in child entities tagged IntroPlayerPart
+    // so we can bulk-fade them during the JumpIn phase.
     commands.spawn((
-        Sprite {
-            color: Color::srgb(0.2, 0.65, 0.3),
-            custom_size: Some(Vec2::new(16.0, 28.0)),
-            ..default()
-        },
         Transform::from_xyz(-280.0, well_base_y + 16.0, Z_PLAYER),
+        Visibility::Visible,
         IntroEntity,
         IntroPlayer,
-    ));
+    )).with_children(|p| {
+        // Body – green tunic
+        p.spawn((
+            Sprite {
+                color: Color::srgb(0.18, 0.50, 0.28),
+                custom_size: Some(Vec2::new(14.0, 14.0)),
+                ..default()
+            },
+            Transform::from_xyz(0.0, 0.0, 0.1),
+            IntroEntity,
+            IntroPlayerPart,
+        ));
+
+        // Belt – brown strap
+        p.spawn((
+            Sprite {
+                color: Color::srgb(0.45, 0.30, 0.15),
+                custom_size: Some(Vec2::new(14.0, 3.0)),
+                ..default()
+            },
+            Transform::from_xyz(0.0, -5.0, 0.15),
+            IntroEntity,
+            IntroPlayerPart,
+        ));
+
+        // Head – slightly warm tone, with hood children
+        p.spawn((
+            Sprite {
+                color: Color::srgb(0.78, 0.62, 0.48),
+                custom_size: Some(Vec2::new(12.0, 11.0)),
+                ..default()
+            },
+            Transform::from_xyz(0.0, 12.0, 0.2),
+            IntroEntity,
+            IntroPlayerPart,
+        )).with_children(|head| {
+            // Left eye
+            head.spawn((
+                Sprite {
+                    color: Color::srgb(0.9, 0.92, 0.95),
+                    custom_size: Some(Vec2::new(2.5, 3.0)),
+                    ..default()
+                },
+                Transform::from_xyz(-2.5, 0.5, 0.1),
+                IntroEntity,
+                IntroPlayerPart,
+            ));
+            // Right eye
+            head.spawn((
+                Sprite {
+                    color: Color::srgb(0.9, 0.92, 0.95),
+                    custom_size: Some(Vec2::new(2.5, 3.0)),
+                    ..default()
+                },
+                Transform::from_xyz(2.5, 0.5, 0.1),
+                IntroEntity,
+                IntroPlayerPart,
+            ));
+            // Hood – darker green drape over top of head
+            head.spawn((
+                Sprite {
+                    color: Color::srgb(0.12, 0.34, 0.18),
+                    custom_size: Some(Vec2::new(14.0, 5.0)),
+                    ..default()
+                },
+                Transform::from_xyz(0.0, 4.5, 0.15),
+                IntroEntity,
+                IntroPlayerPart,
+            ));
+        });
+
+        // Left leg
+        p.spawn((
+            Sprite {
+                color: Color::srgb(0.28, 0.22, 0.16),
+                custom_size: Some(Vec2::new(5.0, 10.0)),
+                ..default()
+            },
+            Transform::from_xyz(-3.5, -12.0, 0.0),
+            IntroEntity,
+            IntroPlayerPart,
+            IntroLegL,
+        ));
+
+        // Right leg
+        p.spawn((
+            Sprite {
+                color: Color::srgb(0.26, 0.20, 0.14),
+                custom_size: Some(Vec2::new(5.0, 10.0)),
+                ..default()
+            },
+            Transform::from_xyz(3.5, -12.0, 0.0),
+            IntroEntity,
+            IntroPlayerPart,
+            IntroLegR,
+        ));
+
+        // Sword – small gray rectangle on right side
+        p.spawn((
+            Sprite {
+                color: Color::srgb(0.68, 0.70, 0.74),
+                custom_size: Some(Vec2::new(3.0, 16.0)),
+                ..default()
+            },
+            Transform::from_xyz(10.0, 3.0, 0.35),
+            IntroEntity,
+            IntroPlayerPart,
+        ));
+    });
 
     // Darkness overlay
     commands.spawn((
@@ -369,60 +491,96 @@ fn setup_well_intro(mut commands: Commands) {
 fn update_well_intro(
     mut commands: Commands,
     mut state: ResMut<IntroState>,
-    mut player_q: Query<(&mut Transform, &mut Sprite), With<IntroPlayer>>,
-    mut darkness_q: Query<&mut Sprite, (With<DarknessOverlay>, Without<IntroPlayer>)>,
+    // Root entity – only needs Transform, no Sprite.
+    mut player_q: Query<&mut Transform, (With<IntroPlayer>, Without<IntroLegL>, Without<IntroLegR>)>,
+    // All visible child parts – for alpha fading.
+    mut parts_q: Query<&mut Sprite, (With<IntroPlayerPart>, Without<DarknessOverlay>)>,
+    // Leg children – for walk animation.
+    mut legl_q: Query<&mut Transform, (With<IntroLegL>, Without<IntroPlayer>, Without<IntroLegR>)>,
+    mut legr_q: Query<&mut Transform, (With<IntroLegR>, Without<IntroPlayer>, Without<IntroLegL>)>,
+    mut darkness_q: Query<&mut Sprite, (With<DarknessOverlay>, Without<IntroPlayerPart>)>,
     mut next_state: ResMut<NextState<GameState>>,
     time: Res<Time>,
 ) {
     let dt = time.delta_secs();
     state.timer += dt;
 
-    let Ok((mut p_tf, mut p_sprite)) = player_q.get_single_mut() else { return };
+    let Ok(mut p_tf) = player_q.get_single_mut() else { return };
 
     match state.phase {
         IntroPhase::WalkToWell => {
-            // Walk from -280 to ~0
+            // Walk rightward from -280 toward the well at x=0.
             p_tf.translation.x += 200.0 * dt;
-            // Walk bob
+
+            // Vertical walk bob on the root so all parts move together.
             let bob = (state.timer * 14.0).sin().abs() * 3.0;
             p_tf.translation.y = state.player_start_y + bob;
 
+            // Leg stride animation using sin waves (opposite phase each leg).
+            let sw_l = (state.timer * 14.0).sin() * 6.0;
+            let sw_r = (state.timer * 14.0 + std::f32::consts::PI).sin() * 6.0;
+
+            if let Ok(mut ll) = legl_q.get_single_mut() {
+                ll.translation = Vec3::new(-3.5 + sw_l * 0.3, -12.0 + sw_l.abs() * 0.5, 0.0);
+            }
+            if let Ok(mut rl) = legr_q.get_single_mut() {
+                rl.translation = Vec3::new(3.5 + sw_r * 0.3, -12.0 + sw_r.abs() * 0.5, 0.0);
+            }
+
             if p_tf.translation.x >= -5.0 {
                 p_tf.translation.x = 0.0;
+                // Reset legs to standing pose before the jump.
+                if let Ok(mut ll) = legl_q.get_single_mut() {
+                    ll.translation = Vec3::new(-3.5, -12.0, 0.0);
+                }
+                if let Ok(mut rl) = legr_q.get_single_mut() {
+                    rl.translation = Vec3::new(3.5, -12.0, 0.0);
+                }
                 state.phase = IntroPhase::JumpIn;
                 state.timer = 0.0;
             }
         }
+
         IntroPhase::JumpIn => {
             let t = state.timer;
             if t < 0.35 {
-                // Arc up
+                // Arc up over the well rim.
                 let frac = t / 0.35;
                 let y_off = 55.0 * (frac * std::f32::consts::PI).sin();
                 p_tf.translation.y = state.player_start_y + y_off;
                 let stretch = 1.0 + 0.25 * frac;
                 p_tf.scale = Vec3::new(1.0 / stretch.sqrt(), stretch, 1.0);
             } else if t < 0.9 {
-                // Drop into well hole
+                // Drop into the well hole – fade all parts out as the
+                // character descends below the well rim.
                 let fall_frac = (t - 0.35) / 0.55;
                 p_tf.translation.y = state.player_start_y + 10.0 - fall_frac * 90.0;
                 p_tf.scale = Vec3::new(0.8, 1.15, 1.0);
+
                 let alpha = (1.0 - fall_frac).max(0.0);
-                p_sprite.color = Color::srgba(0.2, 0.65, 0.3, alpha);
+                for mut sprite in parts_q.iter_mut() {
+                    // Preserve existing rgb, only update alpha.
+                    let c = sprite.color.to_srgba();
+                    sprite.color = Color::srgba(c.red, c.green, c.blue, alpha);
+                }
             } else {
-                p_sprite.color = Color::srgba(0.0, 0.0, 0.0, 0.0);
+                // Fully hidden – zero out alpha on all parts.
+                for mut sprite in parts_q.iter_mut() {
+                    sprite.color = Color::srgba(0.0, 0.0, 0.0, 0.0);
+                }
                 state.phase = IntroPhase::FallDarkness;
                 state.timer = 0.0;
             }
         }
+
         IntroPhase::FallDarkness => {
-            // Fade screen to black
+            // Fade the screen to black.
             if let Ok(mut ds) = darkness_q.get_single_mut() {
                 let alpha = (state.timer / 0.6).min(1.0);
                 ds.color = Color::srgba(0.0, 0.0, 0.0, alpha);
             }
 
-            // Falling debris particles
+            // Falling debris particles.
             if state.timer > 0.3 && state.timer < 1.8 {
                 use rand::Rng;
                 let mut rng = rand::thread_rng();
@@ -448,8 +606,9 @@ fn update_well_intro(
                 state.timer = 0.0;
             }
         }
+
         IntroPhase::LandInCave => {
-            // Brief warm flash then to gameplay
+            // Brief warm flash then transition to gameplay.
             if let Ok(mut ds) = darkness_q.get_single_mut() {
                 if state.timer < 0.1 {
                     ds.color = Color::srgba(0.12, 0.08, 0.05, 0.85);

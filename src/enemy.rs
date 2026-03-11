@@ -205,8 +205,8 @@ fn spawn_ground_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
         },
         Transform::from_xyz(x, y, Z_ENEMIES),
         Enemy {
-            health: 2 + floor / 2,
-            max_health: 2 + floor / 2,
+            health: 2 + floor.min(5),
+            max_health: 2 + floor.min(5),
             contact_damage: 1,
             score_reward: 80,
             gold_drop: 5 + floor * 2,
@@ -280,8 +280,8 @@ fn spawn_flying_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
         },
         Transform::from_xyz(x, y + 100.0, Z_ENEMIES),
         Enemy {
-            health: 2 + floor / 3,
-            max_health: 2 + floor / 3,
+            health: 1 + floor.min(3),
+            max_health: 1 + floor.min(3),
             contact_damage: 1,
             score_reward: 110,
             gold_drop: 8 + floor * 2,
@@ -347,8 +347,8 @@ fn spawn_turret_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
         },
         Transform::from_xyz(x, y, Z_ENEMIES),
         Enemy {
-            health: 3 + floor / 2,
-            max_health: 3 + floor / 2,
+            health: 3 + floor.min(4),
+            max_health: 3 + floor.min(4),
             contact_damage: 1,
             score_reward: 130,
             gold_drop: 10 + floor * 3,
@@ -406,8 +406,8 @@ fn spawn_charger_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
         },
         Transform::from_xyz(x, y, Z_ENEMIES),
         Enemy {
-            health: 3 + floor / 2,
-            max_health: 3 + floor / 2,
+            health: 3 + floor.min(5),
+            max_health: 3 + floor.min(5),
             contact_damage: 2,
             score_reward: 150,
             gold_drop: 12 + floor * 3,
@@ -474,7 +474,7 @@ fn spawn_charger_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
 ///   Claw left        12x8   offset (-22, -2)  dark maroon
 ///   Claw right       12x8   offset ( 22, -2)  dark maroon
 fn spawn_boss(commands: &mut Commands, floor: i32) {
-    let hp = 15 + floor * 5;
+    let hp = 10 + floor * 3;
 
     let body_color  = Color::srgb(0.45, 0.05, 0.08);
     let robe_color  = Color::srgb(0.30, 0.03, 0.05);

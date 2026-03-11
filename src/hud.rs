@@ -34,6 +34,9 @@ struct SpellText;
 #[derive(Component)]
 struct ScoreText;
 
+#[derive(Component)]
+struct EnemyText;
+
 fn setup_hud(mut commands: Commands) {
     commands
         .spawn((
@@ -74,6 +77,12 @@ fn setup_hud(mut commands: Commands) {
                             TextFont { font_size: 14.0, ..default() },
                             TextColor(Color::srgb(0.3, 0.5, 0.9)),
                             ManaText,
+                        ));
+                        col.spawn((
+                            Text::new(""),
+                            TextFont { font_size: 14.0, ..default() },
+                            TextColor(Color::srgb(0.9, 0.5, 0.2)),
+                            EnemyText,
                         ));
                     });
 
@@ -127,12 +136,13 @@ fn update_hud(
     room_state: Res<RoomState>,
     player_q: Query<&Player>,
     slots_q: Query<&SpellSlots>,
-    mut score_q: Query<&mut Text, (With<ScoreText>, Without<HealthText>, Without<ManaText>, Without<GoldText>, Without<FloorText>, Without<SpellText>)>,
-    mut health_q: Query<&mut Text, (With<HealthText>, Without<ScoreText>, Without<ManaText>, Without<GoldText>, Without<FloorText>, Without<SpellText>)>,
-    mut mana_q: Query<&mut Text, (With<ManaText>, Without<ScoreText>, Without<HealthText>, Without<GoldText>, Without<FloorText>, Without<SpellText>)>,
-    mut gold_q: Query<&mut Text, (With<GoldText>, Without<ScoreText>, Without<HealthText>, Without<ManaText>, Without<FloorText>, Without<SpellText>)>,
-    mut floor_q: Query<&mut Text, (With<FloorText>, Without<ScoreText>, Without<HealthText>, Without<ManaText>, Without<GoldText>, Without<SpellText>)>,
-    mut spell_q: Query<&mut Text, (With<SpellText>, Without<ScoreText>, Without<HealthText>, Without<ManaText>, Without<GoldText>, Without<FloorText>)>,
+    mut score_q:  Query<&mut Text, (With<ScoreText>,  Without<HealthText>, Without<ManaText>, Without<GoldText>, Without<FloorText>, Without<SpellText>, Without<EnemyText>)>,
+    mut health_q: Query<&mut Text, (With<HealthText>, Without<ScoreText>,  Without<ManaText>, Without<GoldText>, Without<FloorText>, Without<SpellText>, Without<EnemyText>)>,
+    mut mana_q:   Query<&mut Text, (With<ManaText>,   Without<ScoreText>,  Without<HealthText>, Without<GoldText>, Without<FloorText>, Without<SpellText>, Without<EnemyText>)>,
+    mut gold_q:   Query<&mut Text, (With<GoldText>,   Without<ScoreText>,  Without<HealthText>, Without<ManaText>, Without<FloorText>, Without<SpellText>, Without<EnemyText>)>,
+    mut floor_q:  Query<&mut Text, (With<FloorText>,  Without<ScoreText>,  Without<HealthText>, Without<ManaText>, Without<GoldText>,  Without<SpellText>, Without<EnemyText>)>,
+    mut spell_q:  Query<&mut Text, (With<SpellText>,  Without<ScoreText>,  Without<HealthText>, Without<ManaText>, Without<GoldText>,  Without<FloorText>, Without<EnemyText>)>,
+    mut enemy_q:  Query<&mut Text, (With<EnemyText>,  Without<ScoreText>,  Without<HealthText>, Without<ManaText>, Without<GoldText>,  Without<FloorText>, Without<SpellText>)>,
 ) {
     let player = player_q.get_single().ok();
 
@@ -176,6 +186,14 @@ fn update_hud(
                 }
             }
             **text = parts.join("  ");
+        }
+    }
+
+    if let Ok(mut text) = enemy_q.get_single_mut() {
+        if run.enemies_alive > 0 {
+            **text = format!("Enemies: {}", run.enemies_alive);
+        } else {
+            **text = String::new();
         }
     }
 }

@@ -27,6 +27,7 @@ enum ShopEffect {
     MaxHpUp,
     DamageUp,
     ManaUp,
+    UnlockSpell(usize, crate::spell::SpellId),
 }
 
 #[derive(Resource)]
@@ -39,7 +40,8 @@ fn shop_interaction(
     keys: Res<ButtonInput<KeyCode>>,
     shop_items: Query<(Entity, &ShopItem, &Transform)>,
     player_q: Query<&Transform, (With<crate::player::Player>, Without<ShopItem>)>,
-    mut player_mut: Query<&mut crate::player::Player>,
+    mut player_mut: Query<&mut crate::player::Player, Without<crate::spell::SpellSlots>>,
+    mut spell_slots_q: Query<&mut crate::spell::SpellSlots, Without<crate::player::Player>>,
     shop_spawned: Option<Res<ShopSpawned>>,
 ) {
     if room_state.current_type != RoomType::Shop { return; }
@@ -48,13 +50,17 @@ fn shop_interaction(
     if shop_spawned.map_or(true, |s| !s.0) {
         commands.insert_resource(ShopSpawned(true));
         let items = vec![
-            ("Heal Full", 30, ShopEffect::HealFull),
-            ("+1 Max HP", 50, ShopEffect::MaxHpUp),
+            ("Heal Full",  30, ShopEffect::HealFull),
+            ("+1 Max HP",  50, ShopEffect::MaxHpUp),
             ("+Mana Pool", 40, ShopEffect::ManaUp),
+            ("Fireball",   60, ShopEffect::UnlockSpell(0, crate::spell::SpellId::Fireball)),
+            ("Ice Shards", 50, ShopEffect::UnlockSpell(1, crate::spell::SpellId::IceShards)),
+            ("Lightning",  80, ShopEffect::UnlockSpell(2, crate::spell::SpellId::Lightning)),
+            ("Shield",     70, ShopEffect::UnlockSpell(3, crate::spell::SpellId::Shield)),
         ];
 
         for (i, (name, cost, effect)) in items.into_iter().enumerate() {
-            let x = 250.0 + i as f32 * 200.0;
+            let x = 120.0 + i as f32 * 110.0;
             commands.spawn((
                 Sprite {
                     color: Color::srgb(0.8, 0.7, 0.3),
@@ -109,6 +115,11 @@ fn shop_interaction(
                     }
                 }
                 ShopEffect::DamageUp => {}
+                ShopEffect::UnlockSpell(slot, spell) => {
+                    if let Ok(mut slots) = spell_slots_q.get_single_mut() {
+                        slots.slots[*slot] = Some(*spell);
+                    }
+                }
             }
 
             commands.entity(entity).despawn_recursive();
