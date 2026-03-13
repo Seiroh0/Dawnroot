@@ -11,6 +11,7 @@ mod camera;
 mod effects;
 mod animation;
 mod loot;
+mod hazards;
 mod death_screen;
 mod floor_complete;
 
@@ -113,7 +114,7 @@ fn main() {
                 .set(ImagePlugin::default_nearest()),
         )
         .init_state::<GameState>()
-        .insert_resource(ClearColor(Color::srgb(0.05, 0.05, 0.08)))
+        .insert_resource(ClearColor(Color::srgb(0.08, 0.06, 0.04)))
         .insert_resource(RunData::default())
         .insert_resource(load_meta())
         .insert_resource(ActiveSaveSlot(0))
@@ -130,6 +131,7 @@ fn main() {
             effects::EffectsPlugin,
             animation::AnimationPlugin,
             loot::LootPlugin,
+            hazards::HazardsPlugin,
             death_screen::DeathScreenPlugin,
             floor_complete::FloorCompletePlugin,
         ))

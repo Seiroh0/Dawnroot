@@ -1,5 +1,6 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, floor_complete::FloorCompleteState};
+use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, floor_complete::FloorCompleteState,
+    hazards::{spawn_lava_strip, spawn_water_strip, spawn_moving_platform}};
 
 pub struct RoomPlugin;
 
@@ -752,14 +753,17 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             spawn_mushroom(commands, TILE_SIZE * 10.0, TILE_SIZE * 4.0 + TILE_SIZE);
         }
 
-        // ── 2: Pits with narrow bridges ──────────────────────────────────────
+        // ── 2: Lava pits with narrow bridges ──────────────────────────────────
         2 => {
             spawn_platform(commands, 3,  5,  3, plat_color);
             spawn_platform(commands, 9,  11, 3, plat_color);
             spawn_platform(commands, 15, 17, 3, plat_color);
-            // Lower bridge tiles over pits
+            // Lower bridge tiles over lava pits
             spawn_platform(commands, 6,  8,  2, plat_color);
             spawn_platform(commands, 12, 14, 2, plat_color);
+            // Lava in the gaps below the bridges
+            spawn_lava_strip(commands, 6, 8, 1);
+            spawn_lava_strip(commands, 12, 14, 1);
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
@@ -795,15 +799,25 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             spawn_mushroom(commands, TILE_SIZE * 7.5, TILE_SIZE * 4.0 + TILE_SIZE);
         }
 
-        // ── 5: Floating stepping stones ──────────────────────────────────────
+        // ── 5: Floating stones + moving platform ─────────────────────────────
         5 => {
             spawn_platform(commands, 2,  4,  3, plat_color);
             spawn_platform(commands, 7,  10, 5, plat_color);
             spawn_platform(commands, 13, 16, 3, plat_color);
             spawn_platform(commands, 18, 21, 4, plat_color);
-            // Tiny single-tile mid-gaps
+            // Tiny single-tile mid-gap
             spawn_platform(commands, 5,  6,  4, plat_color);
-            spawn_platform(commands, 11, 12, 4, plat_color);
+            // Moving platform instead of static bridge at col 11-12
+            let mp_x = 11.0 * TILE_SIZE + TILE_SIZE;
+            let mp_y = 4.0 * TILE_SIZE + TILE_SIZE / 2.0;
+            spawn_moving_platform(
+                commands, 11, 4, 2,
+                vec![
+                    Vec2::new(mp_x, mp_y),
+                    Vec2::new(mp_x, mp_y + TILE_SIZE * 3.0),
+                ],
+                40.0, 1.0,
+            );
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.5);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 5.0);
@@ -811,7 +825,7 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             spawn_mushroom(commands, TILE_SIZE * 8.5, TILE_SIZE * 5.0 + TILE_SIZE);
         }
 
-        // ── 6: Low walkways with a central gap ───────────────────────────────
+        // ── 6: Low walkways with swampy water gap ─────────────────────────────
         6 => {
             // Long walkways left and right, gap in middle
             spawn_platform_worn(commands, 2,  9,  3, plat_color);
@@ -820,6 +834,8 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             spawn_platform(commands, 10, 12, 4, plat_color);
             // Optional high ledge (was row 6)
             spawn_platform(commands, 7, 10, 5, plat_color);
+            // Swampy water in the central gap (floor level)
+            spawn_water_strip(commands, 10, 12, 1);
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
@@ -977,6 +993,10 @@ fn spawn_boss_room(commands: &mut Commands, _floor: i32) {
     spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 6.0);
     spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 9.0);
     spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 9.0);
+
+    // Lava pits flanking the arena
+    spawn_lava_strip(commands, 2, 3, 1);
+    spawn_lava_strip(commands, 20, 21, 1);
 
     // Ominous red crystals
     spawn_boss_crystal(commands, TILE_SIZE * 2.0,  TILE_SIZE, 0.0);
