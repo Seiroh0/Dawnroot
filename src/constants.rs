@@ -42,6 +42,12 @@ pub const MELEE_DAMAGE: i32 = 1;
 pub const MELEE_COOLDOWN: f32 = 0.35;
 pub const MELEE_ACTIVE_TIME: f32 = 0.1;
 
+// Ranged attack (energy bolt)
+pub const RANGED_SPEED: f32 = 420.0;
+pub const RANGED_DAMAGE: i32 = 1;
+pub const RANGED_COOLDOWN: f32 = 0.45;
+pub const RANGED_LIFETIME: f32 = 1.2;
+
 // Spells
 pub const SPELL_SLOT_COUNT: usize = 4;
 pub const MANA_MAX: f32 = 100.0;

@@ -25,9 +25,8 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 ### Room Progression
 
 ```
- Start  -->  Combat  -->  Combat  -->  Treasure  -->  Combat  -->  Boss
-                                                          |
-                                                        Shop (even floors)
+ Start  -->  Combat x N  -->  Treasure  -->  Combat  -->  Shop  -->  Boss
+           (scales with floor)
 ```
 
 ---
@@ -87,7 +86,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 
 ### Progression & Loot
 - **Gold, Health, Mana** drops with magnet pickup
-- **In-room shop** -- heal, upgrade max HP, expand mana pool
+- **In-room shop** -- heal, upgrade max HP, expand mana pool, buy spells
 - **Meta-progression** -- persistent upgrades between runs
 - **Score system** with combo potential
 - Room-cleared confetti celebration
@@ -157,15 +156,18 @@ cargo run
 - [x] 8 combat room templates with decorations
 - [x] Room lock mechanic (enemies must be defeated to proceed)
 - [x] Particle effects (death, damage, confetti, dust, afterimages)
+- [x] Screen transitions & fade effects between rooms
+- [x] Save / Load for meta-progression (JSON file)
+- [x] Game balance pass & difficulty scaling (floor-based enemy count/HP, shop prices, gold drops)
+- [x] Spells locked at start -- buy with gold at shop
+- [x] Enemy counter in HUD
+- [x] Randomized room layouts per run (seed-based)
 - [ ] Spritesheet art (replace procedural rectangles)
 - [ ] Audio engine (background music + SFX per action)
-- [ ] Save / Load for meta-progression
 - [ ] More floor templates & enemy variants
 - [ ] Advanced room decorations (water, lava, moving platforms)
 - [ ] NPC dialogue system
-- [ ] Game balance pass & difficulty scaling
 - [ ] Controller / gamepad support
-- [ ] Screen transitions & fade effects between rooms
 
 ---
 

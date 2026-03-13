@@ -18,6 +18,7 @@ impl Plugin for PlayerPlugin {
                     player_physics,
                     player_invuln,
                     melee_hitbox_lifetime,
+                    player_projectile_movement,
                     update_player_visuals,
                 )
                     .chain()
@@ -59,6 +60,7 @@ pub struct Player {
     pub coyote_timer: f32,
     pub jump_buffer: f32,
     pub melee_cooldown: f32,
+    pub ranged_cooldown: f32,
     pub is_dashing: bool,
     pub dash_timer: f32,
     pub dash_cooldown: f32,
@@ -77,6 +79,7 @@ impl Default for Player {
             is_jumping: false, jump_hold_time: 0.0,
             coyote_timer: 0.0, jump_buffer: 0.0,
             melee_cooldown: 0.0,
+            ranged_cooldown: 0.0,
             is_dashing: false, dash_timer: 0.0, dash_cooldown: 0.0,
             anim_time: 0.0, land_squash: 0.0,
         }
@@ -85,6 +88,14 @@ impl Default for Player {
 
 #[derive(Component)]
 pub struct MeleeHitbox { pub damage: i32, pub lifetime: f32 }
+
+#[derive(Component)]
+pub struct PlayerProjectile {
+    pub vx: f32,
+    pub vy: f32,
+    pub damage: i32,
+    pub lifetime: f32,
+}
 
 // Body part markers
 #[derive(Component)] struct PlayerBody;
@@ -173,6 +184,7 @@ fn player_input(
 
     player.anim_time += dt;
     player.melee_cooldown = (player.melee_cooldown - dt).max(0.0);
+    player.ranged_cooldown = (player.ranged_cooldown - dt).max(0.0);
     player.dash_cooldown = (player.dash_cooldown - dt).max(0.0);
     player.jump_buffer = (player.jump_buffer - dt).max(0.0);
     player.land_squash = (player.land_squash - dt * 5.0).max(0.0);
@@ -227,7 +239,7 @@ fn player_input(
         });
     }
 
-    let attack = keys.just_pressed(KeyCode::KeyJ) || mouse.just_pressed(MouseButton::Left);
+    let attack = keys.just_pressed(KeyCode::KeyE) || keys.just_pressed(KeyCode::KeyJ) || mouse.just_pressed(MouseButton::Left);
     if attack && player.melee_cooldown <= 0.0 {
         player.melee_cooldown = MELEE_COOLDOWN;
         ev_attack.send(PlayerAttack);
@@ -238,6 +250,51 @@ fn player_input(
             MeleeHitbox { damage: MELEE_DAMAGE, lifetime: MELEE_ACTIVE_TIME },
             PlayingEntity,
         ));
+    }
+
+    // Ranged attack (F key or right-click)
+    let ranged = keys.just_pressed(KeyCode::KeyF) || mouse.just_pressed(MouseButton::Right);
+    if ranged && player.ranged_cooldown <= 0.0 {
+        player.ranged_cooldown = RANGED_COOLDOWN;
+        let origin = Vec3::new(
+            tf.translation.x + player.facing * 16.0,
+            tf.translation.y,
+            Z_PROJECTILES,
+        );
+        commands.spawn((
+            Sprite {
+                color: Color::srgb(0.6, 0.9, 1.0),
+                custom_size: Some(Vec2::new(10.0, 5.0)),
+                ..default()
+            },
+            Transform::from_translation(origin),
+            PlayerProjectile {
+                vx: player.facing * RANGED_SPEED,
+                vy: 0.0,
+                damage: RANGED_DAMAGE,
+                lifetime: RANGED_LIFETIME,
+            },
+            PlayingEntity,
+        )).with_children(|bolt| {
+            // Bright core
+            bolt.spawn((
+                Sprite {
+                    color: Color::srgba(0.9, 1.0, 1.0, 0.9),
+                    custom_size: Some(Vec2::new(6.0, 3.0)),
+                    ..default()
+                },
+                Transform::from_xyz(0.0, 0.0, 0.1),
+            ));
+            // Trailing glow
+            bolt.spawn((
+                Sprite {
+                    color: Color::srgba(0.4, 0.7, 1.0, 0.5),
+                    custom_size: Some(Vec2::new(14.0, 7.0)),
+                    ..default()
+                },
+                Transform::from_xyz(-3.0, 0.0, -0.1),
+            ));
+        });
     }
 
     player.mana = (player.mana + MANA_REGEN_RATE * dt).min(player.max_mana);
@@ -352,6 +409,22 @@ fn melee_hitbox_lifetime(
         let alpha = (hb.lifetime / MELEE_ACTIVE_TIME).max(0.0) * 0.5;
         sprite.color = Color::srgba(1.0, 0.95, 0.7, alpha);
         if hb.lifetime <= 0.0 { commands.entity(entity).despawn(); }
+    }
+}
+
+fn player_projectile_movement(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Transform, &mut PlayerProjectile)>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut tf, mut proj) in &mut query {
+        tf.translation.x += proj.vx * dt;
+        tf.translation.y += proj.vy * dt;
+        proj.lifetime -= dt;
+        if proj.lifetime <= 0.0 {
+            commands.entity(entity).despawn_recursive();
+        }
     }
 }
 

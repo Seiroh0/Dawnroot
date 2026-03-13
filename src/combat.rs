@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use crate::{
     constants::*,
     GameState, RunData,
-    player::{Player, MeleeHitbox, PlayerDamaged, PlayerDied},
+    player::{Player, MeleeHitbox, PlayerProjectile, PlayerDamaged, PlayerDied},
     enemy::{Enemy, EnemyDefeated, EnemyProjectile},
     spell::{SpellProjectile, LightningStrike},
     camera::{ScreenShake, trigger_shake},
@@ -16,6 +16,7 @@ impl Plugin for CombatPlugin {
             Update,
             (
                 melee_vs_enemy,
+                ranged_vs_enemy,
                 spell_vs_enemy,
                 lightning_vs_enemy,
                 player_vs_enemy,
@@ -59,6 +60,44 @@ fn melee_vs_enemy(
                         trigger_shake(&mut shake, 8.0, 0.15);
                     }
                 }
+            }
+        }
+    }
+}
+
+fn ranged_vs_enemy(
+    mut commands: Commands,
+    proj_q: Query<(Entity, &Transform, &PlayerProjectile)>,
+    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite)>,
+    mut ev_defeated: EventWriter<EnemyDefeated>,
+    mut run: ResMut<RunData>,
+    mut shake_q: Query<&mut ScreenShake>,
+) {
+    for (p_entity, p_tf, proj) in &proj_q {
+        for (e_entity, e_tf, mut enemy, sprite) in &mut enemy_q {
+            let e_size = sprite.custom_size.unwrap_or(Vec2::new(20.0, 20.0));
+            let dist = (p_tf.translation.xy() - e_tf.translation.xy()).abs();
+
+            if dist.x < 5.0 + e_size.x / 2.0 && dist.y < 3.0 + e_size.y / 2.0 {
+                enemy.health -= proj.damage;
+                commands.entity(p_entity).despawn_recursive();
+
+                if enemy.health <= 0 {
+                    run.score += enemy.score_reward;
+                    run.gold += enemy.gold_drop;
+                    run.enemies_killed += 1;
+                    ev_defeated.send(EnemyDefeated {
+                        position: e_tf.translation,
+                        score: enemy.score_reward,
+                        gold_drop: enemy.gold_drop,
+                    });
+                    commands.entity(e_entity).despawn_recursive();
+
+                    if let Ok(mut shake) = shake_q.get_single_mut() {
+                        trigger_shake(&mut shake, 6.0, 0.12);
+                    }
+                }
+                break;
             }
         }
     }

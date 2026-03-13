@@ -238,7 +238,7 @@ fn setup_title(mut commands: Commands) {
         TitleEntity,
     ));
     commands.spawn((
-        Text2d::new("A/D: Move  |  Space: Jump  |  J: Attack  |  Shift: Dash  |  1-4: Spells"),
+        Text2d::new("A/D: Move  |  Space: Jump  |  E: Melee  |  F: Ranged  |  Shift: Dash  |  1-4: Spells"),
         TextFont { font_size: 11.0, ..default() },
         TextColor(Color::srgb(0.4, 0.38, 0.32)),
         Transform::from_xyz(0.0, -200.0, Z_HUD),

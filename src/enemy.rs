@@ -192,20 +192,59 @@ fn spawn_room_enemies(
 
 /// GroundEnemy – Goblin
 /// Layout (all offsets relative to root at logical center):
-///   Body      20x14  offset (0,  2)  red-brown
-///   Head      16x14  offset (0, 14)  slightly lighter red-brown
-///   Eyes   2x 3x3    offset (±4, 17) glowing yellow
-///   Club       6x14  offset (14, 8)  dark brown (to the right)
-///   LegLeft    6x8   offset (-4, -8) red-brown  (animated)
-///   LegRight   6x8   offset ( 4, -8) red-brown  (animated)
+///   Shadow           22x4   offset (0, -13)   dark translucent (ground shadow)
+///   Body             20x14  offset (0,  2)     red-brown
+///   Body highlight    8x3   offset (-3, 7)     lighter rim (top-left catch-light)
+///   Belly patch      10x6   offset (0, -1)     cream/tan (underbelly)
+///   Shoulder L        7x5   offset (-12, 4)    dark armor gray
+///   Shoulder R        7x5   offset ( 12, 4)    dark armor gray
+///   Belt              20x3  offset (0, -4)     dark brown leather
+///   Belt buckle        4x3  offset (0, -4)     dull gold
+///   Head             16x14  offset (0, 14)     slightly lighter red-brown
+///   Head shadow       14x4  offset (0, 10)     darker underside of head
+///   Brow ridge L       5x2  offset (-4, 20)    dark brow crease
+///   Brow ridge R       5x2  offset ( 4, 20)    dark brow crease
+///   Eye left           3x3  offset (-4, 17)    glowing yellow
+///   Eye pupil L        1x2  offset (-4, 16)    black slit pupil
+///   Eye right          3x3  offset ( 4, 17)    glowing yellow
+///   Eye pupil R        1x2  offset ( 4, 16)    black slit pupil
+///   Nose               4x2  offset (0, 14)     darker nostril patch
+///   Mouth/fang row     8x2  offset (0, 12)     dark gum line
+///   Fang left          2x3  offset (-2, 11)    dirty white fang
+///   Fang right         2x3  offset ( 2, 11)    dirty white fang
+///   Scar               6x1  offset (-2, 16)    lighter scar slash
+///   Club handle       4x14  offset (14, 5)     dark brown handle
+///   Club knob         8x8   offset (14, 14)    darker knob head
+///   Club spike        3x3   offset (14, 18)    metal spike tip
+///   Club grip wrap    4x3   offset (14, 0)     lighter wrap band
+///   Leg left          6x8   offset (-4, -8)    red-brown  (animated)
+///   Boot left         6x4   offset (-4, -14)   very dark brown boot
+///   Leg right         6x8   offset ( 4, -8)    red-brown  (animated)
+///   Boot right        6x4   offset ( 4, -14)   very dark brown boot
 fn spawn_ground_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
     let speed = 80.0 + floor as f32 * 10.0;
 
-    let body_color   = Color::srgb(0.65, 0.28, 0.20);
-    let head_color   = Color::srgb(0.72, 0.34, 0.25);
-    let eye_color    = Color::srgb(1.0,  0.95, 0.1);
-    let club_color   = Color::srgb(0.35, 0.20, 0.10);
-    let leg_color    = Color::srgb(0.60, 0.25, 0.18);
+    let body_color      = Color::srgb(0.65, 0.28, 0.20);
+    let body_hi_color   = Color::srgb(0.78, 0.40, 0.30);
+    let head_color      = Color::srgb(0.72, 0.34, 0.25);
+    let head_shadow     = Color::srgb(0.50, 0.20, 0.14);
+    let belly_color     = Color::srgb(0.82, 0.72, 0.52);
+    let eye_color       = Color::srgb(1.0,  0.95, 0.10);
+    let pupil_color     = Color::srgb(0.05, 0.02, 0.02);
+    let brow_color      = Color::srgb(0.30, 0.10, 0.06);
+    let nose_color      = Color::srgb(0.42, 0.16, 0.10);
+    let gum_color       = Color::srgb(0.38, 0.08, 0.08);
+    let fang_color      = Color::srgb(0.90, 0.88, 0.75);
+    let scar_color      = Color::srgb(0.85, 0.55, 0.45);
+    let shoulder_color  = Color::srgb(0.28, 0.28, 0.30);
+    let belt_color      = Color::srgb(0.30, 0.18, 0.08);
+    let buckle_color    = Color::srgb(0.70, 0.60, 0.20);
+    let club_color      = Color::srgb(0.35, 0.20, 0.10);
+    let club_hi_color   = Color::srgb(0.50, 0.32, 0.16);
+    let spike_color     = Color::srgb(0.60, 0.62, 0.65);
+    let leg_color       = Color::srgb(0.60, 0.25, 0.18);
+    let boot_color      = Color::srgb(0.22, 0.12, 0.06);
+    let shadow_color    = Color::srgba(0.0, 0.0, 0.0, 0.35);
 
     commands.spawn((
         Sprite {
@@ -230,30 +269,135 @@ fn spawn_ground_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
         RoomEntity,
         PlayingEntity,
     )).with_children(|parent| {
+        // Ground shadow blob (behind everything)
+        parent.spawn((
+            Sprite { color: shadow_color, custom_size: Some(Vec2::new(22.0, 4.0)), ..default() },
+            Transform::from_xyz(0.0, -13.0, 0.0),
+        ));
         // Body
         parent.spawn((
             Sprite { color: body_color, custom_size: Some(Vec2::new(20.0, 14.0)), ..default() },
             Transform::from_xyz(0.0, 2.0, 0.1),
+        ));
+        // Body top-left highlight (rim light)
+        parent.spawn((
+            Sprite { color: body_hi_color, custom_size: Some(Vec2::new(8.0, 3.0)), ..default() },
+            Transform::from_xyz(-3.0, 8.0, 0.15),
+        ));
+        // Belly / underbelly patch
+        parent.spawn((
+            Sprite { color: belly_color, custom_size: Some(Vec2::new(10.0, 6.0)), ..default() },
+            Transform::from_xyz(0.0, -1.0, 0.15),
+        ));
+        // Left shoulder armor plate
+        parent.spawn((
+            Sprite { color: shoulder_color, custom_size: Some(Vec2::new(7.0, 5.0)), ..default() },
+            Transform::from_xyz(-12.0, 4.0, 0.18),
+        ));
+        // Right shoulder armor plate
+        parent.spawn((
+            Sprite { color: shoulder_color, custom_size: Some(Vec2::new(7.0, 5.0)), ..default() },
+            Transform::from_xyz(12.0, 4.0, 0.18),
+        ));
+        // Belt strap
+        parent.spawn((
+            Sprite { color: belt_color, custom_size: Some(Vec2::new(20.0, 3.0)), ..default() },
+            Transform::from_xyz(0.0, -4.0, 0.19),
+        ));
+        // Belt buckle
+        parent.spawn((
+            Sprite { color: buckle_color, custom_size: Some(Vec2::new(4.0, 3.0)), ..default() },
+            Transform::from_xyz(0.0, -4.0, 0.20),
         ));
         // Head
         parent.spawn((
             Sprite { color: head_color, custom_size: Some(Vec2::new(16.0, 14.0)), ..default() },
             Transform::from_xyz(0.0, 14.0, 0.1),
         ));
+        // Head underside shadow
+        parent.spawn((
+            Sprite { color: head_shadow, custom_size: Some(Vec2::new(14.0, 4.0)), ..default() },
+            Transform::from_xyz(0.0, 10.0, 0.15),
+        ));
+        // Brow ridge left (angry crease)
+        parent.spawn((
+            Sprite { color: brow_color, custom_size: Some(Vec2::new(5.0, 2.0)), ..default() },
+            Transform::from_xyz(-4.0, 20.0, 0.22),
+        ));
+        // Brow ridge right
+        parent.spawn((
+            Sprite { color: brow_color, custom_size: Some(Vec2::new(5.0, 2.0)), ..default() },
+            Transform::from_xyz(4.0, 20.0, 0.22),
+        ));
         // Eye left
         parent.spawn((
             Sprite { color: eye_color, custom_size: Some(Vec2::new(3.0, 3.0)), ..default() },
             Transform::from_xyz(-4.0, 17.0, 0.2),
+        ));
+        // Slit pupil left
+        parent.spawn((
+            Sprite { color: pupil_color, custom_size: Some(Vec2::new(1.0, 2.0)), ..default() },
+            Transform::from_xyz(-4.0, 17.0, 0.25),
         ));
         // Eye right
         parent.spawn((
             Sprite { color: eye_color, custom_size: Some(Vec2::new(3.0, 3.0)), ..default() },
             Transform::from_xyz(4.0, 17.0, 0.2),
         ));
-        // Club (held to side)
+        // Slit pupil right
         parent.spawn((
-            Sprite { color: club_color, custom_size: Some(Vec2::new(6.0, 14.0)), ..default() },
-            Transform::from_xyz(14.0, 8.0, 0.1),
+            Sprite { color: pupil_color, custom_size: Some(Vec2::new(1.0, 2.0)), ..default() },
+            Transform::from_xyz(4.0, 17.0, 0.25),
+        ));
+        // Nostril patch
+        parent.spawn((
+            Sprite { color: nose_color, custom_size: Some(Vec2::new(4.0, 2.0)), ..default() },
+            Transform::from_xyz(0.0, 14.0, 0.22),
+        ));
+        // Gum / mouth line
+        parent.spawn((
+            Sprite { color: gum_color, custom_size: Some(Vec2::new(8.0, 2.0)), ..default() },
+            Transform::from_xyz(0.0, 12.0, 0.22),
+        ));
+        // Left fang
+        parent.spawn((
+            Sprite { color: fang_color, custom_size: Some(Vec2::new(2.0, 3.0)), ..default() },
+            Transform::from_xyz(-2.0, 11.0, 0.23),
+        ));
+        // Right fang
+        parent.spawn((
+            Sprite { color: fang_color, custom_size: Some(Vec2::new(2.0, 3.0)), ..default() },
+            Transform::from_xyz(2.0, 11.0, 0.23),
+        ));
+        // Scar slash across face
+        parent.spawn((
+            Sprite { color: scar_color, custom_size: Some(Vec2::new(6.0, 1.0)), ..default() },
+            Transform::from_xyz(-2.0, 16.0, 0.24),
+        ));
+        // Club handle (shaft)
+        parent.spawn((
+            Sprite { color: club_color, custom_size: Some(Vec2::new(4.0, 14.0)), ..default() },
+            Transform::from_xyz(14.0, 5.0, 0.1),
+        ));
+        // Club knob head
+        parent.spawn((
+            Sprite { color: club_color, custom_size: Some(Vec2::new(8.0, 8.0)), ..default() },
+            Transform::from_xyz(14.0, 14.0, 0.12),
+        ));
+        // Club knob highlight
+        parent.spawn((
+            Sprite { color: club_hi_color, custom_size: Some(Vec2::new(3.0, 3.0)), ..default() },
+            Transform::from_xyz(12.0, 16.0, 0.14),
+        ));
+        // Club spike on top
+        parent.spawn((
+            Sprite { color: spike_color, custom_size: Some(Vec2::new(3.0, 3.0)), ..default() },
+            Transform::from_xyz(14.0, 19.0, 0.15),
+        ));
+        // Club grip wrap band
+        parent.spawn((
+            Sprite { color: club_hi_color, custom_size: Some(Vec2::new(4.0, 3.0)), ..default() },
+            Transform::from_xyz(14.0, 0.0, 0.14),
         ));
         // Leg left (animated)
         parent.spawn((
@@ -261,26 +405,64 @@ fn spawn_ground_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
             Transform::from_xyz(-4.0, -8.0, 0.1),
             GoblinLegLeft,
         ));
+        // Boot left
+        parent.spawn((
+            Sprite { color: boot_color, custom_size: Some(Vec2::new(6.0, 4.0)), ..default() },
+            Transform::from_xyz(-4.0, -14.0, 0.12),
+        ));
         // Leg right (animated)
         parent.spawn((
             Sprite { color: leg_color, custom_size: Some(Vec2::new(6.0, 8.0)), ..default() },
             Transform::from_xyz(4.0, -8.0, 0.1),
             GoblinLegRight,
         ));
+        // Boot right
+        parent.spawn((
+            Sprite { color: boot_color, custom_size: Some(Vec2::new(6.0, 4.0)), ..default() },
+            Transform::from_xyz(4.0, -14.0, 0.12),
+        ));
     });
 }
 
 /// FlyingEnemy – Bat
 /// Layout:
-///   Body       18x12  center           purple
-///   EyeLeft     3x3   offset (-4, 3)   red
-///   EyeRight    3x3   offset ( 4, 3)   red
-///   WingLeft   16x8   offset (-16, 2)  dark purple  (animated rotate)
-///   WingRight  16x8   offset ( 16, 2)  dark purple  (animated rotate)
+///   Wing left          16x8   offset (-16, 2)   dark purple         (animated rotate)
+///   Wing vein left      2x6   offset (-18, 1)   even darker vein    (membrane detail)
+///   Wing left tip       6x4   offset (-26, 2)   near-black claw tip
+///   Wing right         16x8   offset ( 16, 2)   dark purple         (animated rotate)
+///   Wing vein right     2x6   offset ( 18, 1)   even darker vein
+///   Wing right tip      6x4   offset ( 26, 2)   near-black claw tip
+///   Body               18x12  center             purple
+///   Body belly patch   10x6   offset (0, -2)     lighter underbelly
+///   Body highlight      6x3   offset (-3, 4)     rim light
+///   Fur head tuft       8x5   offset (0, 8)      slightly lighter purple
+///   Ear left            4x6   offset (-6, 12)    dark purple ear
+///   Ear inner left      2x4   offset (-6, 13)    pink inner ear
+///   Ear right           4x6   offset ( 6, 12)    dark purple ear
+///   Ear inner right     2x4   offset ( 6, 13)    pink inner ear
+///   Nose leaf           5x3   offset (0, 3)      dark nose ornament
+///   Eye left            3x3   offset (-4, 3)     red
+///   Eye glow left       5x5   offset (-4, 3)     dim red glow behind eye
+///   Eye right           3x3   offset ( 4, 3)     red
+///   Eye glow right      5x5   offset ( 4, 3)     dim red glow
+///   Mouth               6x2   offset (0, 0)      dark gum
+///   Fang left           2x3   offset (-2, -1)    white fang
+///   Fang right          2x3   offset ( 2, -1)    white fang
 fn spawn_flying_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
-    let body_color = Color::srgb(0.55, 0.20, 0.70);
-    let eye_color  = Color::srgb(0.95, 0.15, 0.15);
-    let wing_color = Color::srgb(0.38, 0.10, 0.55);
+    let body_color    = Color::srgb(0.55, 0.20, 0.70);
+    let body_hi_color = Color::srgb(0.68, 0.32, 0.82);
+    let belly_color   = Color::srgb(0.72, 0.52, 0.80);
+    let eye_color     = Color::srgb(0.95, 0.15, 0.15);
+    let eye_glow      = Color::srgba(0.80, 0.05, 0.05, 0.45);
+    let wing_color    = Color::srgb(0.38, 0.10, 0.55);
+    let vein_color    = Color::srgb(0.22, 0.04, 0.35);
+    let tip_color     = Color::srgb(0.12, 0.02, 0.18);
+    let ear_color     = Color::srgb(0.35, 0.08, 0.50);
+    let ear_inner     = Color::srgb(0.80, 0.40, 0.55);
+    let fur_color     = Color::srgb(0.62, 0.26, 0.76);
+    let nose_color    = Color::srgb(0.28, 0.06, 0.40);
+    let gum_color     = Color::srgb(0.35, 0.05, 0.08);
+    let fang_color    = Color::srgb(0.92, 0.90, 0.80);
 
     commands.spawn((
         Sprite {
@@ -306,25 +488,21 @@ fn spawn_flying_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
         RoomEntity,
         PlayingEntity,
     )).with_children(|parent| {
-        // Body
-        parent.spawn((
-            Sprite { color: body_color, custom_size: Some(Vec2::new(18.0, 12.0)), ..default() },
-            Transform::from_xyz(0.0, 0.0, 0.1),
-        ));
-        // Eyes
-        parent.spawn((
-            Sprite { color: eye_color, custom_size: Some(Vec2::new(3.0, 3.0)), ..default() },
-            Transform::from_xyz(-4.0, 3.0, 0.2),
-        ));
-        parent.spawn((
-            Sprite { color: eye_color, custom_size: Some(Vec2::new(3.0, 3.0)), ..default() },
-            Transform::from_xyz(4.0, 3.0, 0.2),
-        ));
-        // Wing left (animated)
+        // Wing left (animated - spawned first so body renders on top)
         parent.spawn((
             Sprite { color: wing_color, custom_size: Some(Vec2::new(16.0, 8.0)), ..default() },
             Transform::from_xyz(-16.0, 2.0, 0.0),
             BatWingLeft,
+        ));
+        // Wing left membrane vein
+        parent.spawn((
+            Sprite { color: vein_color, custom_size: Some(Vec2::new(2.0, 6.0)), ..default() },
+            Transform::from_xyz(-18.0, 1.0, 0.01),
+        ));
+        // Wing left claw tip
+        parent.spawn((
+            Sprite { color: tip_color, custom_size: Some(Vec2::new(6.0, 4.0)), ..default() },
+            Transform::from_xyz(-26.0, 2.0, 0.01),
         ));
         // Wing right (animated)
         parent.spawn((
@@ -332,22 +510,136 @@ fn spawn_flying_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
             Transform::from_xyz(16.0, 2.0, 0.0),
             BatWingRight,
         ));
+        // Wing right membrane vein
+        parent.spawn((
+            Sprite { color: vein_color, custom_size: Some(Vec2::new(2.0, 6.0)), ..default() },
+            Transform::from_xyz(18.0, 1.0, 0.01),
+        ));
+        // Wing right claw tip
+        parent.spawn((
+            Sprite { color: tip_color, custom_size: Some(Vec2::new(6.0, 4.0)), ..default() },
+            Transform::from_xyz(26.0, 2.0, 0.01),
+        ));
+        // Body
+        parent.spawn((
+            Sprite { color: body_color, custom_size: Some(Vec2::new(18.0, 12.0)), ..default() },
+            Transform::from_xyz(0.0, 0.0, 0.1),
+        ));
+        // Belly underbelly patch
+        parent.spawn((
+            Sprite { color: belly_color, custom_size: Some(Vec2::new(10.0, 6.0)), ..default() },
+            Transform::from_xyz(0.0, -2.0, 0.15),
+        ));
+        // Body rim highlight
+        parent.spawn((
+            Sprite { color: body_hi_color, custom_size: Some(Vec2::new(6.0, 3.0)), ..default() },
+            Transform::from_xyz(-3.0, 4.0, 0.15),
+        ));
+        // Head fur tuft
+        parent.spawn((
+            Sprite { color: fur_color, custom_size: Some(Vec2::new(8.0, 5.0)), ..default() },
+            Transform::from_xyz(0.0, 8.0, 0.12),
+        ));
+        // Ear left
+        parent.spawn((
+            Sprite { color: ear_color, custom_size: Some(Vec2::new(4.0, 6.0)), ..default() },
+            Transform::from_xyz(-6.0, 12.0, 0.12),
+        ));
+        // Ear left inner
+        parent.spawn((
+            Sprite { color: ear_inner, custom_size: Some(Vec2::new(2.0, 4.0)), ..default() },
+            Transform::from_xyz(-6.0, 13.0, 0.14),
+        ));
+        // Ear right
+        parent.spawn((
+            Sprite { color: ear_color, custom_size: Some(Vec2::new(4.0, 6.0)), ..default() },
+            Transform::from_xyz(6.0, 12.0, 0.12),
+        ));
+        // Ear right inner
+        parent.spawn((
+            Sprite { color: ear_inner, custom_size: Some(Vec2::new(2.0, 4.0)), ..default() },
+            Transform::from_xyz(6.0, 13.0, 0.14),
+        ));
+        // Nose leaf ornament
+        parent.spawn((
+            Sprite { color: nose_color, custom_size: Some(Vec2::new(5.0, 3.0)), ..default() },
+            Transform::from_xyz(0.0, 3.0, 0.18),
+        ));
+        // Eye glow left (diffuse behind eye)
+        parent.spawn((
+            Sprite { color: eye_glow, custom_size: Some(Vec2::new(5.0, 5.0)), ..default() },
+            Transform::from_xyz(-4.0, 3.0, 0.19),
+        ));
+        // Eye left
+        parent.spawn((
+            Sprite { color: eye_color, custom_size: Some(Vec2::new(3.0, 3.0)), ..default() },
+            Transform::from_xyz(-4.0, 3.0, 0.2),
+        ));
+        // Eye glow right
+        parent.spawn((
+            Sprite { color: eye_glow, custom_size: Some(Vec2::new(5.0, 5.0)), ..default() },
+            Transform::from_xyz(4.0, 3.0, 0.19),
+        ));
+        // Eye right
+        parent.spawn((
+            Sprite { color: eye_color, custom_size: Some(Vec2::new(3.0, 3.0)), ..default() },
+            Transform::from_xyz(4.0, 3.0, 0.2),
+        ));
+        // Gum / mouth line
+        parent.spawn((
+            Sprite { color: gum_color, custom_size: Some(Vec2::new(6.0, 2.0)), ..default() },
+            Transform::from_xyz(0.0, 0.0, 0.22),
+        ));
+        // Fang left
+        parent.spawn((
+            Sprite { color: fang_color, custom_size: Some(Vec2::new(2.0, 3.0)), ..default() },
+            Transform::from_xyz(-2.0, -1.0, 0.23),
+        ));
+        // Fang right
+        parent.spawn((
+            Sprite { color: fang_color, custom_size: Some(Vec2::new(2.0, 3.0)), ..default() },
+            Transform::from_xyz(2.0, -1.0, 0.23),
+        ));
     });
 }
 
 /// TurretEnemy – Stone Tower
 /// Layout:
-///   Base        24x20  offset (0, -2)   gray stone
-///   Left crenel  6x6   offset (-9, 12)  darker gray
-///   Mid crenel   6x6   offset ( 0, 12)  darker gray
-///   Right crenel 6x6   offset ( 9, 12)  darker gray
-///   Eye barrel  10x6   offset (0, 2)    glowing orange  (rotates)
+///   Base shadow        26x4   offset (0, -13)    cast shadow
+///   Stone base         24x20  offset (0, -2)     mid gray stone
+///   Base highlight     22x3   offset (0, 6)      light catch on top face
+///   Left mortar line    2x18  offset (-8, -2)    dark mortar seam
+///   Right mortar line   2x18  offset ( 8, -2)    dark mortar seam
+///   Horiz mortar line  22x2   offset (0, -8)     horizontal mortar band
+///   Arrow slit          4x8   offset (0, -5)     dark window opening
+///   Arrow slit rim      6x10  offset (0, -5)     darker stone arch surround
+///   Base front face    24x5   offset (0, -14)    slightly lighter base ledge
+///   Left crenel         6x6   offset (-9, 12)    darker gray merlon
+///   Left crenel face    4x3   offset (-9, 10)    front face of merlon
+///   Mid crenel          6x6   offset ( 0, 12)    darker gray
+///   Mid crenel face     4x3   offset ( 0, 10)    front face
+///   Right crenel        6x6   offset ( 9, 12)    darker gray
+///   Right crenel face   4x3   offset ( 9, 10)    front face
+///   Eye socket ring    12x8   offset (0, 2)      dark socket surround
+///   Eye inner glow     10x6   offset (0, 2)      deep orange glow fill
+///   Eye barrel         10x6   offset (0, 2)      bright barrel tip  (TurretEye - rotates)
+///   Barrel tip ring     4x4   offset (6, 2)      lighter barrel end ring
 fn spawn_turret_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
     let interval = (2.0 - floor as f32 * 0.1).clamp(0.8, 2.5);
 
     let stone_color    = Color::srgb(0.50, 0.52, 0.55);
+    let stone_hi_color = Color::srgb(0.65, 0.67, 0.70);
+    let stone_ledge    = Color::srgb(0.58, 0.60, 0.63);
+    let mortar_color   = Color::srgb(0.28, 0.29, 0.32);
     let crenel_color   = Color::srgb(0.35, 0.37, 0.40);
+    let crenel_face    = Color::srgb(0.44, 0.46, 0.50);
+    let slit_color     = Color::srgb(0.10, 0.10, 0.12);
+    let slit_rim       = Color::srgb(0.28, 0.29, 0.32);
+    let socket_color   = Color::srgb(0.18, 0.12, 0.05);
+    let eye_glow_color = Color::srgb(0.80, 0.35, 0.02);
     let eye_color      = Color::srgb(1.0,  0.55, 0.05);
+    let barrel_rim     = Color::srgb(1.0,  0.75, 0.40);
+    let shadow_color   = Color::srgba(0.0, 0.0, 0.0, 0.35);
 
     commands.spawn((
         Sprite {
@@ -371,42 +663,135 @@ fn spawn_turret_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
         RoomEntity,
         PlayingEntity,
     )).with_children(|parent| {
-        // Stone base
+        // Ground cast shadow
+        parent.spawn((
+            Sprite { color: shadow_color, custom_size: Some(Vec2::new(26.0, 4.0)), ..default() },
+            Transform::from_xyz(0.0, -13.0, 0.0),
+        ));
+        // Stone base body
         parent.spawn((
             Sprite { color: stone_color, custom_size: Some(Vec2::new(24.0, 20.0)), ..default() },
             Transform::from_xyz(0.0, -2.0, 0.1),
         ));
+        // Top face catch-light
+        parent.spawn((
+            Sprite { color: stone_hi_color, custom_size: Some(Vec2::new(22.0, 3.0)), ..default() },
+            Transform::from_xyz(0.0, 6.0, 0.15),
+        ));
+        // Vertical mortar seam left
+        parent.spawn((
+            Sprite { color: mortar_color, custom_size: Some(Vec2::new(2.0, 18.0)), ..default() },
+            Transform::from_xyz(-8.0, -2.0, 0.13),
+        ));
+        // Vertical mortar seam right
+        parent.spawn((
+            Sprite { color: mortar_color, custom_size: Some(Vec2::new(2.0, 18.0)), ..default() },
+            Transform::from_xyz(8.0, -2.0, 0.13),
+        ));
+        // Horizontal mortar band
+        parent.spawn((
+            Sprite { color: mortar_color, custom_size: Some(Vec2::new(22.0, 2.0)), ..default() },
+            Transform::from_xyz(0.0, -8.0, 0.13),
+        ));
+        // Arrow slit surround / rim
+        parent.spawn((
+            Sprite { color: slit_rim, custom_size: Some(Vec2::new(6.0, 10.0)), ..default() },
+            Transform::from_xyz(0.0, -5.0, 0.14),
+        ));
+        // Arrow slit opening
+        parent.spawn((
+            Sprite { color: slit_color, custom_size: Some(Vec2::new(4.0, 8.0)), ..default() },
+            Transform::from_xyz(0.0, -5.0, 0.16),
+        ));
+        // Base front ledge
+        parent.spawn((
+            Sprite { color: stone_ledge, custom_size: Some(Vec2::new(24.0, 5.0)), ..default() },
+            Transform::from_xyz(0.0, -14.0, 0.16),
+        ));
         // Crenellations (3 merlons on top)
         for cx in [-9i32, 0, 9] {
+            // Merlon body
             parent.spawn((
                 Sprite { color: crenel_color, custom_size: Some(Vec2::new(6.0, 6.0)), ..default() },
                 Transform::from_xyz(cx as f32, 12.0, 0.1),
             ));
+            // Merlon front face highlight
+            parent.spawn((
+                Sprite { color: crenel_face, custom_size: Some(Vec2::new(4.0, 3.0)), ..default() },
+                Transform::from_xyz(cx as f32, 10.0, 0.14),
+            ));
         }
-        // Glowing eye / barrel (rotates toward player)
+        // Eye socket / dark surround ring
+        parent.spawn((
+            Sprite { color: socket_color, custom_size: Some(Vec2::new(12.0, 8.0)), ..default() },
+            Transform::from_xyz(0.0, 2.0, 0.17),
+        ));
+        // Inner glow fill
+        parent.spawn((
+            Sprite { color: eye_glow_color, custom_size: Some(Vec2::new(10.0, 6.0)), ..default() },
+            Transform::from_xyz(0.0, 2.0, 0.18),
+        ));
+        // Glowing barrel (rotates toward player)
         parent.spawn((
             Sprite { color: eye_color, custom_size: Some(Vec2::new(10.0, 6.0)), ..default() },
             Transform::from_xyz(0.0, 2.0, 0.2),
             TurretEye,
+        ));
+        // Barrel end ring / muzzle highlight
+        parent.spawn((
+            Sprite { color: barrel_rim, custom_size: Some(Vec2::new(4.0, 4.0)), ..default() },
+            Transform::from_xyz(6.0, 2.0, 0.21),
         ));
     });
 }
 
 /// ChargerEnemy – Bull / Boar
 /// Layout:
-///   Body        26x16  offset (0, 0)     orange-brown
-///   Head        18x14  offset (14, 2)    slightly lighter
-///   Hoof left    6x5   offset (-10, -10) dark brown
-///   Hoof right   6x5   offset (-2,  -10) dark brown
-///   Horn left   12x5   offset (18, 9)    cream/tan  (tilts when charging)
-///   Horn right  12x5   offset (18, 4)    cream/tan  (tilts when charging)
-///   Eye          3x3   offset (19, 6)    angry red
+///   Shadow           28x4   offset (0, -13)    ground shadow
+///   Body             26x16  offset (0, 0)       orange-brown
+///   Body underside   20x5   offset (0, -6)      darker belly underside
+///   Belly patch      14x7   offset (0, -3)      cream underbelly
+///   Body highlight    8x3   offset (-6, 6)      rim light
+///   Spine ridge L     4x12  offset (-10, 4)     dark ridge stripe
+///   Spine ridge R     4x12  offset (-6,  4)     slightly lighter
+///   Shoulder muscle  10x8   offset (-8, 4)      bulge highlight
+///   Head             18x14  offset (14, 2)      slightly lighter
+///   Head shadow       16x4  offset (14, -2)     chin shadow
+///   Nostril           4x3   offset (21, 1)      dark nostril patch
+///   Snort marking     6x2   offset (19, 5)      angular angry marking
+///   Eye socket ring   5x5   offset (19, 6)      dark eye ring
+///   Eye               3x3   offset (19, 6)      angry red
+///   Hoof front L      6x5   offset (-10, -10)   dark brown
+///   Hoof front R      6x5   offset (-2,  -10)   dark brown
+///   Hoof rear L       6x5   offset (-18, -10)   dark brown (rear legs)
+///   Hoof rear R       6x5   offset (-26, -10)   dark brown
+///   Leg upper front   6x8   offset (-6, -4)     body-color leg
+///   Leg upper rear    6x8   offset (-22, -4)    body-color leg
+///   Tail nub          5x4   offset (-16, 6)     dark tail stub
+///   Horn upper       12x5   offset (18, 9)      cream/tan  (BoarHorn animated)
+///   Horn tip upper    4x3   offset (28, 9)      darker horn tip
+///   Horn lower       12x5   offset (18, 4)      cream/tan  (BoarHorn animated)
+///   Horn tip lower    4x3   offset (28, 4)      darker horn tip
 fn spawn_charger_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
-    let body_color = Color::srgb(0.72, 0.40, 0.14);
-    let head_color = Color::srgb(0.80, 0.48, 0.18);
-    let hoof_color = Color::srgb(0.28, 0.18, 0.08);
-    let horn_color = Color::srgb(0.90, 0.85, 0.65);
-    let eye_color  = Color::srgb(0.95, 0.15, 0.15);
+    let body_color      = Color::srgb(0.72, 0.40, 0.14);
+    let body_hi_color   = Color::srgb(0.85, 0.52, 0.22);
+    let body_dark       = Color::srgb(0.52, 0.28, 0.08);
+    let belly_color     = Color::srgb(0.88, 0.78, 0.58);
+    let head_color      = Color::srgb(0.80, 0.48, 0.18);
+    let head_shadow     = Color::srgb(0.58, 0.32, 0.10);
+    let hoof_color      = Color::srgb(0.28, 0.18, 0.08);
+    let leg_color       = Color::srgb(0.65, 0.36, 0.12);
+    let horn_color      = Color::srgb(0.90, 0.85, 0.65);
+    let horn_tip        = Color::srgb(0.65, 0.55, 0.35);
+    let eye_color       = Color::srgb(0.95, 0.15, 0.15);
+    let socket_color    = Color::srgb(0.25, 0.05, 0.05);
+    let nostril_color   = Color::srgb(0.38, 0.20, 0.06);
+    let marking_color   = Color::srgb(0.48, 0.18, 0.04);
+    let ridge_dark      = Color::srgb(0.48, 0.26, 0.08);
+    let ridge_mid       = Color::srgb(0.60, 0.34, 0.10);
+    let shoulder_color  = Color::srgb(0.80, 0.48, 0.20);
+    let tail_color      = Color::srgb(0.38, 0.20, 0.06);
+    let shadow_color    = Color::srgba(0.0, 0.0, 0.0, 0.35);
 
     commands.spawn((
         Sprite {
@@ -432,24 +817,110 @@ fn spawn_charger_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
         RoomEntity,
         PlayingEntity,
     )).with_children(|parent| {
-        // Body
+        // Ground shadow blob
+        parent.spawn((
+            Sprite { color: shadow_color, custom_size: Some(Vec2::new(28.0, 4.0)), ..default() },
+            Transform::from_xyz(0.0, -13.0, 0.0),
+        ));
+        // Body main
         parent.spawn((
             Sprite { color: body_color, custom_size: Some(Vec2::new(26.0, 16.0)), ..default() },
             Transform::from_xyz(0.0, 0.0, 0.1),
+        ));
+        // Body underside dark strip
+        parent.spawn((
+            Sprite { color: body_dark, custom_size: Some(Vec2::new(20.0, 5.0)), ..default() },
+            Transform::from_xyz(0.0, -6.0, 0.12),
+        ));
+        // Belly cream underbelly
+        parent.spawn((
+            Sprite { color: belly_color, custom_size: Some(Vec2::new(14.0, 7.0)), ..default() },
+            Transform::from_xyz(0.0, -3.0, 0.14),
+        ));
+        // Body top rim highlight
+        parent.spawn((
+            Sprite { color: body_hi_color, custom_size: Some(Vec2::new(8.0, 3.0)), ..default() },
+            Transform::from_xyz(-6.0, 6.0, 0.14),
+        ));
+        // Spine ridge left dark stripe
+        parent.spawn((
+            Sprite { color: ridge_dark, custom_size: Some(Vec2::new(4.0, 12.0)), ..default() },
+            Transform::from_xyz(-10.0, 4.0, 0.13),
+        ));
+        // Spine ridge right lighter stripe
+        parent.spawn((
+            Sprite { color: ridge_mid, custom_size: Some(Vec2::new(4.0, 12.0)), ..default() },
+            Transform::from_xyz(-6.0, 4.0, 0.13),
+        ));
+        // Shoulder muscle bulge
+        parent.spawn((
+            Sprite { color: shoulder_color, custom_size: Some(Vec2::new(10.0, 8.0)), ..default() },
+            Transform::from_xyz(-8.0, 4.0, 0.14),
+        ));
+        // Rear upper leg
+        parent.spawn((
+            Sprite { color: leg_color, custom_size: Some(Vec2::new(6.0, 8.0)), ..default() },
+            Transform::from_xyz(-22.0, -4.0, 0.09),
+        ));
+        // Rear hoof left
+        parent.spawn((
+            Sprite { color: hoof_color, custom_size: Some(Vec2::new(6.0, 5.0)), ..default() },
+            Transform::from_xyz(-18.0, -10.0, 0.09),
+        ));
+        // Rear hoof right
+        parent.spawn((
+            Sprite { color: hoof_color, custom_size: Some(Vec2::new(6.0, 5.0)), ..default() },
+            Transform::from_xyz(-26.0, -10.0, 0.09),
+        ));
+        // Tail stub
+        parent.spawn((
+            Sprite { color: tail_color, custom_size: Some(Vec2::new(5.0, 4.0)), ..default() },
+            Transform::from_xyz(-16.0, 6.0, 0.09),
         ));
         // Head (forward-facing)
         parent.spawn((
             Sprite { color: head_color, custom_size: Some(Vec2::new(18.0, 14.0)), ..default() },
             Transform::from_xyz(14.0, 2.0, 0.1),
         ));
-        // Hooves
+        // Head chin shadow
         parent.spawn((
-            Sprite { color: hoof_color, custom_size: Some(Vec2::new(6.0, 5.0)), ..default() },
-            Transform::from_xyz(-10.0, -10.0, 0.1),
+            Sprite { color: head_shadow, custom_size: Some(Vec2::new(16.0, 4.0)), ..default() },
+            Transform::from_xyz(14.0, -2.0, 0.14),
         ));
+        // Angry face marking / slash
+        parent.spawn((
+            Sprite { color: marking_color, custom_size: Some(Vec2::new(6.0, 2.0)), ..default() },
+            Transform::from_xyz(19.0, 5.0, 0.16),
+        ));
+        // Nostril patch
+        parent.spawn((
+            Sprite { color: nostril_color, custom_size: Some(Vec2::new(4.0, 3.0)), ..default() },
+            Transform::from_xyz(21.0, 1.0, 0.16),
+        ));
+        // Front upper leg
+        parent.spawn((
+            Sprite { color: leg_color, custom_size: Some(Vec2::new(6.0, 8.0)), ..default() },
+            Transform::from_xyz(-6.0, -4.0, 0.11),
+        ));
+        // Front hoof left
         parent.spawn((
             Sprite { color: hoof_color, custom_size: Some(Vec2::new(6.0, 5.0)), ..default() },
-            Transform::from_xyz(-2.0, -10.0, 0.1),
+            Transform::from_xyz(-10.0, -10.0, 0.11),
+        ));
+        // Front hoof right
+        parent.spawn((
+            Sprite { color: hoof_color, custom_size: Some(Vec2::new(6.0, 5.0)), ..default() },
+            Transform::from_xyz(-2.0, -10.0, 0.11),
+        ));
+        // Eye socket dark ring
+        parent.spawn((
+            Sprite { color: socket_color, custom_size: Some(Vec2::new(5.0, 5.0)), ..default() },
+            Transform::from_xyz(19.0, 6.0, 0.28),
+        ));
+        // Angry eye
+        parent.spawn((
+            Sprite { color: eye_color, custom_size: Some(Vec2::new(3.0, 3.0)), ..default() },
+            Transform::from_xyz(19.0, 6.0, 0.30),
         ));
         // Horn upper (animated)
         parent.spawn((
@@ -457,41 +928,102 @@ fn spawn_charger_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
             Transform::from_xyz(18.0, 9.0, 0.2),
             BoarHorn { side: 1.0 },
         ));
+        // Horn upper tip
+        parent.spawn((
+            Sprite { color: horn_tip, custom_size: Some(Vec2::new(4.0, 3.0)), ..default() },
+            Transform::from_xyz(28.0, 9.0, 0.2),
+        ));
         // Horn lower (animated)
         parent.spawn((
             Sprite { color: horn_color, custom_size: Some(Vec2::new(12.0, 5.0)), ..default() },
             Transform::from_xyz(18.0, 4.0, 0.2),
             BoarHorn { side: -1.0 },
         ));
-        // Angry eye
+        // Horn lower tip
         parent.spawn((
-            Sprite { color: eye_color, custom_size: Some(Vec2::new(3.0, 3.0)), ..default() },
-            Transform::from_xyz(19.0, 6.0, 0.3),
+            Sprite { color: horn_tip, custom_size: Some(Vec2::new(4.0, 3.0)), ..default() },
+            Transform::from_xyz(28.0, 4.0, 0.2),
         ));
     });
 }
 
 /// Boss – Lich-like dark creature (48x48 root hitbox)
 /// Layout:
-///   Main body        36x28  offset (0, -4)    dark crimson
-///   Robe/skirt       32x14  offset (0, -18)   very dark red
-///   Head             24x22  offset (0,  18)   deep red
-///   Eye left          5x5   offset (-6, 22)   glowing magenta
-///   Eye right         5x5   offset ( 6, 22)   glowing magenta
-///   Spike left       10x5   offset (-14, 30)  near-black red  (crown)
-///   Spike mid         8x6   offset (  0, 33)  near-black red  (crown center, taller)
-///   Spike right      10x5   offset ( 14, 30)  near-black red  (crown)
-///   Claw left        12x8   offset (-22, -2)  dark maroon
-///   Claw right       12x8   offset ( 22, -2)  dark maroon
+///   Dark aura          52x52  offset (0, 0)       near-black translucent halo
+///   Robe/skirt base    32x14  offset (0, -18)      very dark red
+///   Robe hem trim      36x4   offset (0, -24)      slightly lighter hem edge
+///   Robe inner lining  18x10  offset (0, -17)      dark crimson inner
+///   Robe lining edge    2x10  offset (±9, -17)     even darker fold lines
+///   Main body          36x28  offset (0, -4)       dark crimson
+///   Body shadow strip  30x6   offset (0, -14)      very dark bottom body
+///   Body highlight     14x5   offset (-8, 6)       lighter rim catch-light
+///   Rib line 1          2x16  offset (-6, -4)      bone-colored rib
+///   Rib line 2          2x16  offset (-2, -4)      bone-colored rib
+///   Rib line 3          2x16  offset ( 2, -4)      bone-colored rib
+///   Rib line 4          2x16  offset ( 6, -4)      bone-colored rib
+///   Pauldron left      12x8   offset (-22, 6)      dark maroon shoulder pad
+///   Pauldron spike L    4x6   offset (-24, 12)     near-black spike on pad
+///   Pauldron right     12x8   offset ( 22, 6)      dark maroon shoulder pad
+///   Pauldron spike R    4x6   offset ( 24, 12)     near-black spike on pad
+///   Claw left arm      12x8   offset (-22, -2)     dark maroon
+///   Claw finger 1 L     3x5   offset (-28, -4)     bone claw
+///   Claw finger 2 L     3x5   offset (-31, -1)     bone claw (spread)
+///   Claw right arm     12x8   offset ( 22, -2)     dark maroon
+///   Claw finger 1 R     3x5   offset ( 28, -4)     bone claw
+///   Claw finger 2 R     3x5   offset ( 31, -1)     bone claw
+///   Head               24x22  offset (0,  18)      deep red
+///   Head shadow strip  22x6   offset (0,  12)      very dark chin underside
+///   Head highlight     10x4   offset (-4, 26)      rim catch-light on skull
+///   Cheekbone L         6x3   offset (-8, 20)      prominent cheek ridge
+///   Cheekbone R         6x3   offset ( 8, 20)      prominent cheek ridge
+///   Nose cavity         5x4   offset (0,  16)      very dark nose socket
+///   Jaw line           18x3   offset (0,  12)      dark jaw edge
+///   Teeth row          16x3   offset (0,  10)      off-white tooth row
+///   Fang center L       3x5   offset (-3, 9)       long fang
+///   Fang center R       3x5   offset ( 3, 9)       long fang
+///   Eye socket L       10x10  offset (-6, 22)      very dark socket depression
+///   Eye glow L          7x7   offset (-6, 22)      magenta diffuse glow
+///   Eye left            5x5   offset (-6, 22)      bright magenta eye
+///   Eye socket R       10x10  offset ( 6, 22)      very dark socket
+///   Eye glow R          7x7   offset ( 6, 22)      magenta diffuse glow
+///   Eye right           5x5   offset ( 6, 22)      bright magenta eye
+///   Crown band         26x4   offset (0, 29)       dark crown base band
+///   Spike outer L      10x5   offset (-14, 30)     near-black spike
+///   Spike inner L       8x4   offset (-8,  32)     inner spike
+///   Spike mid           8x10  offset (  0, 33)     center tall spike
+///   Spike mid gem       4x4   offset (  0, 38)     glowing gem atop center spike
+///   Spike inner R       8x4   offset ( 8,  32)     inner spike
+///   Spike outer R      10x5   offset ( 14, 30)     near-black spike
 fn spawn_boss(commands: &mut Commands, floor: i32) {
     let hp = 10 + floor * 3;
 
-    let body_color  = Color::srgb(0.45, 0.05, 0.08);
-    let robe_color  = Color::srgb(0.30, 0.03, 0.05);
-    let head_color  = Color::srgb(0.52, 0.08, 0.10);
-    let eye_color   = Color::srgb(1.0,  0.20, 0.90);
-    let spike_color = Color::srgb(0.22, 0.02, 0.04);
-    let claw_color  = Color::srgb(0.38, 0.04, 0.06);
+    let body_color      = Color::srgb(0.45, 0.05, 0.08);
+    let body_hi_color   = Color::srgb(0.60, 0.12, 0.15);
+    let body_dark       = Color::srgb(0.25, 0.02, 0.04);
+    let robe_color      = Color::srgb(0.30, 0.03, 0.05);
+    let robe_hem        = Color::srgb(0.40, 0.06, 0.08);
+    let robe_lining     = Color::srgb(0.38, 0.05, 0.07);
+    let robe_fold       = Color::srgb(0.18, 0.02, 0.03);
+    let head_color      = Color::srgb(0.52, 0.08, 0.10);
+    let head_shadow     = Color::srgb(0.28, 0.03, 0.05);
+    let head_hi         = Color::srgb(0.65, 0.15, 0.18);
+    let cheek_color     = Color::srgb(0.42, 0.06, 0.08);
+    let nose_color      = Color::srgb(0.10, 0.01, 0.02);
+    let jaw_color       = Color::srgb(0.30, 0.03, 0.05);
+    let teeth_color     = Color::srgb(0.80, 0.75, 0.65);
+    let fang_color      = Color::srgb(0.90, 0.88, 0.78);
+    let eye_socket      = Color::srgb(0.06, 0.01, 0.01);
+    let eye_glow        = Color::srgba(0.90, 0.10, 0.80, 0.50);
+    let eye_color       = Color::srgb(1.0,  0.20, 0.90);
+    let spike_color     = Color::srgb(0.22, 0.02, 0.04);
+    let crown_color     = Color::srgb(0.18, 0.02, 0.03);
+    let gem_color       = Color::srgb(0.90, 0.30, 1.00);
+    let claw_color      = Color::srgb(0.38, 0.04, 0.06);
+    let bone_color      = Color::srgb(0.75, 0.70, 0.60);
+    let pauldron_color  = Color::srgb(0.28, 0.03, 0.05);
+    let pauldron_spike  = Color::srgb(0.12, 0.01, 0.02);
+    let rib_color       = Color::srgb(0.55, 0.42, 0.38);
+    let aura_color      = Color::srgba(0.15, 0.0, 0.20, 0.30);
 
     commands.spawn((
         Sprite {
@@ -516,48 +1048,220 @@ fn spawn_boss(commands: &mut Commands, floor: i32) {
         RoomEntity,
         PlayingEntity,
     )).with_children(|parent| {
-        // Robe/skirt (behind body)
+        // Dark aura / shadow halo (behind everything)
+        parent.spawn((
+            Sprite { color: aura_color, custom_size: Some(Vec2::new(52.0, 52.0)), ..default() },
+            Transform::from_xyz(0.0, 0.0, 0.0),
+        ));
+        // Robe/skirt base (behind body)
         parent.spawn((
             Sprite { color: robe_color, custom_size: Some(Vec2::new(32.0, 14.0)), ..default() },
-            Transform::from_xyz(0.0, -18.0, 0.0),
+            Transform::from_xyz(0.0, -18.0, 0.05),
+        ));
+        // Robe inner lining center
+        parent.spawn((
+            Sprite { color: robe_lining, custom_size: Some(Vec2::new(18.0, 10.0)), ..default() },
+            Transform::from_xyz(0.0, -17.0, 0.06),
+        ));
+        // Robe fold line left
+        parent.spawn((
+            Sprite { color: robe_fold, custom_size: Some(Vec2::new(2.0, 10.0)), ..default() },
+            Transform::from_xyz(-9.0, -17.0, 0.07),
+        ));
+        // Robe fold line right
+        parent.spawn((
+            Sprite { color: robe_fold, custom_size: Some(Vec2::new(2.0, 10.0)), ..default() },
+            Transform::from_xyz(9.0, -17.0, 0.07),
+        ));
+        // Robe hem trim at bottom
+        parent.spawn((
+            Sprite { color: robe_hem, custom_size: Some(Vec2::new(36.0, 4.0)), ..default() },
+            Transform::from_xyz(0.0, -24.0, 0.06),
         ));
         // Main body
         parent.spawn((
             Sprite { color: body_color, custom_size: Some(Vec2::new(36.0, 28.0)), ..default() },
             Transform::from_xyz(0.0, -4.0, 0.1),
         ));
-        // Claws
+        // Body bottom shadow strip
+        parent.spawn((
+            Sprite { color: body_dark, custom_size: Some(Vec2::new(30.0, 6.0)), ..default() },
+            Transform::from_xyz(0.0, -14.0, 0.14),
+        ));
+        // Body top rim highlight
+        parent.spawn((
+            Sprite { color: body_hi_color, custom_size: Some(Vec2::new(14.0, 5.0)), ..default() },
+            Transform::from_xyz(-8.0, 6.0, 0.14),
+        ));
+        // Ribcage lines
+        for (i, rx) in [-6i32, -2, 2, 6].iter().enumerate() {
+            let z_off = 0.01 * i as f32;
+            parent.spawn((
+                Sprite { color: rib_color, custom_size: Some(Vec2::new(2.0, 16.0)), ..default() },
+                Transform::from_xyz(*rx as f32, -4.0, 0.15 + z_off),
+            ));
+        }
+        // Pauldron left
+        parent.spawn((
+            Sprite { color: pauldron_color, custom_size: Some(Vec2::new(12.0, 8.0)), ..default() },
+            Transform::from_xyz(-22.0, 6.0, 0.16),
+        ));
+        // Pauldron spike left
+        parent.spawn((
+            Sprite { color: pauldron_spike, custom_size: Some(Vec2::new(4.0, 6.0)), ..default() },
+            Transform::from_xyz(-24.0, 12.0, 0.17),
+        ));
+        // Pauldron right
+        parent.spawn((
+            Sprite { color: pauldron_color, custom_size: Some(Vec2::new(12.0, 8.0)), ..default() },
+            Transform::from_xyz(22.0, 6.0, 0.16),
+        ));
+        // Pauldron spike right
+        parent.spawn((
+            Sprite { color: pauldron_spike, custom_size: Some(Vec2::new(4.0, 6.0)), ..default() },
+            Transform::from_xyz(24.0, 12.0, 0.17),
+        ));
+        // Claw left arm
         parent.spawn((
             Sprite { color: claw_color, custom_size: Some(Vec2::new(12.0, 8.0)), ..default() },
             Transform::from_xyz(-22.0, -2.0, 0.1),
         ));
+        // Claw finger 1 left (pointing down)
+        parent.spawn((
+            Sprite { color: bone_color, custom_size: Some(Vec2::new(3.0, 5.0)), ..default() },
+            Transform::from_xyz(-28.0, -4.0, 0.12),
+        ));
+        // Claw finger 2 left (spread out)
+        parent.spawn((
+            Sprite { color: bone_color, custom_size: Some(Vec2::new(3.0, 5.0)), ..default() },
+            Transform::from_xyz(-31.0, -1.0, 0.12),
+        ));
+        // Claw right arm
         parent.spawn((
             Sprite { color: claw_color, custom_size: Some(Vec2::new(12.0, 8.0)), ..default() },
             Transform::from_xyz(22.0, -2.0, 0.1),
+        ));
+        // Claw finger 1 right
+        parent.spawn((
+            Sprite { color: bone_color, custom_size: Some(Vec2::new(3.0, 5.0)), ..default() },
+            Transform::from_xyz(28.0, -4.0, 0.12),
+        ));
+        // Claw finger 2 right
+        parent.spawn((
+            Sprite { color: bone_color, custom_size: Some(Vec2::new(3.0, 5.0)), ..default() },
+            Transform::from_xyz(31.0, -1.0, 0.12),
         ));
         // Head
         parent.spawn((
             Sprite { color: head_color, custom_size: Some(Vec2::new(24.0, 22.0)), ..default() },
             Transform::from_xyz(0.0, 18.0, 0.1),
         ));
-        // Eyes
+        // Head chin shadow underside
+        parent.spawn((
+            Sprite { color: head_shadow, custom_size: Some(Vec2::new(22.0, 6.0)), ..default() },
+            Transform::from_xyz(0.0, 12.0, 0.14),
+        ));
+        // Head skull catch-light
+        parent.spawn((
+            Sprite { color: head_hi, custom_size: Some(Vec2::new(10.0, 4.0)), ..default() },
+            Transform::from_xyz(-4.0, 26.0, 0.14),
+        ));
+        // Cheekbone left
+        parent.spawn((
+            Sprite { color: cheek_color, custom_size: Some(Vec2::new(6.0, 3.0)), ..default() },
+            Transform::from_xyz(-8.0, 20.0, 0.14),
+        ));
+        // Cheekbone right
+        parent.spawn((
+            Sprite { color: cheek_color, custom_size: Some(Vec2::new(6.0, 3.0)), ..default() },
+            Transform::from_xyz(8.0, 20.0, 0.14),
+        ));
+        // Nose cavity (dark hollow)
+        parent.spawn((
+            Sprite { color: nose_color, custom_size: Some(Vec2::new(5.0, 4.0)), ..default() },
+            Transform::from_xyz(0.0, 16.0, 0.16),
+        ));
+        // Jaw edge line
+        parent.spawn((
+            Sprite { color: jaw_color, custom_size: Some(Vec2::new(18.0, 3.0)), ..default() },
+            Transform::from_xyz(0.0, 12.0, 0.16),
+        ));
+        // Teeth row
+        parent.spawn((
+            Sprite { color: teeth_color, custom_size: Some(Vec2::new(16.0, 3.0)), ..default() },
+            Transform::from_xyz(0.0, 10.0, 0.17),
+        ));
+        // Center fang left
+        parent.spawn((
+            Sprite { color: fang_color, custom_size: Some(Vec2::new(3.0, 5.0)), ..default() },
+            Transform::from_xyz(-3.0, 9.0, 0.18),
+        ));
+        // Center fang right
+        parent.spawn((
+            Sprite { color: fang_color, custom_size: Some(Vec2::new(3.0, 5.0)), ..default() },
+            Transform::from_xyz(3.0, 9.0, 0.18),
+        ));
+        // Eye socket left (deep dark hollow)
+        parent.spawn((
+            Sprite { color: eye_socket, custom_size: Some(Vec2::new(10.0, 10.0)), ..default() },
+            Transform::from_xyz(-6.0, 22.0, 0.18),
+        ));
+        // Eye diffuse glow left
+        parent.spawn((
+            Sprite { color: eye_glow, custom_size: Some(Vec2::new(7.0, 7.0)), ..default() },
+            Transform::from_xyz(-6.0, 22.0, 0.19),
+        ));
+        // Eye left
         parent.spawn((
             Sprite { color: eye_color, custom_size: Some(Vec2::new(5.0, 5.0)), ..default() },
             Transform::from_xyz(-6.0, 22.0, 0.2),
         ));
+        // Eye socket right
+        parent.spawn((
+            Sprite { color: eye_socket, custom_size: Some(Vec2::new(10.0, 10.0)), ..default() },
+            Transform::from_xyz(6.0, 22.0, 0.18),
+        ));
+        // Eye diffuse glow right
+        parent.spawn((
+            Sprite { color: eye_glow, custom_size: Some(Vec2::new(7.0, 7.0)), ..default() },
+            Transform::from_xyz(6.0, 22.0, 0.19),
+        ));
+        // Eye right
         parent.spawn((
             Sprite { color: eye_color, custom_size: Some(Vec2::new(5.0, 5.0)), ..default() },
             Transform::from_xyz(6.0, 22.0, 0.2),
         ));
-        // Crown spikes
+        // Crown band base
+        parent.spawn((
+            Sprite { color: crown_color, custom_size: Some(Vec2::new(26.0, 4.0)), ..default() },
+            Transform::from_xyz(0.0, 29.0, 0.2),
+        ));
+        // Crown spike outer left
         parent.spawn((
             Sprite { color: spike_color, custom_size: Some(Vec2::new(10.0, 5.0)), ..default() },
             Transform::from_xyz(-14.0, 30.0, 0.2),
         ));
+        // Crown spike inner left
         parent.spawn((
-            Sprite { color: spike_color, custom_size: Some(Vec2::new(8.0, 8.0)), ..default() },
+            Sprite { color: spike_color, custom_size: Some(Vec2::new(8.0, 4.0)), ..default() },
+            Transform::from_xyz(-8.0, 32.0, 0.2),
+        ));
+        // Crown spike center (tallest)
+        parent.spawn((
+            Sprite { color: spike_color, custom_size: Some(Vec2::new(8.0, 10.0)), ..default() },
             Transform::from_xyz(0.0, 33.0, 0.2),
         ));
+        // Crown center gem
+        parent.spawn((
+            Sprite { color: gem_color, custom_size: Some(Vec2::new(4.0, 4.0)), ..default() },
+            Transform::from_xyz(0.0, 38.0, 0.22),
+        ));
+        // Crown spike inner right
+        parent.spawn((
+            Sprite { color: spike_color, custom_size: Some(Vec2::new(8.0, 4.0)), ..default() },
+            Transform::from_xyz(8.0, 32.0, 0.2),
+        ));
+        // Crown spike outer right
         parent.spawn((
             Sprite { color: spike_color, custom_size: Some(Vec2::new(10.0, 5.0)), ..default() },
             Transform::from_xyz(14.0, 30.0, 0.2),
