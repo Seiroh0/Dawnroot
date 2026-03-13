@@ -1,9 +1,10 @@
 use bevy::prelude::*;
 use crate::{
+    constants::{ROOM_W, ROOM_H, Z_HUD},
     GameState, PlayingEntity,
     enemy::EnemyDefeated,
     player::{PlayerDamaged, PlayerLanded, PlayerDashed},
-    room::RoomCleared,
+    room::{RoomCleared, RoomTransition},
 };
 
 pub struct EffectsPlugin;
@@ -16,11 +17,13 @@ impl Plugin for EffectsPlugin {
                 on_enemy_defeated,
                 on_player_damaged,
                 on_room_cleared,
+                on_room_transition_fade,
                 on_player_dash,
                 on_player_landed,
                 update_particles,
                 update_confetti,
                 update_flash_sprites,
+                update_room_fade,
             )
                 .run_if(in_state(GameState::Playing)),
         );
@@ -54,6 +57,13 @@ struct Confetti {
 struct FlashSprite {
     lifetime: f32,
     max_lifetime: f32,
+}
+
+/// Full-screen fade overlay used for room transitions.
+#[derive(Component)]
+struct RoomFadeOverlay {
+    timer: f32,
+    max_time: f32,
 }
 
 // ---------------------------------------------------------------------------
@@ -407,5 +417,44 @@ fn update_flash_sprites(
         let alpha = (flash.lifetime / flash.max_lifetime).clamp(0.0, 1.0);
         let c = sprite.color.to_srgba();
         sprite.color = Color::srgba(c.red, c.green, c.blue, alpha);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Room transition fade (black overlay that fades out)
+// ---------------------------------------------------------------------------
+
+fn on_room_transition_fade(
+    mut commands: Commands,
+    mut ev: EventReader<RoomTransition>,
+) {
+    for _ in ev.read() {
+        commands.spawn((
+            Sprite {
+                color: Color::srgba(0.0, 0.0, 0.0, 1.0),
+                custom_size: Some(Vec2::new(2000.0, 2000.0)),
+                ..default()
+            },
+            Transform::from_xyz(ROOM_W / 2.0, ROOM_H / 2.0, Z_HUD + 50.0),
+            RoomFadeOverlay { timer: 0.6, max_time: 0.6 },
+            PlayingEntity,
+        ));
+    }
+}
+
+fn update_room_fade(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Sprite, &mut RoomFadeOverlay)>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut sprite, mut fade) in &mut query {
+        fade.timer -= dt;
+        if fade.timer <= 0.0 {
+            commands.entity(entity).despawn();
+        } else {
+            let alpha = (fade.timer / fade.max_time).clamp(0.0, 1.0);
+            sprite.color = Color::srgba(0.0, 0.0, 0.0, alpha);
+        }
     }
 }

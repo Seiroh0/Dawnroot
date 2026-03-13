@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{GameState, constants::*};
+use crate::{GameState, constants::*, ActiveSaveSlot, LoadedSave, load_slot, delete_slot};
 
 pub struct TitlePlugin;
 
@@ -7,7 +7,11 @@ impl Plugin for TitlePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Title), setup_title)
             .add_systems(OnExit(GameState::Title), cleanup_title)
-            .add_systems(Update, handle_title_input.run_if(in_state(GameState::Title)))
+            .add_systems(
+                Update,
+                (handle_title_input, handle_slot_input)
+                    .run_if(in_state(GameState::Title)),
+            )
             .add_systems(OnEnter(GameState::WellIntro), setup_well_intro)
             .add_systems(OnExit(GameState::WellIntro), cleanup_well_intro)
             .add_systems(
@@ -24,10 +28,19 @@ struct TitleEntity;
 #[derive(Component)]
 struct PromptText;
 
+#[derive(Component)]
+struct SlotUI;
+
+#[derive(Resource)]
+struct SlotMenuState {
+    open: bool,
+}
+
 // ── Title screen ──────────────────────────────────────────────────
 
 fn setup_title(mut commands: Commands) {
     commands.spawn((Camera2d, TitleEntity));
+    commands.insert_resource(SlotMenuState { open: false });
 
     let mut rng = rand::thread_rng();
     use rand::Rng;
@@ -118,20 +131,17 @@ fn setup_title(mut commands: Commands) {
         TitleEntity,
     ));
 
-    // ── Well (Brunnen) ──
+    // Well
     let well_base_y = ground_y + 52.5;
     let well_x = 0.0;
-    // Base
     commands.spawn((
         Sprite { color: Color::srgb(0.35, 0.3, 0.25), custom_size: Some(Vec2::new(64.0, 28.0)), ..default() },
         Transform::from_xyz(well_x, well_base_y + 14.0, Z_BACKGROUND + 5.0), TitleEntity,
     ));
-    // Inner darkness
     commands.spawn((
         Sprite { color: Color::srgb(0.01, 0.01, 0.02), custom_size: Some(Vec2::new(48.0, 20.0)), ..default() },
         Transform::from_xyz(well_x, well_base_y + 14.0, Z_BACKGROUND + 5.5), TitleEntity,
     ));
-    // Rim
     commands.spawn((
         Sprite { color: Color::srgb(0.4, 0.35, 0.28), custom_size: Some(Vec2::new(70.0, 8.0)), ..default() },
         Transform::from_xyz(well_x, well_base_y + 30.0, Z_BACKGROUND + 6.0), TitleEntity,
@@ -248,43 +258,168 @@ fn cleanup_title(mut commands: Commands, q: Query<Entity, With<TitleEntity>>) {
     for e in &q {
         commands.entity(e).despawn_recursive();
     }
+    commands.remove_resource::<SlotMenuState>();
 }
 
 fn handle_title_input(
     keys: Res<ButtonInput<KeyCode>>,
-    mut next_state: ResMut<NextState<GameState>>,
+    mut commands: Commands,
+    mut slot_state: ResMut<SlotMenuState>,
     mut prompt_q: Query<&mut TextColor, With<PromptText>>,
     time: Res<Time>,
 ) {
+    // Animate prompt pulse
     if let Ok(mut color) = prompt_q.get_single_mut() {
         let alpha = 0.4 + 0.6 * (time.elapsed_secs() * 2.5).sin().max(0.0);
         color.0 = Color::srgba(0.9, 0.8, 0.45, alpha);
     }
 
+    if slot_state.open { return; }
+
     if keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter) {
-        next_state.set(GameState::WellIntro);
+        slot_state.open = true;
+        spawn_slot_menu(&mut commands);
+    }
+}
+
+fn spawn_slot_menu(commands: &mut Commands) {
+    let slots: [Option<crate::SaveSlotData>; 3] = [
+        load_slot(0),
+        load_slot(1),
+        load_slot(2),
+    ];
+
+    commands
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                row_gap: Val::Px(8.0),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.02, 0.02, 0.05, 0.92)),
+            SlotUI,
+            TitleEntity,
+        ))
+        .with_children(|parent| {
+            // Header
+            parent.spawn((
+                Text::new("Choose Your Path"),
+                TextFont { font_size: 30.0, ..default() },
+                TextColor(Color::srgb(0.9, 0.78, 0.45)),
+            ));
+
+            parent.spawn(Node { height: Val::Px(16.0), ..default() });
+
+            // 3 save slots
+            for i in 0..3 {
+                let (label, detail_color) = if let Some(ref save) = slots[i] {
+                    let mins = (save.time_played / 60.0) as i32;
+                    let secs = (save.time_played % 60.0) as i32;
+                    (
+                        format!(
+                            "[{}]  Slot {} - Floor {} | {}g | {}:{:02}",
+                            i + 1, i + 1, save.floor, save.gold, mins, secs
+                        ),
+                        Color::srgb(0.5, 0.85, 0.55),
+                    )
+                } else {
+                    (
+                        format!("[{}]  Slot {} - Empty (New Game)", i + 1, i + 1),
+                        Color::srgb(0.55, 0.55, 0.65),
+                    )
+                };
+
+                parent.spawn((
+                    Text::new(label),
+                    TextFont { font_size: 19.0, ..default() },
+                    TextColor(detail_color),
+                ));
+            }
+
+            parent.spawn(Node { height: Val::Px(20.0), ..default() });
+
+            parent.spawn((
+                Text::new("Press 1/2/3 to select  |  DEL to erase  |  ESC to go back"),
+                TextFont { font_size: 13.0, ..default() },
+                TextColor(Color::srgb(0.4, 0.4, 0.5)),
+            ));
+        });
+}
+
+fn handle_slot_input(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut commands: Commands,
+    slot_state: Option<Res<SlotMenuState>>,
+    ui_q: Query<Entity, With<SlotUI>>,
+    mut next_state: ResMut<NextState<GameState>>,
+    mut active_slot: ResMut<ActiveSaveSlot>,
+) {
+    let Some(state) = slot_state else { return };
+    if !state.open { return; }
+
+    // ESC closes the slot menu
+    if keys.just_pressed(KeyCode::Escape) {
+        for e in &ui_q {
+            commands.entity(e).despawn_recursive();
+        }
+        commands.insert_resource(SlotMenuState { open: false });
+        return;
+    }
+
+    // DEL + digit to erase a slot
+    let digit_keys = [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3];
+
+    // Check for delete: hold Delete then press digit
+    if keys.pressed(KeyCode::Delete) {
+        for (i, &key) in digit_keys.iter().enumerate() {
+            if keys.just_pressed(key) {
+                delete_slot(i);
+                // Refresh the menu
+                for e in &ui_q {
+                    commands.entity(e).despawn_recursive();
+                }
+                spawn_slot_menu(&mut commands);
+                return;
+            }
+        }
+    }
+
+    // Select slot
+    for (i, &key) in digit_keys.iter().enumerate() {
+        if keys.just_pressed(key) {
+            active_slot.0 = i;
+
+            if let Some(save) = load_slot(i) {
+                // Continue: load save and go straight to Playing (skip WellIntro)
+                commands.insert_resource(LoadedSave(save));
+                next_state.set(GameState::Playing);
+            } else {
+                // New game: go through WellIntro
+                next_state.set(GameState::WellIntro);
+            }
+            return;
+        }
     }
 }
 
 // ── Well Intro cutscene ───────────────────────────────────────────
 
-/// Marks every entity that belongs to the WellIntro cutscene.
 #[derive(Component, Clone, Copy)]
 struct IntroEntity;
 
-/// Root entity of the animated intro character (invisible collision hull).
 #[derive(Component)]
 struct IntroPlayer;
 
-/// Marks every visible child sprite of the intro character for alpha-fading.
 #[derive(Component)]
 struct IntroPlayerPart;
 
-/// Left leg of the intro character.
 #[derive(Component)]
 struct IntroLegL;
 
-/// Right leg of the intro character.
 #[derive(Component)]
 struct IntroLegR;
 
@@ -341,7 +476,6 @@ fn setup_well_intro(mut commands: Commands) {
     ));
 
     // Well
-    // Base
     commands.spawn((
         Sprite { color: Color::srgb(0.35, 0.3, 0.25), custom_size: Some(Vec2::new(64.0, 28.0)), ..default() },
         Transform::from_xyz(0.0, well_base_y + 14.0, Z_BACKGROUND + 5.0), IntroEntity,
@@ -355,123 +489,54 @@ fn setup_well_intro(mut commands: Commands) {
         Transform::from_xyz(0.0, well_base_y + 30.0, Z_BACKGROUND + 6.0), IntroEntity,
     ));
 
-    // ── Intro player: invisible root + child body parts ──────────────
-    //
-    // The root holds the position / scale used for the jump arc and walk
-    // bob. All visible pixels live in child entities tagged IntroPlayerPart
-    // so we can bulk-fade them during the JumpIn phase.
+    // Intro player
     commands.spawn((
         Transform::from_xyz(-280.0, well_base_y + 16.0, Z_PLAYER),
         Visibility::Visible,
         IntroEntity,
         IntroPlayer,
     )).with_children(|p| {
-        // Body – green tunic
+        // Body
         p.spawn((
-            Sprite {
-                color: Color::srgb(0.18, 0.50, 0.28),
-                custom_size: Some(Vec2::new(14.0, 14.0)),
-                ..default()
-            },
-            Transform::from_xyz(0.0, 0.0, 0.1),
-            IntroEntity,
-            IntroPlayerPart,
+            Sprite { color: Color::srgb(0.18, 0.50, 0.28), custom_size: Some(Vec2::new(14.0, 14.0)), ..default() },
+            Transform::from_xyz(0.0, 0.0, 0.1), IntroEntity, IntroPlayerPart,
         ));
-
-        // Belt – brown strap
+        // Belt
         p.spawn((
-            Sprite {
-                color: Color::srgb(0.45, 0.30, 0.15),
-                custom_size: Some(Vec2::new(14.0, 3.0)),
-                ..default()
-            },
-            Transform::from_xyz(0.0, -5.0, 0.15),
-            IntroEntity,
-            IntroPlayerPart,
+            Sprite { color: Color::srgb(0.45, 0.30, 0.15), custom_size: Some(Vec2::new(14.0, 3.0)), ..default() },
+            Transform::from_xyz(0.0, -5.0, 0.15), IntroEntity, IntroPlayerPart,
         ));
-
-        // Head – slightly warm tone, with hood children
+        // Head
         p.spawn((
-            Sprite {
-                color: Color::srgb(0.78, 0.62, 0.48),
-                custom_size: Some(Vec2::new(12.0, 11.0)),
-                ..default()
-            },
-            Transform::from_xyz(0.0, 12.0, 0.2),
-            IntroEntity,
-            IntroPlayerPart,
+            Sprite { color: Color::srgb(0.78, 0.62, 0.48), custom_size: Some(Vec2::new(12.0, 11.0)), ..default() },
+            Transform::from_xyz(0.0, 12.0, 0.2), IntroEntity, IntroPlayerPart,
         )).with_children(|head| {
-            // Left eye
             head.spawn((
-                Sprite {
-                    color: Color::srgb(0.9, 0.92, 0.95),
-                    custom_size: Some(Vec2::new(2.5, 3.0)),
-                    ..default()
-                },
-                Transform::from_xyz(-2.5, 0.5, 0.1),
-                IntroEntity,
-                IntroPlayerPart,
+                Sprite { color: Color::srgb(0.9, 0.92, 0.95), custom_size: Some(Vec2::new(2.5, 3.0)), ..default() },
+                Transform::from_xyz(-2.5, 0.5, 0.1), IntroEntity, IntroPlayerPart,
             ));
-            // Right eye
             head.spawn((
-                Sprite {
-                    color: Color::srgb(0.9, 0.92, 0.95),
-                    custom_size: Some(Vec2::new(2.5, 3.0)),
-                    ..default()
-                },
-                Transform::from_xyz(2.5, 0.5, 0.1),
-                IntroEntity,
-                IntroPlayerPart,
+                Sprite { color: Color::srgb(0.9, 0.92, 0.95), custom_size: Some(Vec2::new(2.5, 3.0)), ..default() },
+                Transform::from_xyz(2.5, 0.5, 0.1), IntroEntity, IntroPlayerPart,
             ));
-            // Hood – darker green drape over top of head
             head.spawn((
-                Sprite {
-                    color: Color::srgb(0.12, 0.34, 0.18),
-                    custom_size: Some(Vec2::new(14.0, 5.0)),
-                    ..default()
-                },
-                Transform::from_xyz(0.0, 4.5, 0.15),
-                IntroEntity,
-                IntroPlayerPart,
+                Sprite { color: Color::srgb(0.12, 0.34, 0.18), custom_size: Some(Vec2::new(14.0, 5.0)), ..default() },
+                Transform::from_xyz(0.0, 4.5, 0.15), IntroEntity, IntroPlayerPart,
             ));
         });
-
-        // Left leg
+        // Legs
         p.spawn((
-            Sprite {
-                color: Color::srgb(0.28, 0.22, 0.16),
-                custom_size: Some(Vec2::new(5.0, 10.0)),
-                ..default()
-            },
-            Transform::from_xyz(-3.5, -12.0, 0.0),
-            IntroEntity,
-            IntroPlayerPart,
-            IntroLegL,
+            Sprite { color: Color::srgb(0.28, 0.22, 0.16), custom_size: Some(Vec2::new(5.0, 10.0)), ..default() },
+            Transform::from_xyz(-3.5, -12.0, 0.0), IntroEntity, IntroPlayerPart, IntroLegL,
         ));
-
-        // Right leg
         p.spawn((
-            Sprite {
-                color: Color::srgb(0.26, 0.20, 0.14),
-                custom_size: Some(Vec2::new(5.0, 10.0)),
-                ..default()
-            },
-            Transform::from_xyz(3.5, -12.0, 0.0),
-            IntroEntity,
-            IntroPlayerPart,
-            IntroLegR,
+            Sprite { color: Color::srgb(0.26, 0.20, 0.14), custom_size: Some(Vec2::new(5.0, 10.0)), ..default() },
+            Transform::from_xyz(3.5, -12.0, 0.0), IntroEntity, IntroPlayerPart, IntroLegR,
         ));
-
-        // Sword – small gray rectangle on right side
+        // Sword
         p.spawn((
-            Sprite {
-                color: Color::srgb(0.68, 0.70, 0.74),
-                custom_size: Some(Vec2::new(3.0, 16.0)),
-                ..default()
-            },
-            Transform::from_xyz(10.0, 3.0, 0.35),
-            IntroEntity,
-            IntroPlayerPart,
+            Sprite { color: Color::srgb(0.68, 0.70, 0.74), custom_size: Some(Vec2::new(3.0, 16.0)), ..default() },
+            Transform::from_xyz(10.0, 3.0, 0.35), IntroEntity, IntroPlayerPart,
         ));
     });
 
@@ -491,11 +556,8 @@ fn setup_well_intro(mut commands: Commands) {
 fn update_well_intro(
     mut commands: Commands,
     mut state: ResMut<IntroState>,
-    // Root entity – only needs Transform, no Sprite.
     mut player_q: Query<&mut Transform, (With<IntroPlayer>, Without<IntroLegL>, Without<IntroLegR>)>,
-    // All visible child parts – for alpha fading.
     mut parts_q: Query<&mut Sprite, (With<IntroPlayerPart>, Without<DarknessOverlay>)>,
-    // Leg children – for walk animation.
     mut legl_q: Query<&mut Transform, (With<IntroLegL>, Without<IntroPlayer>, Without<IntroLegR>)>,
     mut legr_q: Query<&mut Transform, (With<IntroLegR>, Without<IntroPlayer>, Without<IntroLegL>)>,
     mut darkness_q: Query<&mut Sprite, (With<DarknessOverlay>, Without<IntroPlayerPart>)>,
@@ -509,14 +571,10 @@ fn update_well_intro(
 
     match state.phase {
         IntroPhase::WalkToWell => {
-            // Walk rightward from -280 toward the well at x=0.
             p_tf.translation.x += 200.0 * dt;
-
-            // Vertical walk bob on the root so all parts move together.
             let bob = (state.timer * 14.0).sin().abs() * 3.0;
             p_tf.translation.y = state.player_start_y + bob;
 
-            // Leg stride animation using sin waves (opposite phase each leg).
             let sw_l = (state.timer * 14.0).sin() * 6.0;
             let sw_r = (state.timer * 14.0 + std::f32::consts::PI).sin() * 6.0;
 
@@ -529,7 +587,6 @@ fn update_well_intro(
 
             if p_tf.translation.x >= -5.0 {
                 p_tf.translation.x = 0.0;
-                // Reset legs to standing pose before the jump.
                 if let Ok(mut ll) = legl_q.get_single_mut() {
                     ll.translation = Vec3::new(-3.5, -12.0, 0.0);
                 }
@@ -544,27 +601,22 @@ fn update_well_intro(
         IntroPhase::JumpIn => {
             let t = state.timer;
             if t < 0.35 {
-                // Arc up over the well rim.
                 let frac = t / 0.35;
                 let y_off = 55.0 * (frac * std::f32::consts::PI).sin();
                 p_tf.translation.y = state.player_start_y + y_off;
                 let stretch = 1.0 + 0.25 * frac;
                 p_tf.scale = Vec3::new(1.0 / stretch.sqrt(), stretch, 1.0);
             } else if t < 0.9 {
-                // Drop into the well hole – fade all parts out as the
-                // character descends below the well rim.
                 let fall_frac = (t - 0.35) / 0.55;
                 p_tf.translation.y = state.player_start_y + 10.0 - fall_frac * 90.0;
                 p_tf.scale = Vec3::new(0.8, 1.15, 1.0);
 
                 let alpha = (1.0 - fall_frac).max(0.0);
                 for mut sprite in parts_q.iter_mut() {
-                    // Preserve existing rgb, only update alpha.
                     let c = sprite.color.to_srgba();
                     sprite.color = Color::srgba(c.red, c.green, c.blue, alpha);
                 }
             } else {
-                // Fully hidden – zero out alpha on all parts.
                 for mut sprite in parts_q.iter_mut() {
                     sprite.color = Color::srgba(0.0, 0.0, 0.0, 0.0);
                 }
@@ -574,13 +626,11 @@ fn update_well_intro(
         }
 
         IntroPhase::FallDarkness => {
-            // Fade the screen to black.
             if let Ok(mut ds) = darkness_q.get_single_mut() {
                 let alpha = (state.timer / 0.6).min(1.0);
                 ds.color = Color::srgba(0.0, 0.0, 0.0, alpha);
             }
 
-            // Falling debris particles.
             if state.timer > 0.3 && state.timer < 1.8 {
                 use rand::Rng;
                 let mut rng = rand::thread_rng();
@@ -608,7 +658,6 @@ fn update_well_intro(
         }
 
         IntroPhase::LandInCave => {
-            // Brief warm flash then transition to gameplay.
             if let Ok(mut ds) = darkness_q.get_single_mut() {
                 if state.timer < 0.1 {
                     ds.color = Color::srgba(0.12, 0.08, 0.05, 0.85);

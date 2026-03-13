@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player};
+use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, floor_complete::FloorCompleteState};
 
 pub struct RoomPlugin;
 
@@ -7,6 +7,7 @@ impl Plugin for RoomPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<RoomCleared>()
             .add_event::<RoomTransition>()
+            .add_event::<AdvanceFloor>()
             .insert_resource(RoomState::default())
             .insert_resource(StartRoomUnlockTimer::default())
             .add_systems(OnEnter(GameState::Playing), spawn_first_room)
@@ -16,6 +17,7 @@ impl Plugin for RoomPlugin {
                     check_room_exit,
                     check_room_cleared,
                     tick_start_door_timer,
+                    handle_advance_floor,
                     animate_torches,
                     animate_crystals,
                 )
@@ -31,6 +33,9 @@ pub struct RoomCleared;
 
 #[derive(Event)]
 pub struct RoomTransition;
+
+#[derive(Event)]
+pub struct AdvanceFloor;
 
 // ─── Components ──────────────────────────────────────────────────────────────
 
@@ -108,7 +113,9 @@ impl Default for RoomState {
 
 fn generate_floor_layout(floor: i32) -> Vec<RoomType> {
     let mut layout = vec![RoomType::Start];
-    let combat_count = (ROOMS_PER_FLOOR - 2).max(2) as usize;
+    // More combat rooms on higher floors (4 base, +1 per floor up to +3)
+    let base_rooms = (ROOMS_PER_FLOOR - 2).max(2) as usize;
+    let combat_count = base_rooms + (floor as usize).saturating_sub(1).min(3);
     for i in 0..combat_count {
         if i == combat_count / 2 {
             layout.push(RoomType::Treasure);
@@ -116,9 +123,8 @@ fn generate_floor_layout(floor: i32) -> Vec<RoomType> {
             layout.push(RoomType::Combat);
         }
     }
-    if floor % 2 == 0 {
-        layout.push(RoomType::Shop);
-    }
+    // Shop available every floor
+    layout.push(RoomType::Shop);
     layout.push(RoomType::Boss);
     layout
 }
@@ -130,16 +136,23 @@ fn spawn_first_room(
     mut state: ResMut<RoomState>,
     mut run: ResMut<RunData>,
     mut start_timer: ResMut<StartRoomUnlockTimer>,
+    loaded: Option<Res<crate::LoadedSave>>,
+    mut floor_complete: ResMut<FloorCompleteState>,
 ) {
+    // Reset floor complete overlay
+    *floor_complete = FloorCompleteState::default();
+
+    let floor = loaded.as_ref().map(|s| s.0.floor).unwrap_or(1);
+
     *state = RoomState {
-        floor: 1,
-        seed: 42,
+        floor,
+        seed: rand::random::<u64>(),
         ..default()
     };
-    state.floor_layout = generate_floor_layout(1);
+    state.floor_layout = generate_floor_layout(floor);
     state.current_type = state.floor_layout[0];
     state.room_cleared = true;
-    run.current_floor = 1;
+    run.current_floor = floor;
     run.current_room = 1;
 
     start_timer.active = false;
@@ -731,7 +744,7 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             spawn_platform_worn(commands, 2,  5,  2, plat_color);
             spawn_platform_worn(commands, 8,  12, 4, plat_color);
             spawn_platform_worn(commands, 15, 18, 2, plat_color);
-            spawn_platform_worn(commands, 5,  9,  6, plat_color); // medium high
+            spawn_platform_worn(commands, 5,  9,  5, plat_color); // medium high (was row 6)
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
@@ -771,10 +784,10 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             spawn_platform(commands, 2,  4,  2, plat_color);
             spawn_platform(commands, 6,  8,  4, plat_color);
             spawn_platform(commands, 10, 13, 2, plat_color);
-            spawn_platform(commands, 14, 16, 5, plat_color);
+            spawn_platform(commands, 14, 16, 4, plat_color);
             spawn_platform(commands, 18, 21, 3, plat_color);
-            // A medium-high ledge for optional routing
-            spawn_platform(commands, 9, 13, 7, plat_color);
+            // A medium-high ledge for optional routing (was row 7)
+            spawn_platform(commands, 9, 13, 5, plat_color);
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 3.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
@@ -804,9 +817,9 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             spawn_platform_worn(commands, 2,  9,  3, plat_color);
             spawn_platform_worn(commands, 13, 21, 3, plat_color);
             // Small mid platform to bridge the gap
-            spawn_platform(commands, 10, 12, 5, plat_color);
-            // Optional high ledge
-            spawn_platform(commands, 7, 10, 6, plat_color);
+            spawn_platform(commands, 10, 12, 4, plat_color);
+            // Optional high ledge (was row 6)
+            spawn_platform(commands, 7, 10, 5, plat_color);
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
@@ -849,40 +862,64 @@ fn spawn_treasure_room(commands: &mut Commands, seed: u64) {
     spawn_platform(commands, 3, 6,  4, plat_color);
     spawn_platform(commands, 17, 20, 4, plat_color);
 
-    // Treasure chest placeholder
+    // Treasure chest
     let chest_x = ROOM_W / 2.0;
     let chest_y = 2.0 * TILE_SIZE + TILE_SIZE + 14.0;
 
+    // Main body (dark wood)
     commands.spawn((
-        Sprite {
-            color: Color::srgb(0.60, 0.42, 0.10),
-            custom_size: Some(Vec2::new(28.0, 22.0)),
-            ..default()
-        },
+        Sprite { color: Color::srgb(0.50, 0.32, 0.08), custom_size: Some(Vec2::new(32.0, 20.0)), ..default() },
         Transform::from_xyz(chest_x, chest_y, Z_PICKUPS),
-        RoomEntity,
-        PlayingEntity,
+        RoomEntity, PlayingEntity,
     ));
+    // Metal band bottom
     commands.spawn((
-        Sprite {
-            color: Color::srgb(0.80, 0.62, 0.18),
-            custom_size: Some(Vec2::new(28.0, 10.0)),
-            ..default()
-        },
+        Sprite { color: Color::srgb(0.40, 0.38, 0.30), custom_size: Some(Vec2::new(34.0, 3.0)), ..default() },
+        Transform::from_xyz(chest_x, chest_y - 6.0, Z_PICKUPS + 0.05),
+        RoomEntity, PlayingEntity,
+    ));
+    // Metal band middle
+    commands.spawn((
+        Sprite { color: Color::srgb(0.40, 0.38, 0.30), custom_size: Some(Vec2::new(34.0, 3.0)), ..default() },
+        Transform::from_xyz(chest_x, chest_y + 2.0, Z_PICKUPS + 0.05),
+        RoomEntity, PlayingEntity,
+    ));
+    // Lid (lighter wood, slightly wider)
+    commands.spawn((
+        Sprite { color: Color::srgb(0.65, 0.45, 0.12), custom_size: Some(Vec2::new(34.0, 10.0)), ..default() },
         Transform::from_xyz(chest_x, chest_y + 14.0, Z_PICKUPS + 0.1),
-        RoomEntity,
-        PlayingEntity,
+        RoomEntity, PlayingEntity,
     ));
+    // Lid dome top (narrower for curved look)
     commands.spawn((
-        Sprite {
-            color: Color::srgba(1.0, 0.85, 0.20, 0.18),
-            custom_size: Some(Vec2::new(56.0, 56.0)),
-            ..default()
-        },
-        Transform::from_xyz(chest_x, chest_y + 4.0, Z_PICKUPS - 0.1),
+        Sprite { color: Color::srgb(0.58, 0.40, 0.10), custom_size: Some(Vec2::new(28.0, 5.0)), ..default() },
+        Transform::from_xyz(chest_x, chest_y + 20.0, Z_PICKUPS + 0.12),
+        RoomEntity, PlayingEntity,
+    ));
+    // Metal band on lid
+    commands.spawn((
+        Sprite { color: Color::srgb(0.40, 0.38, 0.30), custom_size: Some(Vec2::new(36.0, 2.5)), ..default() },
+        Transform::from_xyz(chest_x, chest_y + 12.0, Z_PICKUPS + 0.15),
+        RoomEntity, PlayingEntity,
+    ));
+    // Lock clasp (gold)
+    commands.spawn((
+        Sprite { color: Color::srgb(0.90, 0.75, 0.15), custom_size: Some(Vec2::new(6.0, 8.0)), ..default() },
+        Transform::from_xyz(chest_x, chest_y + 8.0, Z_PICKUPS + 0.2),
+        RoomEntity, PlayingEntity,
+    ));
+    // Keyhole (dark)
+    commands.spawn((
+        Sprite { color: Color::srgb(0.15, 0.10, 0.05), custom_size: Some(Vec2::new(2.5, 3.0)), ..default() },
+        Transform::from_xyz(chest_x, chest_y + 7.0, Z_PICKUPS + 0.22),
+        RoomEntity, PlayingEntity,
+    ));
+    // Gold glow halo (animated)
+    commands.spawn((
+        Sprite { color: Color::srgba(1.0, 0.85, 0.20, 0.18), custom_size: Some(Vec2::new(60.0, 60.0)), ..default() },
+        Transform::from_xyz(chest_x, chest_y + 8.0, Z_PICKUPS - 0.1),
         CrystalGlow { timer: 0.0, phase: 0.0 },
-        RoomEntity,
-        PlayingEntity,
+        RoomEntity, PlayingEntity,
     ));
 
     // Crystal decorations on corners
@@ -925,9 +962,9 @@ fn spawn_boss_room(commands: &mut Commands, _floor: i32) {
 
     // Wide ground arena
     spawn_platform(commands, 3, 20, 4, plat_color);
-    // Two raised side platforms
-    spawn_platform_worn(commands, 4,  7,  7, plat_color);
-    spawn_platform_worn(commands, 16, 19, 7, plat_color);
+    // Two raised side platforms (was row 7, lowered to row 5 for reachability from row 4)
+    spawn_platform_worn(commands, 4,  7,  5, plat_color);
+    spawn_platform_worn(commands, 16, 19, 5, plat_color);
 
     // Dramatic stone pillars
     spawn_pillar(commands, 4,  5, 8, pillar_color);
@@ -1085,21 +1122,37 @@ fn check_room_cleared(
 
 fn check_room_exit(
     mut commands: Commands,
-    player_q: Query<&Transform, With<Player>>,
+    mut player_q: Query<(&mut Player, &mut Transform), Without<ExitDoor>>,
     door_q: Query<(&Transform, &ExitDoor), Without<Player>>,
     room_entities: Query<Entity, With<RoomEntity>>,
     mut run: ResMut<RunData>,
     mut room_state: ResMut<RoomState>,
     mut start_timer: ResMut<StartRoomUnlockTimer>,
     mut ev_transition: EventWriter<RoomTransition>,
+    mut floor_complete: ResMut<FloorCompleteState>,
 ) {
-    let Ok(player_tf) = player_q.get_single() else { return };
+    // Block room transitions while floor complete overlay is active
+    if floor_complete.active { return; }
+
+    let Ok((mut player, mut player_tf)) = player_q.get_single_mut() else { return };
 
     for (door_tf, door) in &door_q {
         if door.locked { continue; }
 
         let dist = (player_tf.translation.xy() - door_tf.translation.xy()).abs();
         if dist.x < 30.0 && dist.y < 60.0 {
+            // Check if this is the last room of the floor (boss cleared)
+            let is_floor_end = room_state.room_index + 1 >= room_state.floor_layout.len();
+
+            if is_floor_end {
+                // Show floor complete overlay (keep room visible behind it)
+                floor_complete.active = true;
+                floor_complete.floor_completed = room_state.floor;
+                floor_complete.ui_spawned = false;
+                break;
+            }
+
+            // Normal room transition
             ev_transition.send(RoomTransition);
 
             for entity in &room_entities {
@@ -1109,17 +1162,6 @@ fn check_room_exit(
             room_state.room_index += 1;
             run.rooms_cleared += 1;
             run.current_room += 1;
-
-            if room_state.room_index >= room_state.floor_layout.len() {
-                room_state.floor += 1;
-                run.current_floor = room_state.floor;
-                run.current_room = 1;
-                room_state.room_index = 0;
-                room_state.floor_layout = generate_floor_layout(room_state.floor);
-                room_state.seed = room_state.seed
-                    .wrapping_mul(6364136223846793005)
-                    .wrapping_add(1);
-            }
 
             room_state.current_type = room_state.floor_layout[room_state.room_index];
             room_state.room_cleared = match room_state.current_type {
@@ -1140,7 +1182,59 @@ fn check_room_exit(
 
             spawn_room(&mut commands, &room_state, room_state.room_index);
 
+            // Teleport player to safe spawn (left side, above floor)
+            player_tf.translation.x = TILE_SIZE * 2.5;
+            player_tf.translation.y = TILE_SIZE * 2.0;
+            player.vx = 0.0;
+            player.vy = 0.0;
+
             break;
         }
+    }
+}
+
+/// Handles the AdvanceFloor event sent from FloorComplete when player chooses to descend.
+fn handle_advance_floor(
+    mut commands: Commands,
+    mut ev: EventReader<AdvanceFloor>,
+    mut room_state: ResMut<RoomState>,
+    mut run: ResMut<RunData>,
+    mut start_timer: ResMut<StartRoomUnlockTimer>,
+    room_entities: Query<Entity, With<RoomEntity>>,
+    mut player_q: Query<(&mut Player, &mut Transform), Without<ExitDoor>>,
+    mut ev_transition: EventWriter<RoomTransition>,
+) {
+    for _ in ev.read() {
+        // Despawn old room
+        for entity in &room_entities {
+            commands.entity(entity).despawn_recursive();
+        }
+
+        ev_transition.send(RoomTransition);
+
+        // Advance floor
+        room_state.floor += 1;
+        run.current_floor = room_state.floor;
+        run.current_room = 1;
+        room_state.room_index = 0;
+        room_state.floor_layout = generate_floor_layout(room_state.floor);
+        room_state.seed = room_state.seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1);
+        room_state.current_type = room_state.floor_layout[0];
+        room_state.room_cleared = true;
+        start_timer.active = false;
+
+        spawn_room(&mut commands, &room_state, 0);
+
+        // Teleport player
+        if let Ok((mut player, mut tf)) = player_q.get_single_mut() {
+            tf.translation.x = TILE_SIZE * 2.5;
+            tf.translation.y = TILE_SIZE * 2.0;
+            player.vx = 0.0;
+            player.vy = 0.0;
+        }
+
+        break;
     }
 }

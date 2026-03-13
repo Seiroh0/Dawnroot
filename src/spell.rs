@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, player::Player};
+use crate::{constants::*, GameState, PlayingEntity, LoadedSave, player::Player};
 
 pub struct SpellPlugin;
 
@@ -152,10 +152,21 @@ struct TrailParticle {
 // Initialise spell slots
 // ---------------------------------------------------------------------------
 
-fn init_spell_slots(mut commands: Commands) {
+fn init_spell_slots(mut commands: Commands, loaded: Option<Res<LoadedSave>>) {
+    let spell_ids = [SpellId::Fireball, SpellId::IceShards, SpellId::Lightning, SpellId::Shield];
+    let slots = if let Some(ref save) = loaded {
+        let mut s: [Option<SpellId>; SPELL_SLOT_COUNT] = [None; SPELL_SLOT_COUNT];
+        for (i, &unlocked) in save.0.spells.iter().enumerate().take(SPELL_SLOT_COUNT) {
+            if unlocked { s[i] = Some(spell_ids[i]); }
+        }
+        s
+    } else {
+        [None, None, None, None]
+    };
+
     commands.spawn((
         SpellSlots {
-            slots: [None, None, None, None],
+            slots,
             cooldowns: [0.0; SPELL_SLOT_COUNT],
         },
         PlayingEntity,

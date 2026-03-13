@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{GameState, RunData, PlayingEntity, room::{RoomState, RoomType}};
+use crate::{GameState, RunData, PlayingEntity, room::{RoomState, RoomType, RoomTransition}};
 
 pub struct ShopPlugin;
 
@@ -7,8 +7,19 @@ impl Plugin for ShopPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            shop_interaction.run_if(in_state(GameState::Playing)),
+            (reset_shop_on_transition, shop_interaction)
+                .chain()
+                .run_if(in_state(GameState::Playing)),
         );
+    }
+}
+
+fn reset_shop_on_transition(
+    mut ev: EventReader<RoomTransition>,
+    mut commands: Commands,
+) {
+    for _ in ev.read() {
+        commands.insert_resource(ShopSpawned(false));
     }
 }
 
@@ -50,13 +61,13 @@ fn shop_interaction(
     if shop_spawned.map_or(true, |s| !s.0) {
         commands.insert_resource(ShopSpawned(true));
         let items = vec![
-            ("Heal Full",  30, ShopEffect::HealFull),
-            ("+1 Max HP",  50, ShopEffect::MaxHpUp),
-            ("+Mana Pool", 40, ShopEffect::ManaUp),
-            ("Fireball",   60, ShopEffect::UnlockSpell(0, crate::spell::SpellId::Fireball)),
-            ("Ice Shards", 50, ShopEffect::UnlockSpell(1, crate::spell::SpellId::IceShards)),
-            ("Lightning",  80, ShopEffect::UnlockSpell(2, crate::spell::SpellId::Lightning)),
-            ("Shield",     70, ShopEffect::UnlockSpell(3, crate::spell::SpellId::Shield)),
+            ("Heal Full",  20, ShopEffect::HealFull),
+            ("+1 Max HP",  40, ShopEffect::MaxHpUp),
+            ("+Mana Pool", 30, ShopEffect::ManaUp),
+            ("Fireball",   35, ShopEffect::UnlockSpell(0, crate::spell::SpellId::Fireball)),
+            ("Ice Shards", 30, ShopEffect::UnlockSpell(1, crate::spell::SpellId::IceShards)),
+            ("Lightning",  50, ShopEffect::UnlockSpell(2, crate::spell::SpellId::Lightning)),
+            ("Shield",     45, ShopEffect::UnlockSpell(3, crate::spell::SpellId::Shield)),
         ];
 
         for (i, (name, cost, effect)) in items.into_iter().enumerate() {

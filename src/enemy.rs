@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, room::{RoomState, RoomType, RoomEntity}};
+use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, room::{RoomState, RoomType, RoomEntity, RoomTransition}};
 
 pub struct EnemyPlugin;
 
@@ -10,6 +10,7 @@ impl Plugin for EnemyPlugin {
             .add_systems(
                 Update,
                 (
+                    on_room_transition,
                     spawn_room_enemies,
                     ground_enemy_ai,
                     flying_enemy_ai,
@@ -132,6 +133,15 @@ fn reset_enemy_state(mut commands: Commands) {
     commands.insert_resource(EnemySpawnState { spawned_for_room: false });
 }
 
+fn on_room_transition(
+    mut ev: EventReader<RoomTransition>,
+    mut spawn_state: ResMut<EnemySpawnState>,
+) {
+    for _ in ev.read() {
+        spawn_state.spawned_for_room = false;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Room-level enemy spawning
 // ---------------------------------------------------------------------------
@@ -209,7 +219,7 @@ fn spawn_ground_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
             max_health: 2 + floor.min(5),
             contact_damage: 1,
             score_reward: 80,
-            gold_drop: 5 + floor * 2,
+            gold_drop: 8 + floor * 3,
         },
         GroundEnemy {
             speed,
@@ -284,7 +294,7 @@ fn spawn_flying_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
             max_health: 1 + floor.min(3),
             contact_damage: 1,
             score_reward: 110,
-            gold_drop: 8 + floor * 2,
+            gold_drop: 10 + floor * 3,
         },
         FlyingEnemy {
             amplitude: 50.0,
@@ -351,7 +361,7 @@ fn spawn_turret_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
             max_health: 3 + floor.min(4),
             contact_damage: 1,
             score_reward: 130,
-            gold_drop: 10 + floor * 3,
+            gold_drop: 12 + floor * 3,
         },
         TurretEnemy {
             fire_interval: interval,
@@ -410,7 +420,7 @@ fn spawn_charger_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
             max_health: 3 + floor.min(5),
             contact_damage: 2,
             score_reward: 150,
-            gold_drop: 12 + floor * 3,
+            gold_drop: 15 + floor * 3,
         },
         ChargerEnemy {
             speed: 350.0 + floor as f32 * 15.0,

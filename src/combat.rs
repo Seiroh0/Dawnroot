@@ -47,6 +47,7 @@ fn melee_vs_enemy(
                 if enemy.health <= 0 {
                     run.score += enemy.score_reward;
                     run.gold += enemy.gold_drop;
+                    run.enemies_killed += 1;
                     ev_defeated.send(EnemyDefeated {
                         position: e_tf.translation,
                         score: enemy.score_reward,
@@ -83,6 +84,7 @@ fn spell_vs_enemy(
                 if enemy.health <= 0 {
                     run.score += enemy.score_reward;
                     run.gold += enemy.gold_drop;
+                    run.enemies_killed += 1;
                     ev_defeated.send(EnemyDefeated {
                         position: e_tf.translation,
                         score: enemy.score_reward,
@@ -120,6 +122,7 @@ fn lightning_vs_enemy(
                 if enemy.health <= 0 {
                     run.score += enemy.score_reward;
                     run.gold += enemy.gold_drop;
+                    run.enemies_killed += 1;
                     ev_defeated.send(EnemyDefeated {
                         position: e_tf.translation,
                         score: enemy.score_reward,

@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, MetaProgression};
+use crate::{constants::*, GameState, PlayingEntity, MetaProgression, LoadedSave};
 
 pub struct PlayerPlugin;
 
@@ -93,14 +93,23 @@ pub struct MeleeHitbox { pub damage: i32, pub lifetime: f32 }
 #[derive(Component)] struct PlayerLegR;
 #[derive(Component)] struct PlayerWeapon;
 
-fn spawn_player(mut commands: Commands, meta: Res<MetaProgression>) {
-    let max_hp = 5 + meta.max_health_bonus;
+fn spawn_player(mut commands: Commands, meta: Res<MetaProgression>, loaded: Option<Res<LoadedSave>>) {
+    let max_hp = if let Some(ref save) = loaded {
+        save.0.max_health
+    } else {
+        5 + meta.max_health_bonus
+    };
+    let max_mp = if let Some(ref save) = loaded {
+        save.0.max_mana
+    } else {
+        MANA_MAX
+    };
 
     commands.spawn((
         // Invisible collision root
         Sprite { color: Color::srgba(0.0, 0.0, 0.0, 0.0), custom_size: Some(Vec2::new(20.0, 32.0)), ..default() },
         Transform::from_xyz(80.0, 100.0, Z_PLAYER),
-        Player { max_health: max_hp, health: max_hp, ..default() },
+        Player { max_health: max_hp, health: max_hp, max_mana: max_mp, mana: max_mp, ..default() },
         PlayingEntity,
     )).with_children(|p| {
         // Body (green tunic)
@@ -239,7 +248,6 @@ fn player_physics(
     tile_q: Query<(&GlobalTransform, &Sprite), (With<crate::room::Tile>, Without<Player>)>,
     mut ev_landed: EventWriter<PlayerLanded>,
     time: Res<Time>,
-    mut next_state: ResMut<NextState<GameState>>,
     mut ev_died: EventWriter<PlayerDied>,
 ) {
     let Ok((mut player, mut tf)) = query.get_single_mut() else { return };
@@ -324,7 +332,6 @@ fn player_physics(
     }
     if tf.translation.y < -200.0 {
         ev_died.send(PlayerDied);
-        next_state.set(GameState::GameOver);
     }
 }
 
