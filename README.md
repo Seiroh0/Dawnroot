@@ -8,7 +8,7 @@
 <h1 align="center">Dawnroot</h1>
 
 <p align="center">
-  <em>Descend into the depths. Fight through the dark. Rise as legend.</em>
+  <em>Descend into the depths. Fight through the dark. Rise as a legend.</em>
 </p>
 
 <p align="center">
