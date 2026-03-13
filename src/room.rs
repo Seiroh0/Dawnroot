@@ -724,7 +724,7 @@ fn spawn_start_room(commands: &mut Commands, seed: u64) {
 
 fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
     let plat_color = Color::srgb(0.32, 0.24, 0.14);
-    let template = (seed % 8) as i32;
+    let template = (seed % 16) as i32;
 
     match template {
         // ── 0: Low staircase – left to right flow ─────────────────────────────
@@ -843,7 +843,7 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
         }
 
         // ── 7: Tunnel / low platforms inside a corridor ───────────────────────
-        _ => {
+        7 => {
             // Raised false ceiling at row 8 (lower than before)
             spawn_platform(commands, 4, 19, 8, plat_color);
             // Ground bumps inside the corridor
@@ -858,6 +858,187 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 3.0);
             spawn_crystal(commands, TILE_SIZE * 14.0, TILE_SIZE * 3.0, 2.6);
             spawn_mushroom(commands, TILE_SIZE * 9.0, TILE_SIZE);
+        }
+
+        // ── 8: Lava gauntlet – lava floor with island platforms ─────────────
+        8 => {
+            // Lava covering most of the floor
+            spawn_lava_strip(commands, 2, 21, 1);
+            // Island platforms above the lava
+            spawn_platform(commands, 2,  4,  2, plat_color);
+            spawn_platform(commands, 7,  9,  3, plat_color);
+            spawn_platform(commands, 11, 14, 2, plat_color);
+            spawn_platform(commands, 17, 20, 3, plat_color);
+            // High escape route
+            spawn_platform(commands, 5,  6,  5, plat_color);
+            spawn_platform(commands, 15, 16, 5, plat_color);
+
+            spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
+            spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
+        }
+
+        // ── 9: Swamp marsh – water-filled lower area ────────────────────────
+        9 => {
+            // Water across the floor
+            spawn_water_strip(commands, 3, 20, 1);
+            // Raised dry platforms
+            spawn_platform_worn(commands, 2,  5,  3, plat_color);
+            spawn_platform_worn(commands, 8,  11, 2, plat_color);
+            spawn_platform_worn(commands, 14, 17, 3, plat_color);
+            spawn_platform_worn(commands, 19, 21, 2, plat_color);
+            // Upper catwalk
+            spawn_platform(commands, 6, 8, 5, plat_color);
+            spawn_platform(commands, 12, 14, 5, plat_color);
+
+            spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
+            spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
+            spawn_mushroom(commands, TILE_SIZE * 3.5, TILE_SIZE * 3.0 + TILE_SIZE);
+            spawn_mushroom(commands, TILE_SIZE * 15.5, TILE_SIZE * 3.0 + TILE_SIZE);
+        }
+
+        // ── 10: Vertical elevator shaft – multiple moving platforms ─────────
+        10 => {
+            // Ground-level platforms on sides
+            spawn_platform(commands, 2,  5,  2, plat_color);
+            spawn_platform(commands, 18, 21, 2, plat_color);
+            // High ledges on sides
+            spawn_platform(commands, 2,  4,  5, plat_color);
+            spawn_platform(commands, 19, 21, 5, plat_color);
+            // Two moving platforms in the center
+            let mp1_x = 9.0 * TILE_SIZE + TILE_SIZE;
+            let mp1_y = 2.0 * TILE_SIZE + TILE_SIZE / 2.0;
+            spawn_moving_platform(
+                commands, 9, 2, 2,
+                vec![
+                    Vec2::new(mp1_x, mp1_y),
+                    Vec2::new(mp1_x, mp1_y + TILE_SIZE * 4.0),
+                ],
+                35.0, 0.8,
+            );
+            let mp2_x = 14.0 * TILE_SIZE + TILE_SIZE;
+            let mp2_y = 5.0 * TILE_SIZE + TILE_SIZE / 2.0;
+            spawn_moving_platform(
+                commands, 14, 5, 2,
+                vec![
+                    Vec2::new(mp2_x, mp2_y),
+                    Vec2::new(mp2_x, mp2_y - TILE_SIZE * 3.0),
+                ],
+                35.0, 0.8,
+            );
+
+            spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 5.0);
+            spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 5.0);
+            spawn_crystal(commands, TILE_SIZE * 11.5, TILE_SIZE, 1.0);
+        }
+
+        // ── 11: Split path – high road vs low road ──────────────────────────
+        11 => {
+            // Low road (ground level with water hazard)
+            spawn_platform(commands, 2, 6, 2, plat_color);
+            spawn_water_strip(commands, 7, 16, 1);
+            spawn_platform(commands, 17, 21, 2, plat_color);
+            // High road (upper platforms)
+            spawn_platform(commands, 3,  5,  4, plat_color);
+            spawn_platform(commands, 7,  10, 5, plat_color);
+            spawn_platform(commands, 12, 15, 5, plat_color);
+            spawn_platform(commands, 17, 20, 4, plat_color);
+
+            spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
+            spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
+            spawn_crystal(commands, TILE_SIZE * 11.0, TILE_SIZE * 6.0, 0.7);
+            spawn_mushroom(commands, TILE_SIZE * 4.0, TILE_SIZE * 2.0 + TILE_SIZE);
+        }
+
+        // ── 12: Pillared hall – dense columns creating corridors ─────────────
+        12 => {
+            // Ground platforms between pillars
+            spawn_platform(commands, 2, 21, 2, plat_color);
+            // Pillars creating corridors
+            spawn_pillar(commands, 5,  3, 7, Color::srgb(0.25, 0.18, 0.10));
+            spawn_pillar(commands, 10, 3, 7, Color::srgb(0.25, 0.18, 0.10));
+            spawn_pillar(commands, 15, 3, 7, Color::srgb(0.25, 0.18, 0.10));
+            spawn_pillar(commands, 20, 3, 7, Color::srgb(0.25, 0.18, 0.10));
+            // Mid-height walkways between pillars
+            spawn_platform(commands, 6,  9,  5, plat_color);
+            spawn_platform(commands, 11, 14, 5, plat_color);
+            spawn_platform(commands, 16, 19, 5, plat_color);
+
+            spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 5.0);
+            spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 5.0);
+            spawn_crystal(commands, TILE_SIZE * 7.5, TILE_SIZE * 2.0 + TILE_SIZE, 1.2);
+            spawn_crystal(commands, TILE_SIZE * 17.5, TILE_SIZE * 2.0 + TILE_SIZE, 2.4);
+        }
+
+        // ── 13: Crumbling ruins – worn platforms over lava ──────────────────
+        13 => {
+            // Lava base
+            spawn_lava_strip(commands, 4, 19, 1);
+            // Worn platforms as safe ground
+            spawn_platform_worn(commands, 2,  5,  3, plat_color);
+            spawn_platform_worn(commands, 7,  9,  4, plat_color);
+            spawn_platform_worn(commands, 11, 13, 3, plat_color);
+            spawn_platform_worn(commands, 15, 18, 5, plat_color);
+            spawn_platform_worn(commands, 19, 21, 3, plat_color);
+            // Collapsed pillar (decorative, acts as platform)
+            spawn_platform(commands, 10, 10, 2, plat_color);
+
+            spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
+            spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
+            spawn_crystal(commands, TILE_SIZE * 6.0, TILE_SIZE * 4.0, 3.1);
+        }
+
+        // ── 14: The pit – deep central chasm with bridges ───────────────────
+        14 => {
+            // Solid ground on sides
+            spawn_platform(commands, 2,  7,  2, plat_color);
+            spawn_platform(commands, 16, 21, 2, plat_color);
+            // Lava in the pit
+            spawn_lava_strip(commands, 8, 15, 1);
+            // Narrow bridge across
+            spawn_platform(commands, 9,  10, 3, plat_color);
+            spawn_platform(commands, 13, 14, 3, plat_color);
+            // Moving platform in the gap
+            let mp_x = 11.0 * TILE_SIZE + TILE_SIZE;
+            let mp_y = 3.0 * TILE_SIZE + TILE_SIZE / 2.0;
+            spawn_moving_platform(
+                commands, 11, 3, 2,
+                vec![
+                    Vec2::new(mp_x, mp_y),
+                    Vec2::new(mp_x, mp_y + TILE_SIZE * 2.5),
+                ],
+                30.0, 1.5,
+            );
+            // Upper platforms for alternate routing
+            spawn_platform(commands, 5,  7,  5, plat_color);
+            spawn_platform(commands, 16, 18, 5, plat_color);
+
+            spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
+            spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
+            spawn_crystal(commands, TILE_SIZE * 4.0, TILE_SIZE * 3.0, 0.5);
+            spawn_crystal(commands, TILE_SIZE * 19.0, TILE_SIZE * 3.0, 1.8);
+        }
+
+        // ── 15: Alternating hazards – lava and water patchwork ──────────────
+        _ => {
+            // Alternating lava and water patches on the floor
+            spawn_lava_strip(commands, 3, 5, 1);
+            spawn_water_strip(commands, 7, 9, 1);
+            spawn_lava_strip(commands, 11, 13, 1);
+            spawn_water_strip(commands, 15, 17, 1);
+            spawn_lava_strip(commands, 19, 20, 1);
+            // Platforms above the hazards
+            spawn_platform(commands, 2,  4,  3, plat_color);
+            spawn_platform(commands, 6,  8,  2, plat_color);
+            spawn_platform(commands, 10, 12, 4, plat_color);
+            spawn_platform(commands, 14, 16, 2, plat_color);
+            spawn_platform(commands, 18, 21, 3, plat_color);
+            // High bridge
+            spawn_platform(commands, 8, 14, 5, plat_color);
+
+            spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 3.5);
+            spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 3.5);
+            spawn_mushroom(commands, TILE_SIZE * 7.0, TILE_SIZE * 2.0 + TILE_SIZE);
+            spawn_crystal(commands, TILE_SIZE * 18.0, TILE_SIZE * 3.0 + TILE_SIZE, 2.0);
         }
     }
 
