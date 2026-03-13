@@ -53,7 +53,7 @@ fn spawn_floor_complete_ui(
                 row_gap: Val::Px(10.0),
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.02, 0.06, 0.03, 0.90)),
+            BackgroundColor(Color::srgba(0.06, 0.04, 0.02, 0.92)),
             FloorCompleteUI,
             PlayingEntity,
         ))
@@ -62,7 +62,7 @@ fn spawn_floor_complete_ui(
             parent.spawn((
                 Text::new(format!("FLOOR {} CONQUERED!", state.floor_completed)),
                 TextFont { font_size: 38.0, ..default() },
-                TextColor(Color::srgb(0.2, 0.92, 0.35)),
+                TextColor(Color::srgb(0.95, 0.7, 0.2)),
             ));
 
             parent.spawn(Node { height: Val::Px(16.0), ..default() });
@@ -71,7 +71,7 @@ fn spawn_floor_complete_ui(
             parent.spawn((
                 Text::new(format!("Enemies Defeated: {}", run.enemies_killed)),
                 TextFont { font_size: 18.0, ..default() },
-                TextColor(Color::srgb(0.7, 0.7, 0.8)),
+                TextColor(Color::srgb(0.75, 0.6, 0.4)),
             ));
 
             parent.spawn((
@@ -89,7 +89,7 @@ fn spawn_floor_complete_ui(
             parent.spawn((
                 Text::new(format!("Time: {}:{:02}", minutes, seconds)),
                 TextFont { font_size: 18.0, ..default() },
-                TextColor(Color::srgb(0.6, 0.6, 0.7)),
+                TextColor(Color::srgb(0.75, 0.6, 0.4)),
             ));
 
             parent.spawn(Node { height: Val::Px(28.0), ..default() });
@@ -98,13 +98,13 @@ fn spawn_floor_complete_ui(
             parent.spawn((
                 Text::new("[SPACE]  Descend Deeper"),
                 TextFont { font_size: 20.0, ..default() },
-                TextColor(Color::srgb(0.35, 0.9, 0.45)),
+                TextColor(Color::srgb(0.9, 0.65, 0.2)),
             ));
 
             parent.spawn((
                 Text::new("[ESC]  Save & Return to Surface"),
                 TextFont { font_size: 17.0, ..default() },
-                TextColor(Color::srgb(0.6, 0.55, 0.5)),
+                TextColor(Color::srgb(0.6, 0.5, 0.35)),
             ));
         });
 
@@ -114,9 +114,9 @@ fn spawn_floor_complete_ui(
         let y_jitter = (i as f32 * 31.7 % 80.0) - 40.0;
         let color = match i % 5 {
             0 => Color::srgb(1.0, 0.85, 0.15),
-            1 => Color::srgb(0.2, 0.9, 0.35),
+            1 => Color::srgb(0.85, 0.45, 0.1),
             2 => Color::srgb(0.95, 0.95, 0.9),
-            3 => Color::srgb(0.3, 0.8, 1.0),
+            3 => Color::srgb(0.9, 0.55, 0.15),
             _ => Color::srgb(1.0, 0.55, 0.1),
         };
         let (w, h) = if i % 2 == 0 { (7.0, 3.0) } else { (3.0, 8.0) };

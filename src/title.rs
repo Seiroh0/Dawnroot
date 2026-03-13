@@ -48,7 +48,7 @@ fn setup_title(mut commands: Commands) {
     // Night sky
     commands.spawn((
         Sprite {
-            color: Color::srgb(0.02, 0.03, 0.06),
+            color: Color::srgb(0.06, 0.03, 0.02),
             custom_size: Some(Vec2::new(VIEWPORT_W, VIEWPORT_H)),
             ..default()
         },
@@ -64,7 +64,7 @@ fn setup_title(mut commands: Commands) {
         let sz = rng.gen_range(1.0..3.0_f32);
         commands.spawn((
             Sprite {
-                color: Color::srgba(b, b, b * 0.95, b),
+                color: Color::srgba(b, b * 0.9, b * 0.7, b),
                 custom_size: Some(Vec2::new(sz, sz)),
                 ..default()
             },
@@ -76,7 +76,7 @@ fn setup_title(mut commands: Commands) {
     // Moon
     commands.spawn((
         Sprite {
-            color: Color::srgba(0.95, 0.92, 0.8, 0.9),
+            color: Color::srgba(0.95, 0.75, 0.35, 0.9),
             custom_size: Some(Vec2::new(40.0, 40.0)),
             ..default()
         },
@@ -85,7 +85,7 @@ fn setup_title(mut commands: Commands) {
     ));
     commands.spawn((
         Sprite {
-            color: Color::srgb(0.02, 0.03, 0.06),
+            color: Color::srgb(0.06, 0.03, 0.02),
             custom_size: Some(Vec2::new(34.0, 34.0)),
             ..default()
         },
@@ -101,7 +101,7 @@ fn setup_title(mut commands: Commands) {
     ] {
         commands.spawn((
             Sprite {
-                color: Color::srgb(g, g + 0.01, g * 0.8),
+                color: Color::srgb(g + 0.02, g, g * 0.6),
                 custom_size: Some(Vec2::new(w, h)),
                 ..default()
             },
@@ -114,7 +114,7 @@ fn setup_title(mut commands: Commands) {
     let ground_y = -VIEWPORT_H / 2.0 + 50.0;
     commands.spawn((
         Sprite {
-            color: Color::srgb(0.08, 0.1, 0.05),
+            color: Color::srgb(0.12, 0.08, 0.04),
             custom_size: Some(Vec2::new(VIEWPORT_W + 20.0, 100.0)),
             ..default()
         },
@@ -123,7 +123,7 @@ fn setup_title(mut commands: Commands) {
     ));
     commands.spawn((
         Sprite {
-            color: Color::srgb(0.1, 0.22, 0.08),
+            color: Color::srgb(0.22, 0.15, 0.06),
             custom_size: Some(Vec2::new(VIEWPORT_W + 20.0, 5.0)),
             ..default()
         },
@@ -187,7 +187,7 @@ fn setup_title(mut commands: Commands) {
         let trunk_w: f32 = rng.gen_range(10.0..18.0);
         commands.spawn((
             Sprite {
-                color: Color::srgb(0.04, 0.06, 0.03),
+                color: Color::srgb(0.12, 0.07, 0.03),
                 custom_size: Some(Vec2::new(trunk_w, h)),
                 ..default()
             },
@@ -198,7 +198,7 @@ fn setup_title(mut commands: Commands) {
         let canopy_h: f32 = rng.gen_range(35.0..55.0);
         commands.spawn((
             Sprite {
-                color: Color::srgb(0.05, 0.09, 0.04),
+                color: Color::srgb(0.55, 0.25, 0.08),
                 custom_size: Some(Vec2::new(canopy_w, canopy_h)),
                 ..default()
             },
@@ -213,7 +213,7 @@ fn setup_title(mut commands: Commands) {
         let y = rng.gen_range(well_base_y + 10.0..well_base_y + 120.0);
         commands.spawn((
             Sprite {
-                color: Color::srgba(0.6, 0.8, 0.3, 0.6),
+                color: Color::srgba(0.9, 0.6, 0.15, 0.6),
                 custom_size: Some(Vec2::new(3.0, 3.0)),
                 ..default()
             },
@@ -222,36 +222,308 @@ fn setup_title(mut commands: Commands) {
         ));
     }
 
-    // Title text
-    commands.spawn((
-        Text2d::new("DAWNROOT"),
-        TextFont { font_size: 64.0, ..default() },
-        TextColor(Color::srgb(0.9, 0.78, 0.45)),
-        Transform::from_xyz(0.0, 160.0, Z_HUD),
-        TitleEntity,
-    ));
+    // Title logo
+    spawn_logo(&mut commands);
     commands.spawn((
         Text2d::new("Into the Depths"),
         TextFont { font_size: 20.0, ..default() },
-        TextColor(Color::srgb(0.6, 0.55, 0.4)),
+        TextColor(Color::srgb(0.75, 0.55, 0.3)),
         Transform::from_xyz(0.0, 120.0, Z_HUD),
         TitleEntity,
     ));
     commands.spawn((
         Text2d::new("A/D: Move  |  Space: Jump  |  E: Melee  |  F: Ranged  |  Shift: Dash  |  1-4: Spells"),
         TextFont { font_size: 11.0, ..default() },
-        TextColor(Color::srgb(0.4, 0.38, 0.32)),
+        TextColor(Color::srgb(0.45, 0.35, 0.25)),
         Transform::from_xyz(0.0, -200.0, Z_HUD),
         TitleEntity,
     ));
     commands.spawn((
         Text2d::new("- Press SPACE to descend -"),
         TextFont { font_size: 22.0, ..default() },
-        TextColor(Color::srgba(0.9, 0.8, 0.45, 1.0)),
+        TextColor(Color::srgba(0.95, 0.7, 0.25, 1.0)),
         Transform::from_xyz(0.0, -230.0, Z_HUD),
         TitleEntity,
         PromptText,
     ));
+}
+
+fn spawn_logo(commands: &mut Commands) {
+    // All child transforms are relative to the parent at (0.0, 160.0, Z_HUD).
+    // Positive Y = up, positive Z = in front.
+    //
+    // Layout sketch (relative coords):
+    //   Sun center:    (0,  58)  — half-circle built from horizontal bars
+    //   Sun rays:      radiating outward from sun center
+    //   Backdrop:      (-130, 0) to (130, 0) — dark plaque behind text
+    //   Text "DAWNROOT": (0, 0)
+    //   Root tendrils: below the backdrop, Y ~ -25 downward
+    //   Leaf accents:  scattered around the roots
+
+    let parent = commands.spawn((
+        Transform::from_xyz(0.0, 160.0, Z_HUD),
+        Visibility::Visible,
+        TitleEntity,
+    )).id();
+
+    // ── Sun half-circle (layered horizontal bars, bottom to top) ──────────
+    // Each bar row is slightly narrower and one step brighter gold going upward.
+    // Rows are stacked starting at y_base (the flat bottom of the sun).
+    let sun_cx: f32 = 0.0;
+    let sun_base_y: f32 = 38.0;   // flat bottom of half-circle
+    let bar_h: f32 = 7.0;
+    let sun_rows: &[(f32, f32, f32, f32, f32)] = &[
+        // (half_width, r, g, b, y_offset_from_base)
+        (48.0, 0.55, 0.22, 0.04, 0.0),   // deep amber base
+        (46.0, 0.62, 0.28, 0.06, 7.0),
+        (43.0, 0.70, 0.35, 0.07, 14.0),
+        (38.0, 0.78, 0.44, 0.08, 21.0),
+        (32.0, 0.86, 0.55, 0.10, 28.0),
+        (24.0, 0.92, 0.65, 0.14, 35.0),
+        (15.0, 0.96, 0.76, 0.20, 42.0),  // bright gold tip
+        ( 6.0, 1.00, 0.88, 0.35, 49.0),
+    ];
+    for &(hw, r, g, b, dy) in sun_rows {
+        let child = commands.spawn((
+            Sprite {
+                color: Color::srgb(r, g, b),
+                custom_size: Some(Vec2::new(hw * 2.0, bar_h + 1.0)),
+                ..default()
+            },
+            Transform::from_xyz(sun_cx, sun_base_y + dy, 0.2),
+            TitleEntity,
+        )).id();
+        commands.entity(parent).add_child(child);
+    }
+
+    // ── Sun glow halo — a wide, very dim amber rectangle behind the sun ──
+    {
+        let child = commands.spawn((
+            Sprite {
+                color: Color::srgba(0.70, 0.38, 0.05, 0.18),
+                custom_size: Some(Vec2::new(140.0, 80.0)),
+                ..default()
+            },
+            Transform::from_xyz(sun_cx, sun_base_y + 20.0, 0.05),
+            TitleEntity,
+        )).id();
+        commands.entity(parent).add_child(child);
+    }
+
+    // ── Sun rays — thin rectangles rotated around sun center ─────────────
+    let ray_origin_y: f32 = sun_base_y + 20.0; // approximate visual center of half-sun
+    // Angles in radians from vertical. Only upward-facing rays (above the horizon).
+    let ray_angles: &[(f32, f32, f32)] = &[
+        // (angle from +Y axis,  ray_length, ray_width)
+        (-0.90, 52.0, 3.0),  // far left
+        (-0.62, 58.0, 2.5),
+        (-0.34, 62.0, 3.5),
+        (-0.12, 55.0, 2.0),
+        ( 0.12, 55.0, 2.0),
+        ( 0.34, 62.0, 3.5),
+        ( 0.62, 58.0, 2.5),
+        ( 0.90, 52.0, 3.0),  // far right
+    ];
+    for &(angle, length, width) in ray_angles {
+        // The ray rectangle is drawn with its center at (length/2) distance from origin.
+        let dir_x = angle.sin();  // angle measured from +Y, so sin = x component
+        let dir_y = angle.cos();  // cos = y component
+        let cx = sun_cx + dir_x * (length / 2.0 + 28.0); // 28 = approx sun radius
+        let cy = ray_origin_y + dir_y * (length / 2.0 + 28.0);
+        let child = commands.spawn((
+            Sprite {
+                color: Color::srgba(0.88, 0.58, 0.12, 0.55),
+                custom_size: Some(Vec2::new(width, length)),
+                ..default()
+            },
+            Transform {
+                translation: Vec3::new(cx, cy, 0.1),
+                rotation: Quat::from_rotation_z(-angle),
+                scale: Vec3::ONE,
+            },
+            TitleEntity,
+        )).id();
+        commands.entity(parent).add_child(child);
+    }
+
+    // ── Title backdrop — dark sienna plaque behind the text ───────────────
+    // Outer border (slightly larger, slightly lighter)
+    {
+        let child = commands.spawn((
+            Sprite {
+                color: Color::srgb(0.28, 0.14, 0.06),
+                custom_size: Some(Vec2::new(272.0, 56.0)),
+                ..default()
+            },
+            Transform::from_xyz(0.0, 2.0, 0.35),
+            TitleEntity,
+        )).id();
+        commands.entity(parent).add_child(child);
+    }
+    // Inner fill (darker)
+    {
+        let child = commands.spawn((
+            Sprite {
+                color: Color::srgb(0.09, 0.05, 0.02),
+                custom_size: Some(Vec2::new(264.0, 48.0)),
+                ..default()
+            },
+            Transform::from_xyz(0.0, 2.0, 0.40),
+            TitleEntity,
+        )).id();
+        commands.entity(parent).add_child(child);
+    }
+
+    // ── "DAWNROOT" text — child of parent so it renders on top ───────────
+    {
+        let child = commands.spawn((
+            Text2d::new("DAWNROOT"),
+            TextFont { font_size: 64.0, ..default() },
+            TextColor(Color::srgb(0.95, 0.82, 0.42)),
+            Transform::from_xyz(0.0, 0.0, 1.0),
+            TitleEntity,
+        )).id();
+        commands.entity(parent).add_child(child);
+    }
+
+    // ── Root tendrils — organic pixel shapes below the backdrop ──────────
+    // Central downward trunk
+    {
+        let child = commands.spawn((
+            Sprite {
+                color: Color::srgb(0.22, 0.12, 0.05),
+                custom_size: Some(Vec2::new(5.0, 28.0)),
+                ..default()
+            },
+            Transform::from_xyz(0.0, -27.0, 0.45),
+            TitleEntity,
+        )).id();
+        commands.entity(parent).add_child(child);
+    }
+    // Root segments: (x, y, w, h, angle)
+    let root_segments: &[(f32, f32, f32, f32, f32)] = &[
+        // left side branches
+        (-18.0, -30.0,  4.0, 20.0, -0.32),
+        (-34.0, -38.0,  3.0, 16.0, -0.55),
+        (-50.0, -42.0,  3.0, 12.0, -0.75),
+        (-64.0, -44.0,  2.5, 10.0, -0.90),
+        (-28.0, -46.0,  2.5, 14.0, -0.20),
+        (-80.0, -42.0,  2.0,  8.0, -1.05),
+        // right side branches
+        ( 18.0, -30.0,  4.0, 20.0,  0.32),
+        ( 34.0, -38.0,  3.0, 16.0,  0.55),
+        ( 50.0, -42.0,  3.0, 12.0,  0.75),
+        ( 64.0, -44.0,  2.5, 10.0,  0.90),
+        ( 28.0, -46.0,  2.5, 14.0,  0.20),
+        ( 80.0, -42.0,  2.0,  8.0,  1.05),
+        // additional inner cross roots
+        (-10.0, -40.0,  2.5, 10.0, -0.15),
+        ( 10.0, -40.0,  2.5, 10.0,  0.15),
+    ];
+    for &(x, y, w, h, angle) in root_segments {
+        let child = commands.spawn((
+            Sprite {
+                color: Color::srgb(0.20, 0.11, 0.04),
+                custom_size: Some(Vec2::new(w, h)),
+                ..default()
+            },
+            Transform {
+                translation: Vec3::new(x, y, 0.45),
+                rotation: Quat::from_rotation_z(angle),
+                scale: Vec3::ONE,
+            },
+            TitleEntity,
+        )).id();
+        commands.entity(parent).add_child(child);
+    }
+    // Root tip dots (small square nubs at the ends of roots)
+    let root_tips: &[(f32, f32)] = &[
+        (-82.0, -47.0), (-66.0, -51.0), (-52.0, -51.0),
+        ( 82.0, -47.0), ( 66.0, -51.0), ( 52.0, -51.0),
+        (-30.0, -56.0), ( 30.0, -56.0), (0.0, -53.0),
+    ];
+    for &(x, y) in root_tips {
+        let child = commands.spawn((
+            Sprite {
+                color: Color::srgb(0.17, 0.09, 0.03),
+                custom_size: Some(Vec2::new(3.0, 3.0)),
+                ..default()
+            },
+            Transform::from_xyz(x, y, 0.46),
+            TitleEntity,
+        )).id();
+        commands.entity(parent).add_child(child);
+    }
+
+    // ── Leaf accents — small autumn rectangles scattered near roots/text ──
+    // Each entry: (x, y, w, h, angle, r, g, b)
+    let leaves: &[(f32, f32, f32, f32, f32, f32, f32, f32)] = &[
+        // warm orange leaves left
+        (-110.0,  10.0, 7.0, 5.0,  0.50, 0.80, 0.32, 0.05),
+        (-120.0,  -8.0, 6.0, 4.0,  0.80, 0.72, 0.25, 0.04),
+        (-100.0, -18.0, 5.0, 4.0,  0.30, 0.85, 0.38, 0.06),
+        (-130.0,   2.0, 5.0, 3.5,  1.10, 0.65, 0.20, 0.03),
+        // warm orange-red leaves right
+        ( 110.0,  10.0, 7.0, 5.0, -0.50, 0.80, 0.32, 0.05),
+        ( 120.0,  -8.0, 6.0, 4.0, -0.80, 0.72, 0.25, 0.04),
+        ( 100.0, -18.0, 5.0, 4.0, -0.30, 0.85, 0.38, 0.06),
+        ( 130.0,   2.0, 5.0, 3.5, -1.10, 0.65, 0.20, 0.03),
+        // gold leaves near sun / top
+        ( -55.0,  42.0, 6.0, 4.0,  0.60, 0.90, 0.68, 0.10),
+        (  55.0,  42.0, 6.0, 4.0, -0.60, 0.90, 0.68, 0.10),
+        ( -35.0,  50.0, 5.0, 3.5,  0.30, 0.95, 0.75, 0.15),
+        (  35.0,  50.0, 5.0, 3.5, -0.30, 0.95, 0.75, 0.15),
+        // rust-red near root base
+        ( -45.0, -48.0, 5.0, 3.5,  0.70, 0.68, 0.18, 0.04),
+        (  45.0, -48.0, 5.0, 3.5, -0.70, 0.68, 0.18, 0.04),
+        ( -22.0, -54.0, 4.0, 3.0,  0.20, 0.72, 0.22, 0.04),
+        (  22.0, -54.0, 4.0, 3.0, -0.20, 0.72, 0.22, 0.04),
+    ];
+    for &(x, y, w, h, angle, r, g, b) in leaves {
+        let child = commands.spawn((
+            Sprite {
+                color: Color::srgb(r, g, b),
+                custom_size: Some(Vec2::new(w, h)),
+                ..default()
+            },
+            Transform {
+                translation: Vec3::new(x, y, 0.50),
+                rotation: Quat::from_rotation_z(angle),
+                scale: Vec3::ONE,
+            },
+            TitleEntity,
+        )).id();
+        commands.entity(parent).add_child(child);
+        // Small stem pixel for each leaf
+        let stem = commands.spawn((
+            Sprite {
+                color: Color::srgb(0.22, 0.12, 0.05),
+                custom_size: Some(Vec2::new(1.5, 4.0)),
+                ..default()
+            },
+            Transform {
+                translation: Vec3::new(x + angle.sin() * -3.0, y + angle.cos() * -3.0, 0.49),
+                rotation: Quat::from_rotation_z(angle),
+                scale: Vec3::ONE,
+            },
+            TitleEntity,
+        )).id();
+        commands.entity(parent).add_child(stem);
+    }
+
+    // ── Horizontal ground line at base of logo — anchors it to the scene ─
+    {
+        let child = commands.spawn((
+            Sprite {
+                color: Color::srgb(0.30, 0.15, 0.05),
+                custom_size: Some(Vec2::new(280.0, 2.0)),
+                ..default()
+            },
+            Transform::from_xyz(0.0, -18.0, 0.44),
+            TitleEntity,
+        )).id();
+        commands.entity(parent).add_child(child);
+    }
 }
 
 fn cleanup_title(mut commands: Commands, q: Query<Entity, With<TitleEntity>>) {
@@ -271,7 +543,7 @@ fn handle_title_input(
     // Animate prompt pulse
     if let Ok(mut color) = prompt_q.get_single_mut() {
         let alpha = 0.4 + 0.6 * (time.elapsed_secs() * 2.5).sin().max(0.0);
-        color.0 = Color::srgba(0.9, 0.8, 0.45, alpha);
+        color.0 = Color::srgba(0.95, 0.7, 0.25, alpha);
     }
 
     if slot_state.open { return; }
@@ -300,7 +572,7 @@ fn spawn_slot_menu(commands: &mut Commands) {
                 row_gap: Val::Px(8.0),
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.02, 0.02, 0.05, 0.92)),
+            BackgroundColor(Color::srgba(0.06, 0.03, 0.02, 0.94)),
             SlotUI,
             TitleEntity,
         ))
@@ -309,7 +581,7 @@ fn spawn_slot_menu(commands: &mut Commands) {
             parent.spawn((
                 Text::new("Choose Your Path"),
                 TextFont { font_size: 30.0, ..default() },
-                TextColor(Color::srgb(0.9, 0.78, 0.45)),
+                TextColor(Color::srgb(0.95, 0.7, 0.25)),
             ));
 
             parent.spawn(Node { height: Val::Px(16.0), ..default() });
@@ -324,12 +596,12 @@ fn spawn_slot_menu(commands: &mut Commands) {
                             "[{}]  Slot {} - Floor {} | {}g | {}:{:02}",
                             i + 1, i + 1, save.floor, save.gold, mins, secs
                         ),
-                        Color::srgb(0.5, 0.85, 0.55),
+                        Color::srgb(0.85, 0.65, 0.25),
                     )
                 } else {
                     (
                         format!("[{}]  Slot {} - Empty (New Game)", i + 1, i + 1),
-                        Color::srgb(0.55, 0.55, 0.65),
+                        Color::srgb(0.55, 0.45, 0.35),
                     )
                 };
 
@@ -345,7 +617,7 @@ fn spawn_slot_menu(commands: &mut Commands) {
             parent.spawn((
                 Text::new("Press 1/2/3 to select  |  DEL to erase  |  ESC to go back"),
                 TextFont { font_size: 13.0, ..default() },
-                TextColor(Color::srgb(0.4, 0.4, 0.5)),
+                TextColor(Color::srgb(0.45, 0.38, 0.3)),
             ));
         });
 }
@@ -461,17 +733,17 @@ fn setup_well_intro(mut commands: Commands) {
 
     // Sky
     commands.spawn((
-        Sprite { color: Color::srgb(0.02, 0.03, 0.06), custom_size: Some(Vec2::new(VIEWPORT_W, VIEWPORT_H)), ..default() },
+        Sprite { color: Color::srgb(0.06, 0.03, 0.02), custom_size: Some(Vec2::new(VIEWPORT_W, VIEWPORT_H)), ..default() },
         Transform::from_xyz(0.0, 0.0, Z_BACKGROUND), IntroEntity,
     ));
 
     // Ground
     commands.spawn((
-        Sprite { color: Color::srgb(0.08, 0.1, 0.05), custom_size: Some(Vec2::new(VIEWPORT_W + 20.0, 100.0)), ..default() },
+        Sprite { color: Color::srgb(0.12, 0.08, 0.04), custom_size: Some(Vec2::new(VIEWPORT_W + 20.0, 100.0)), ..default() },
         Transform::from_xyz(0.0, ground_y, Z_BACKGROUND + 2.0), IntroEntity,
     ));
     commands.spawn((
-        Sprite { color: Color::srgb(0.1, 0.22, 0.08), custom_size: Some(Vec2::new(VIEWPORT_W + 20.0, 5.0)), ..default() },
+        Sprite { color: Color::srgb(0.22, 0.15, 0.06), custom_size: Some(Vec2::new(VIEWPORT_W + 20.0, 5.0)), ..default() },
         Transform::from_xyz(0.0, ground_y + 52.5, Z_BACKGROUND + 3.0), IntroEntity,
     ));
 
@@ -498,7 +770,7 @@ fn setup_well_intro(mut commands: Commands) {
     )).with_children(|p| {
         // Body
         p.spawn((
-            Sprite { color: Color::srgb(0.18, 0.50, 0.28), custom_size: Some(Vec2::new(14.0, 14.0)), ..default() },
+            Sprite { color: Color::srgb(0.50, 0.30, 0.12), custom_size: Some(Vec2::new(14.0, 14.0)), ..default() },
             Transform::from_xyz(0.0, 0.0, 0.1), IntroEntity, IntroPlayerPart,
         ));
         // Belt
@@ -520,7 +792,7 @@ fn setup_well_intro(mut commands: Commands) {
                 Transform::from_xyz(2.5, 0.5, 0.1), IntroEntity, IntroPlayerPart,
             ));
             head.spawn((
-                Sprite { color: Color::srgb(0.12, 0.34, 0.18), custom_size: Some(Vec2::new(14.0, 5.0)), ..default() },
+                Sprite { color: Color::srgb(0.40, 0.22, 0.10), custom_size: Some(Vec2::new(14.0, 5.0)), ..default() },
                 Transform::from_xyz(0.0, 4.5, 0.15), IntroEntity, IntroPlayerPart,
             ));
         });

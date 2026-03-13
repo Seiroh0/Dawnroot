@@ -61,7 +61,7 @@ fn spawn_drops(
         if roll < 0.2 {
             commands.spawn((
                 Sprite {
-                    color: Color::srgb(0.9, 0.2, 0.3),
+                    color: Color::srgb(0.9, 0.3, 0.15),
                     custom_size: Some(Vec2::new(10.0, 10.0)),
                     ..default()
                 },
@@ -79,7 +79,7 @@ fn spawn_drops(
         if roll >= 0.2 && roll < 0.5 {
             commands.spawn((
                 Sprite {
-                    color: Color::srgb(0.3, 0.4, 0.9),
+                    color: Color::srgb(0.7, 0.4, 0.85),
                     custom_size: Some(Vec2::new(8.0, 8.0)),
                     ..default()
                 },

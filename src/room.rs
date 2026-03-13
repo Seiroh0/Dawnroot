@@ -169,11 +169,11 @@ fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize) {
         .wrapping_mul(state.floor as u64 + 1);
 
     let bg_color = match room_type {
-        RoomType::Start    => Color::srgb(0.06, 0.06, 0.08),
-        RoomType::Combat   => Color::srgb(0.05, 0.05, 0.07),
+        RoomType::Start    => Color::srgb(0.08, 0.06, 0.04),
+        RoomType::Combat   => Color::srgb(0.07, 0.05, 0.03),
         RoomType::Treasure => Color::srgb(0.08, 0.07, 0.05),
-        RoomType::Shop     => Color::srgb(0.06, 0.08, 0.10),
-        RoomType::Boss     => Color::srgb(0.10, 0.04, 0.06),
+        RoomType::Shop     => Color::srgb(0.08, 0.07, 0.05),
+        RoomType::Boss     => Color::srgb(0.10, 0.04, 0.03),
     };
 
     // Background
@@ -219,9 +219,9 @@ fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize) {
     let door_locked = room_type == RoomType::Combat
         || room_type == RoomType::Boss;
     let door_color = if door_locked {
-        Color::srgb(0.55, 0.10, 0.10)
+        Color::srgb(0.60, 0.20, 0.08)
     } else {
-        Color::srgb(0.2, 0.6, 0.3)
+        Color::srgb(0.65, 0.45, 0.15)
     };
 
     // Door body
@@ -244,7 +244,7 @@ fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize) {
         // Horizontal bar
         commands.spawn((
             Sprite {
-                color: Color::srgba(1.0, 0.10, 0.10, 0.75),
+                color: Color::srgba(0.9, 0.25, 0.08, 0.75),
                 custom_size: Some(Vec2::new(TILE_SIZE * 0.70, 5.0)),
                 ..default()
             },
@@ -255,7 +255,7 @@ fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize) {
         // Vertical bar
         commands.spawn((
             Sprite {
-                color: Color::srgba(1.0, 0.10, 0.10, 0.75),
+                color: Color::srgba(0.9, 0.25, 0.08, 0.75),
                 custom_size: Some(Vec2::new(5.0, TILE_SIZE * 2.8)),
                 ..default()
             },
@@ -293,14 +293,14 @@ fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize) {
 fn room_tile_colors(room_type: RoomType) -> (Color, Color, Color) {
     match room_type {
         RoomType::Start    => (
-            Color::srgb(0.25, 0.23, 0.20),  // floor: warm dark stone
-            Color::srgb(0.20, 0.18, 0.17),  // ceiling: darker stone
-            Color::srgb(0.22, 0.20, 0.19),  // walls: neutral stone
+            Color::srgb(0.28, 0.22, 0.15),  // floor: warm dark stone
+            Color::srgb(0.22, 0.17, 0.12),  // ceiling: darker stone
+            Color::srgb(0.24, 0.19, 0.14),  // walls: neutral stone
         ),
         RoomType::Combat   => (
-            Color::srgb(0.24, 0.21, 0.19),  // floor: dark stone
-            Color::srgb(0.18, 0.16, 0.15),  // ceiling: deep dark
-            Color::srgb(0.21, 0.19, 0.17),  // walls: stone gray
+            Color::srgb(0.26, 0.20, 0.14),  // floor: dark stone
+            Color::srgb(0.20, 0.15, 0.10),  // ceiling: deep dark
+            Color::srgb(0.23, 0.18, 0.12),  // walls: stone gray
         ),
         RoomType::Treasure => (
             Color::srgb(0.28, 0.24, 0.16),
@@ -308,14 +308,14 @@ fn room_tile_colors(room_type: RoomType) -> (Color, Color, Color) {
             Color::srgb(0.26, 0.22, 0.15),
         ),
         RoomType::Shop     => (
-            Color::srgb(0.18, 0.22, 0.28),
-            Color::srgb(0.14, 0.18, 0.22),
-            Color::srgb(0.16, 0.20, 0.26),
+            Color::srgb(0.24, 0.20, 0.14),
+            Color::srgb(0.20, 0.16, 0.10),
+            Color::srgb(0.22, 0.18, 0.12),
         ),
         RoomType::Boss     => (
-            Color::srgb(0.28, 0.12, 0.16),
-            Color::srgb(0.20, 0.08, 0.12),
-            Color::srgb(0.24, 0.10, 0.14),
+            Color::srgb(0.28, 0.14, 0.08),
+            Color::srgb(0.22, 0.10, 0.06),
+            Color::srgb(0.25, 0.12, 0.07),
         ),
     }
 }
@@ -681,7 +681,7 @@ fn right_wall_torch_x() -> f32 {
 // ─── Start Room ───────────────────────────────────────────────────────────────
 
 fn spawn_start_room(commands: &mut Commands, seed: u64) {
-    let plat_color = Color::srgb(0.32, 0.30, 0.28);
+    let plat_color = Color::srgb(0.34, 0.26, 0.16);
 
     // Three low, welcoming stepping-stone platforms (rows 2-4, spans 3-4 tiles)
     spawn_platform(commands, 3,  6,  2, plat_color); // left, very low
@@ -722,7 +722,7 @@ fn spawn_start_room(commands: &mut Commands, seed: u64) {
 // ─── Combat Room Templates ────────────────────────────────────────────────────
 
 fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
-    let plat_color = Color::srgb(0.30, 0.28, 0.26);
+    let plat_color = Color::srgb(0.32, 0.24, 0.14);
     let template = (seed % 8) as i32;
 
     match template {
@@ -835,8 +835,8 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             spawn_platform(commands, 11, 13, 3, plat_color);
             spawn_platform(commands, 16, 18, 2, plat_color);
             // Side pillars to define the tunnel entrance/exit
-            spawn_pillar(commands, 4, 1, 8, Color::srgb(0.22, 0.18, 0.27));
-            spawn_pillar(commands, 19, 1, 8, Color::srgb(0.22, 0.18, 0.27));
+            spawn_pillar(commands, 4, 1, 8, Color::srgb(0.25, 0.18, 0.10));
+            spawn_pillar(commands, 19, 1, 8, Color::srgb(0.25, 0.18, 0.10));
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 3.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 3.0);
@@ -957,8 +957,8 @@ fn spawn_treasure_room(commands: &mut Commands, seed: u64) {
 // ─── Boss Room ────────────────────────────────────────────────────────────────
 
 fn spawn_boss_room(commands: &mut Commands, _floor: i32) {
-    let plat_color = Color::srgb(0.32, 0.12, 0.18);
-    let pillar_color = Color::srgb(0.26, 0.10, 0.14);
+    let plat_color = Color::srgb(0.32, 0.16, 0.08);
+    let pillar_color = Color::srgb(0.28, 0.14, 0.07);
 
     // Wide ground arena
     spawn_platform(commands, 3, 20, 4, plat_color);
@@ -1089,7 +1089,7 @@ fn tick_start_door_timer(
 
         for (mut door, mut sprite) in &mut door_q {
             door.locked = false;
-            sprite.color = Color::srgb(0.2, 0.6, 0.3);
+            sprite.color = Color::srgb(0.65, 0.45, 0.15);
         }
     }
 }
@@ -1115,7 +1115,7 @@ fn check_room_cleared(
 
         for (mut door, mut sprite) in &mut door_q {
             door.locked = false;
-            sprite.color = Color::srgb(0.2, 0.6, 0.3);
+            sprite.color = Color::srgb(0.65, 0.45, 0.15);
         }
     }
 }

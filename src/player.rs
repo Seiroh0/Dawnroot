@@ -125,12 +125,12 @@ fn spawn_player(mut commands: Commands, meta: Res<MetaProgression>, loaded: Opti
     )).with_children(|p| {
         // Body (green tunic)
         p.spawn((
-            Sprite { color: Color::srgb(0.18, 0.5, 0.28), custom_size: Some(Vec2::new(14.0, 14.0)), ..default() },
+            Sprite { color: Color::srgb(0.55, 0.30, 0.12), custom_size: Some(Vec2::new(14.0, 14.0)), ..default() },
             Transform::from_xyz(0.0, 0.0, 0.1), PlayerBody,
         ));
         // Belt
         p.spawn((
-            Sprite { color: Color::srgb(0.45, 0.3, 0.15), custom_size: Some(Vec2::new(14.0, 3.0)), ..default() },
+            Sprite { color: Color::srgb(0.40, 0.25, 0.10), custom_size: Some(Vec2::new(14.0, 3.0)), ..default() },
             Transform::from_xyz(0.0, -5.0, 0.15),
         ));
         // Head
@@ -140,16 +140,16 @@ fn spawn_player(mut commands: Commands, meta: Res<MetaProgression>, loaded: Opti
         )).with_children(|head| {
             // Eyes
             head.spawn((
-                Sprite { color: Color::srgb(0.15, 0.15, 0.2), custom_size: Some(Vec2::new(2.5, 3.0)), ..default() },
+                Sprite { color: Color::srgb(0.18, 0.12, 0.08), custom_size: Some(Vec2::new(2.5, 3.0)), ..default() },
                 Transform::from_xyz(-2.5, 0.5, 0.1),
             ));
             head.spawn((
-                Sprite { color: Color::srgb(0.15, 0.15, 0.2), custom_size: Some(Vec2::new(2.5, 3.0)), ..default() },
+                Sprite { color: Color::srgb(0.18, 0.12, 0.08), custom_size: Some(Vec2::new(2.5, 3.0)), ..default() },
                 Transform::from_xyz(2.5, 0.5, 0.1),
             ));
             // Hood/hair
             head.spawn((
-                Sprite { color: Color::srgb(0.14, 0.38, 0.22), custom_size: Some(Vec2::new(14.0, 5.0)), ..default() },
+                Sprite { color: Color::srgb(0.45, 0.25, 0.10), custom_size: Some(Vec2::new(14.0, 5.0)), ..default() },
                 Transform::from_xyz(0.0, 4.5, 0.15),
             ));
         });
@@ -164,7 +164,7 @@ fn spawn_player(mut commands: Commands, meta: Res<MetaProgression>, loaded: Opti
         ));
         // Weapon (sword held in front)
         p.spawn((
-            Sprite { color: Color::srgb(0.72, 0.74, 0.78), custom_size: Some(Vec2::new(3.0, 16.0)), ..default() },
+            Sprite { color: Color::srgb(0.75, 0.65, 0.50), custom_size: Some(Vec2::new(3.0, 16.0)), ..default() },
             Transform::from_xyz(10.0, 3.0, 0.35), PlayerWeapon,
         ));
     });
@@ -245,7 +245,7 @@ fn player_input(
         ev_attack.send(PlayerAttack);
         let hx = tf.translation.x + player.facing * MELEE_RANGE;
         commands.spawn((
-            Sprite { color: Color::srgba(1.0, 0.95, 0.7, 0.5), custom_size: Some(Vec2::new(MELEE_RANGE, MELEE_WIDTH)), ..default() },
+            Sprite { color: Color::srgba(1.0, 0.75, 0.3, 0.5), custom_size: Some(Vec2::new(MELEE_RANGE, MELEE_WIDTH)), ..default() },
             Transform::from_xyz(hx, tf.translation.y, Z_EFFECTS),
             MeleeHitbox { damage: MELEE_DAMAGE, lifetime: MELEE_ACTIVE_TIME },
             PlayingEntity,
@@ -263,7 +263,7 @@ fn player_input(
         );
         commands.spawn((
             Sprite {
-                color: Color::srgb(0.6, 0.9, 1.0),
+                color: Color::srgb(0.95, 0.65, 0.2),
                 custom_size: Some(Vec2::new(10.0, 5.0)),
                 ..default()
             },
@@ -279,7 +279,7 @@ fn player_input(
             // Bright core
             bolt.spawn((
                 Sprite {
-                    color: Color::srgba(0.9, 1.0, 1.0, 0.9),
+                    color: Color::srgba(1.0, 0.9, 0.5, 0.9),
                     custom_size: Some(Vec2::new(6.0, 3.0)),
                     ..default()
                 },
@@ -288,7 +288,7 @@ fn player_input(
             // Trailing glow
             bolt.spawn((
                 Sprite {
-                    color: Color::srgba(0.4, 0.7, 1.0, 0.5),
+                    color: Color::srgba(0.9, 0.5, 0.1, 0.5),
                     custom_size: Some(Vec2::new(14.0, 7.0)),
                     ..default()
                 },
@@ -407,7 +407,7 @@ fn melee_hitbox_lifetime(
     for (entity, mut hb, mut sprite) in &mut query {
         hb.lifetime -= time.delta_secs();
         let alpha = (hb.lifetime / MELEE_ACTIVE_TIME).max(0.0) * 0.5;
-        sprite.color = Color::srgba(1.0, 0.95, 0.7, alpha);
+        sprite.color = Color::srgba(1.0, 0.75, 0.3, alpha);
         if hb.lifetime <= 0.0 { commands.entity(entity).despawn(); }
     }
 }
@@ -492,11 +492,11 @@ fn update_player_visuals(
             let st = (MELEE_COOLDOWN - player.melee_cooldown) / 0.15;
             wt.rotation = Quat::from_rotation_z(-1.5 + st * 3.0);
             wt.translation = Vec3::new(14.0, 6.0, 0.35);
-            ws.color = Color::srgb(0.95, 0.9, 0.6);
+            ws.color = Color::srgb(0.95, 0.75, 0.35);
         } else {
             wt.rotation = Quat::from_rotation_z(-0.3);
             wt.translation = Vec3::new(10.0, 3.0, 0.35);
-            ws.color = Color::srgb(0.72, 0.74, 0.78);
+            ws.color = Color::srgb(0.75, 0.65, 0.50);
         }
     }
 }

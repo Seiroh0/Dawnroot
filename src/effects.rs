@@ -220,9 +220,9 @@ fn on_room_cleared(
             let y_jitter = (i as f32 * 31.7 % 60.0) - 30.0;
 
             let color = match i % 4 {
-                0 => Color::srgb(0.25, 0.88, 0.38), // bright green
+                0 => Color::srgb(0.65, 0.55, 0.15), // olive gold
                 1 => Color::srgb(0.95, 0.82, 0.18), // gold
-                2 => Color::srgb(0.2, 0.7, 1.0),    // sky blue
+                2 => Color::srgb(0.9, 0.45, 0.1),   // autumn orange
                 _ => Color::srgb(1.0, 0.95, 0.95),  // near-white
             };
 
@@ -283,7 +283,7 @@ fn on_player_dash(
             let alpha = 0.55 - k as f32 * 0.15; // 0.55, 0.40, 0.25
             commands.spawn((
                 Sprite {
-                    color: Color::srgba(0.18, 0.5, 0.28, alpha), // player tunic green
+                    color: Color::srgba(0.55, 0.30, 0.12, alpha), // player autumn tunic
                     custom_size: Some(Vec2::new(14.0, 30.0)),     // approximate player silhouette
                     ..default()
                 },

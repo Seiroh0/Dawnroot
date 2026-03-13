@@ -69,13 +69,13 @@ fn setup_hud(mut commands: Commands) {
                         col.spawn((
                             Text::new("HP: 5/5"),
                             TextFont { font_size: 18.0, ..default() },
-                            TextColor(Color::srgb(0.9, 0.3, 0.3)),
+                            TextColor(Color::srgb(0.9, 0.35, 0.15)),
                             HealthText,
                         ));
                         col.spawn((
                             Text::new("MANA: 100/100"),
                             TextFont { font_size: 14.0, ..default() },
-                            TextColor(Color::srgb(0.3, 0.5, 0.9)),
+                            TextColor(Color::srgb(0.7, 0.45, 0.9)),
                             ManaText,
                         ));
                         col.spawn((
@@ -109,7 +109,7 @@ fn setup_hud(mut commands: Commands) {
                         col.spawn((
                             Text::new("Floor 1 - Room 1"),
                             TextFont { font_size: 14.0, ..default() },
-                            TextColor(Color::srgb(0.6, 0.6, 0.7)),
+                            TextColor(Color::srgb(0.65, 0.55, 0.4)),
                             FloorText,
                         ));
                     });
@@ -119,7 +119,7 @@ fn setup_hud(mut commands: Commands) {
             parent.spawn((
                 Text::new("[1] Fireball  [2] Ice  [3] Lightning  [4] Shield"),
                 TextFont { font_size: 14.0, ..default() },
-                TextColor(Color::srgb(0.7, 0.7, 0.8)),
+                TextColor(Color::srgb(0.75, 0.6, 0.4)),
                 Node {
                     position_type: PositionType::Absolute,
                     bottom: Val::Px(12.0),

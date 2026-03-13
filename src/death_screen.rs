@@ -35,7 +35,7 @@ fn setup_death_screen(mut commands: Commands, run: Res<RunData>) {
                 row_gap: Val::Px(10.0),
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.03, 0.02, 0.05, 0.94)),
+            BackgroundColor(Color::srgba(0.06, 0.03, 0.02, 0.94)),
             DeathScreenUI,
         ))
         .with_children(|parent| {
@@ -43,7 +43,7 @@ fn setup_death_screen(mut commands: Commands, run: Res<RunData>) {
             parent.spawn((
                 Text::new("YOU HAVE FALLEN"),
                 TextFont { font_size: 38.0, ..default() },
-                TextColor(Color::srgb(0.9, 0.12, 0.12)),
+                TextColor(Color::srgb(0.9, 0.25, 0.08)),
             ));
 
             parent.spawn(Node { height: Val::Px(24.0), ..default() });
@@ -55,21 +55,21 @@ fn setup_death_screen(mut commands: Commands, run: Res<RunData>) {
                     run.current_floor, run.current_room,
                 )),
                 TextFont { font_size: 22.0, ..default() },
-                TextColor(Color::srgb(0.75, 0.75, 0.85)),
+                TextColor(Color::srgb(0.8, 0.65, 0.45)),
             ));
 
             // Time
             parent.spawn((
                 Text::new(format!("Time Survived: {}:{:02}", minutes, seconds)),
                 TextFont { font_size: 18.0, ..default() },
-                TextColor(Color::srgb(0.6, 0.6, 0.7)),
+                TextColor(Color::srgb(0.65, 0.55, 0.4)),
             ));
 
             // Enemies
             parent.spawn((
                 Text::new(format!("Enemies Defeated: {}", run.enemies_killed)),
                 TextFont { font_size: 18.0, ..default() },
-                TextColor(Color::srgb(0.6, 0.6, 0.7)),
+                TextColor(Color::srgb(0.65, 0.55, 0.4)),
             ));
 
             // Gold
@@ -92,7 +92,7 @@ fn setup_death_screen(mut commands: Commands, run: Res<RunData>) {
             parent.spawn((
                 Text::new("Press SPACE to return"),
                 TextFont { font_size: 16.0, ..default() },
-                TextColor(Color::srgb(0.45, 0.45, 0.55)),
+                TextColor(Color::srgb(0.5, 0.4, 0.3)),
             ));
         });
 }
