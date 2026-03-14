@@ -15,6 +15,7 @@ mod hazards;
 mod dialogue;
 mod death_screen;
 mod floor_complete;
+mod audio;
 
 use bevy::prelude::*;
 use constants::*;
@@ -112,19 +113,19 @@ fn main() {
                         title: "Dawnroot".into(),
                         resolution: (VIEWPORT_W, VIEWPORT_H).into(),
                         resizable: true,
-                        mode: bevy::window::WindowMode::BorderlessFullscreen(MonitorSelection::Current),
+                        mode: bevy::window::WindowMode::Windowed,
                         ..default()
                     }),
                     ..default()
                 })
                 .set(ImagePlugin::default_nearest()),
         )
+        .add_plugins(FontPlugin)
         .init_state::<GameState>()
         .insert_resource(ClearColor(Color::srgb(0.08, 0.06, 0.04)))
         .insert_resource(RunData::default())
         .insert_resource(load_meta())
         .insert_resource(ActiveSaveSlot(0))
-        .add_systems(Startup, load_game_font)
         .add_plugins((
             title::TitlePlugin,
             player::PlayerPlugin,
@@ -144,6 +145,7 @@ fn main() {
             dialogue::DialoguePlugin,
             death_screen::DeathScreenPlugin,
             floor_complete::FloorCompletePlugin,
+            audio::GameAudioPlugin,
         ))
         .add_systems(OnEnter(GameState::Playing), (setup_run, apply_loaded_save).chain())
         .add_systems(OnExit(GameState::Playing), cleanup_run)
@@ -242,10 +244,16 @@ fn check_player_died(
     }
 }
 
-fn load_game_font(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let font = asset_server.load("fonts/PressStart2P-Regular.ttf");
-    commands.insert_resource(GameFont(font));
+struct FontPlugin;
+
+impl Plugin for FontPlugin {
+    fn build(&self, app: &mut App) {
+        let asset_server = app.world().resource::<AssetServer>();
+        let font = asset_server.load("fonts/PressStart2P-Regular.ttf");
+        app.insert_resource(GameFont(font));
+    }
 }
+
 
 fn update_run_time(mut run: ResMut<RunData>, time: Res<Time>) {
     run.time += time.delta_secs();
