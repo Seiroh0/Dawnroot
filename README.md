@@ -114,20 +114,25 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 
 ```
 src/
- |- main.rs        App setup, GameState, RunData, MetaProgression
- |- constants.rs   All numeric constants (physics, spells, layout)
- |- title.rs       Title screen + animated WellIntro cutscene
- |- player.rs      Multi-part player sprite, movement, melee, dash
- |- room.rs        Room generation, 8+ templates, decorations
- |- enemy.rs       5 enemy types with animated multi-part sprites
- |- combat.rs      Melee / spell / projectile collision & damage
- |- spell.rs       4 spells with trails, frost, bolt lines, shield ring
- |- effects.rs     Particles, afterimages, dust, confetti, flash
- |- hud.rs         UI overlay (HP, mana, gold, floor, spell cooldowns)
- |- camera.rs      Smooth follow camera + screen shake
- |- animation.rs   Generic frame-based animation support
- |- loot.rs        Loot drops with magnet pickup
- |- shop.rs        In-room shop purchases
+ |- main.rs           App setup, GameState, RunData, save/load
+ |- constants.rs      All numeric constants (physics, spells, layout)
+ |- title.rs          Title screen, save slots, WellIntro cutscene
+ |- player.rs         Movement, melee, dash, gamepad input
+ |- room.rs           Room generation, 16 templates, decorations
+ |- enemy.rs          5 enemy types + boss with multi-part sprites
+ |- combat.rs         Melee / spell / projectile collision & damage
+ |- spell.rs          4 spells with trails, frost, bolts, shield ring
+ |- effects.rs        Particles, afterimages, dust, confetti, flash
+ |- hud.rs            UI overlay (HP, mana, gold, floor, spells)
+ |- camera.rs         Smooth follow camera + screen shake
+ |- animation.rs      Generic frame-based animation support
+ |- loot.rs           Drops, magnet pickup, treasure chest
+ |- shop.rs           In-room shop purchases
+ |- dialogue.rs       NPC dialogue with typewriter effect
+ |- hazards.rs        Lava, water, moving platforms
+ |- death_screen.rs   Game over screen with run stats
+ |- floor_complete.rs Floor victory screen + confetti
+ |- audio.rs          Audio system (stub, pending valid assets)
 ```
 
 ---
@@ -162,12 +167,21 @@ cargo run
 - [x] Spells locked at start -- buy with gold at shop
 - [x] Enemy counter in HUD
 - [x] Randomized room layouts per run (seed-based)
+- [x] Advanced room decorations (lava, water, moving platforms)
+- [x] NPC dialogue system with typewriter effect and floor-specific lore
+- [x] Controller / gamepad support (full mapping across all screens)
+- [x] 16 combat room templates with hazard integration
+- [x] Save slot system (3 slots, per-floor checkpoints)
+- [x] Pixel font (Press Start 2P) across all UI
+- [x] Treasure chest auto-open on proximity
+- [x] Death screen with run statistics
+- [x] Floor complete screen with confetti celebration
 - [ ] Spritesheet art (replace procedural rectangles)
-- [ ] Audio engine (background music + SFX per action)
-- [ ] More floor templates & enemy variants
-- [ ] Advanced room decorations (water, lava, moving platforms)
-- [ ] NPC dialogue system
-- [ ] Controller / gamepad support
+- [ ] Audio engine (background music + SFX)
+- [ ] Shop UI overhaul (Cuphead-style NPC merchant)
+- [ ] Equipment & set-bonus system
+- [ ] Economy rebalance with tiered item unlocks
+- [ ] Platform visual polish (variable sizes, rounded edges)
 
 ---
 
