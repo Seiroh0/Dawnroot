@@ -38,6 +38,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 | Move | `A` / `D` or `Arrow Keys` |
 | Jump | `Space` / `W` / `Up` |
 | Melee Attack | `J` / `Left Click` |
+| Block (70% dmg reduction) | `K` / `Right Click` |
 | Dash (i-frames) | `Left Shift` |
 | Fireball | `1` |
 | Ice Shards | `2` |
@@ -59,6 +60,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - Tight platforming with **coyote time**, **jump buffering**, and **variable jump height**
 - Melee sword with animated swing arc
 - **Dash** with invincibility frames and afterimage trail
+- **Block** -- 70% damage reduction with 3s cooldown, shield flash effect
 - **4 Spells** -- Fireball (flame trail), Ice Shards (spread shot), Lightning (AoE bolts), Shield (rotating barrier)
 - Squash & stretch on jump/land, landing dust puffs
 
@@ -66,10 +68,10 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 <td width="50%">
 
 ### Enemies & Boss
-- **Goblin** -- patrols and chases, animated legs
-- **Bat** -- wave movement with flapping wings
-- **Stone Turret** -- aims and shoots, rotating eye
-- **Boar** -- detects and charges, horns tilt forward
+- **Goblin** -- patrols and chases, animated legs, **leap attack**
+- **Bat** -- wave movement with flapping wings, **dive bomb**
+- **Stone Turret** -- aims and shoots, rotating eye, **burst fire**
+- **Boar** -- detects and charges, horns tilt forward, **ground shockwave**
 - **Floor Boss** -- large multi-part sprite with crown and claws
 
 </td>
@@ -195,6 +197,9 @@ cargo run
 - [x] Purchase feedback (floating text)
 - [x] Windows executable icon
 - [x] Shop UI overhaul (Cuphead-style stone merchant NPC with overlay panel)
+- [x] Block mechanic (K/RMB, 70% damage reduction, 3s cooldown, shield flash VFX)
+- [x] Unique enemy abilities (Goblin leap, Bat dive bomb, Turret burst fire, Boar shockwave)
+- [x] Tunnel room layout fix (open overhangs replacing sealed ceiling)
 
 ---
 

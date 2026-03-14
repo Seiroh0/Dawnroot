@@ -56,6 +56,9 @@ pub struct GroundEnemy {
     pub direction: f32,
     pub vy: f32,
     pub detect_range: f32,
+    /// Leap attack cooldown
+    pub leap_cooldown: f32,
+    pub is_leaping: bool,
 }
 
 #[derive(Component)]
@@ -65,6 +68,10 @@ pub struct FlyingEnemy {
     pub base_y: f32,
     pub phase: f32,
     pub speed_x: f32,
+    /// Dive bomb cooldown
+    pub dive_cooldown: f32,
+    pub is_diving: bool,
+    pub dive_target_y: f32,
 }
 
 #[derive(Component)]
@@ -72,6 +79,9 @@ pub struct TurretEnemy {
     pub fire_interval: f32,
     pub fire_timer: f32,
     pub projectile_speed: f32,
+    /// Burst fire: shoots 3 rapid shots
+    pub burst_count: i32,
+    pub burst_timer: f32,
 }
 
 #[derive(Component)]
@@ -81,6 +91,8 @@ pub struct ChargerEnemy {
     pub charging: bool,
     pub charge_dir: f32,
     pub cooldown: f32,
+    /// Shockwave on charge end
+    pub did_stomp: bool,
 }
 
 #[derive(Component)]
@@ -265,6 +277,8 @@ fn spawn_ground_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
             direction: 1.0,
             vy: 0.0,
             detect_range: 200.0,
+            leap_cooldown: 2.0,
+            is_leaping: false,
         },
         RoomEntity,
         PlayingEntity,
@@ -484,6 +498,9 @@ fn spawn_flying_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
             base_y: y + 100.0,
             phase: 0.0,
             speed_x: 60.0 + floor as f32 * 5.0,
+            dive_cooldown: 3.5,
+            is_diving: false,
+            dive_target_y: 0.0,
         },
         RoomEntity,
         PlayingEntity,
@@ -659,6 +676,8 @@ fn spawn_turret_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
             fire_interval: interval,
             fire_timer: interval * 0.5,
             projectile_speed: 300.0 + floor as f32 * 20.0,
+            burst_count: 0,
+            burst_timer: 0.0,
         },
         RoomEntity,
         PlayingEntity,
@@ -813,6 +832,7 @@ fn spawn_charger_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
             charging: false,
             charge_dir: 0.0,
             cooldown: 0.0,
+            did_stomp: false,
         },
         RoomEntity,
         PlayingEntity,
@@ -1044,6 +1064,8 @@ fn spawn_boss(commands: &mut Commands, floor: i32) {
             direction: -1.0,
             vy: 0.0,
             detect_range: 400.0,
+            leap_cooldown: 1.5,
+            is_leaping: false,
         },
         RoomEntity,
         PlayingEntity,
@@ -1282,18 +1304,29 @@ fn ground_enemy_ai(
 
     for (mut tf, mut ge) in &mut query {
         let dt = time.delta_secs();
+        ge.leap_cooldown = (ge.leap_cooldown - dt).max(0.0);
 
         ge.vy -= GRAVITY * 0.5 * dt;
         ge.vy = ge.vy.max(-600.0);
 
         if let Some(pp) = player_pos {
-            let dist = (pp.x - tf.translation.x).abs();
-            if dist < ge.detect_range {
+            let dx = (pp.x - tf.translation.x).abs();
+            let dy = (pp.y - tf.translation.y).abs();
+            if dx < ge.detect_range {
+                ge.direction = if pp.x > tf.translation.x { 1.0 } else { -1.0 };
+            }
+            // Leap attack: when close and on ground, jump toward player
+            let on_ground = tf.translation.y <= TILE_SIZE + 12.0;
+            if dx < 120.0 && dy < 80.0 && on_ground && ge.leap_cooldown <= 0.0 && !ge.is_leaping {
+                ge.is_leaping = true;
+                ge.leap_cooldown = 3.0;
+                ge.vy = 350.0; // jump up
                 ge.direction = if pp.x > tf.translation.x { 1.0 } else { -1.0 };
             }
         }
 
-        tf.translation.x += ge.direction * ge.speed * dt;
+        let speed_mult = if ge.is_leaping { 1.8 } else { 1.0 };
+        tf.translation.x += ge.direction * ge.speed * speed_mult * dt;
         tf.translation.y += ge.vy * dt;
 
         let margin = TILE_SIZE + 12.0;
@@ -1305,6 +1338,7 @@ fn ground_enemy_ai(
         if tf.translation.y < TILE_SIZE + 10.0 {
             tf.translation.y = TILE_SIZE + 10.0;
             ge.vy = 0.0;
+            ge.is_leaping = false;
         }
     }
 }
@@ -1318,16 +1352,39 @@ fn flying_enemy_ai(
 
     for (mut tf, mut fe) in &mut query {
         let dt = time.delta_secs();
-        fe.phase += fe.wave_speed * dt;
-        tf.translation.y = fe.base_y + fe.phase.sin() * fe.amplitude;
+        fe.dive_cooldown = (fe.dive_cooldown - dt).max(0.0);
+
+        if fe.is_diving {
+            // Swoop down toward target, then pull back up
+            let target_y = fe.dive_target_y;
+            tf.translation.y += (target_y - tf.translation.y).signum() * 300.0 * dt;
+            if (tf.translation.y - target_y).abs() < 10.0 || tf.translation.y < TILE_SIZE + 20.0 {
+                fe.is_diving = false;
+                fe.dive_cooldown = 4.0;
+            }
+        } else {
+            fe.phase += fe.wave_speed * dt;
+            tf.translation.y = fe.base_y + fe.phase.sin() * fe.amplitude;
+
+            // Initiate dive when player is below and in range
+            if let Some(pp) = player_pos {
+                let dx = (pp.x - tf.translation.x).abs();
+                if dx < 100.0 && pp.y < tf.translation.y - 40.0 && fe.dive_cooldown <= 0.0 {
+                    fe.is_diving = true;
+                    fe.dive_target_y = pp.y;
+                }
+            }
+        }
 
         if let Some(pp) = player_pos {
             let dir = if pp.x > tf.translation.x { 1.0 } else { -1.0 };
-            tf.translation.x += dir * fe.speed_x * dt;
+            let speed = if fe.is_diving { fe.speed_x * 2.0 } else { fe.speed_x };
+            tf.translation.x += dir * speed * dt;
         }
 
         let margin = TILE_SIZE + 14.0;
         tf.translation.x = tf.translation.x.clamp(margin, ROOM_W - margin);
+        tf.translation.y = tf.translation.y.max(TILE_SIZE + 10.0);
     }
 }
 
@@ -1340,7 +1397,39 @@ fn turret_enemy_ai(
     let player_pos = player_q.get_single().map(|t| t.translation).ok();
 
     for (tf, mut turret) in &mut query {
-        turret.fire_timer -= time.delta_secs();
+        let dt = time.delta_secs();
+
+        // Handle burst fire (rapid follow-up shots)
+        if turret.burst_count > 0 {
+            turret.burst_timer -= dt;
+            if turret.burst_timer <= 0.0 {
+                turret.burst_count -= 1;
+                turret.burst_timer = 0.12; // rapid fire interval
+
+                let (vx, vy) = if let Some(pp) = player_pos {
+                    let diff = pp - tf.translation;
+                    let len = diff.length().max(1.0);
+                    (diff.x / len * turret.projectile_speed, diff.y / len * turret.projectile_speed)
+                } else {
+                    (-turret.projectile_speed, 0.0)
+                };
+
+                commands.spawn((
+                    Sprite {
+                        color: Color::srgb(1.0, 0.3, 0.1),
+                        custom_size: Some(Vec2::new(6.0, 6.0)),
+                        ..default()
+                    },
+                    Transform::from_xyz(tf.translation.x, tf.translation.y, Z_PROJECTILES),
+                    EnemyProjectile { vx, vy, lifetime: 2.5 },
+                    RoomEntity,
+                    PlayingEntity,
+                ));
+            }
+            continue;
+        }
+
+        turret.fire_timer -= dt;
         if turret.fire_timer <= 0.0 {
             turret.fire_timer = turret.fire_interval;
 
@@ -1363,11 +1452,19 @@ fn turret_enemy_ai(
                 RoomEntity,
                 PlayingEntity,
             ));
+
+            // Every 3rd shot triggers a burst (2 extra rapid shots)
+            // Use fire_interval as a rough cycle: burst on shorter intervals
+            if turret.fire_interval < 2.0 {
+                turret.burst_count = 2;
+                turret.burst_timer = 0.15;
+            }
         }
     }
 }
 
 fn charger_enemy_ai(
+    mut commands: Commands,
     mut query: Query<(&mut Transform, &mut ChargerEnemy)>,
     player_q: Query<&Transform, (With<Player>, Without<ChargerEnemy>)>,
     time: Res<Time>,
@@ -1383,10 +1480,34 @@ fn charger_enemy_ai(
             let margin = TILE_SIZE + 14.0;
             if tf.translation.x < margin || tf.translation.x > ROOM_W - margin {
                 charger.charging = false;
-                charger.cooldown = 1.0;
+                charger.cooldown = 1.5;
                 tf.translation.x = tf.translation.x.clamp(margin, ROOM_W - margin);
+
+                // Stomp shockwave on charge end — spawns a ground projectile
+                if !charger.did_stomp {
+                    charger.did_stomp = true;
+                    // Shockwave travels along the ground in both directions
+                    for dir in [-1.0_f32, 1.0] {
+                        commands.spawn((
+                            Sprite {
+                                color: Color::srgba(0.8, 0.5, 0.2, 0.7),
+                                custom_size: Some(Vec2::new(20.0, 10.0)),
+                                ..default()
+                            },
+                            Transform::from_xyz(tf.translation.x, TILE_SIZE + 5.0, Z_PROJECTILES),
+                            EnemyProjectile {
+                                vx: dir * 200.0,
+                                vy: 0.0,
+                                lifetime: 1.2,
+                            },
+                            RoomEntity,
+                            PlayingEntity,
+                        ));
+                    }
+                }
             }
         } else if charger.cooldown <= 0.0 {
+            charger.did_stomp = false;
             if let Some(pp) = player_pos {
                 let dx = (pp.x - tf.translation.x).abs();
                 let dy = (pp.y - tf.translation.y).abs();

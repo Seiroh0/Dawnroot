@@ -3,7 +3,7 @@ use crate::{
     constants::{ROOM_W, ROOM_H, Z_HUD},
     GameState, PlayingEntity,
     enemy::EnemyDefeated,
-    player::{PlayerDamaged, PlayerLanded, PlayerDashed},
+    player::{PlayerDamaged, PlayerLanded, PlayerDashed, PlayerBlocked},
     room::{RoomCleared, RoomTransition},
 };
 
@@ -19,6 +19,7 @@ impl Plugin for EffectsPlugin {
                 on_room_cleared,
                 on_room_transition_fade,
                 on_player_dash,
+                on_player_blocked,
                 on_player_landed,
                 update_particles,
                 update_confetti,
@@ -295,6 +296,48 @@ fn on_player_dash(
                 FlashSprite {
                     lifetime: 0.12,
                     max_lifetime: 0.12,
+                },
+                PlayingEntity,
+            ));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Block shield flash
+// ---------------------------------------------------------------------------
+
+fn on_player_blocked(
+    mut commands: Commands,
+    mut ev: EventReader<PlayerBlocked>,
+) {
+    for event in ev.read() {
+        // Shield flash ring around player
+        commands.spawn((
+            Sprite {
+                color: Color::srgba(0.3, 0.7, 1.0, 0.7),
+                custom_size: Some(Vec2::new(40.0, 40.0)),
+                ..default()
+            },
+            Transform::from_xyz(event.position.x, event.position.y, crate::constants::Z_PLAYER + 1.0),
+            FlashSprite { lifetime: 0.25, max_lifetime: 0.25 },
+            PlayingEntity,
+        ));
+        // Spark particles
+        for i in 0..6 {
+            let angle = (i as f32 / 6.0) * std::f32::consts::TAU;
+            commands.spawn((
+                Sprite {
+                    color: Color::srgb(0.5, 0.8, 1.0),
+                    custom_size: Some(Vec2::new(3.0, 3.0)),
+                    ..default()
+                },
+                Transform::from_xyz(event.position.x, event.position.y, crate::constants::Z_PLAYER + 0.5),
+                Particle {
+                    vx: angle.cos() * 120.0,
+                    vy: angle.sin() * 120.0,
+                    lifetime: 0.3,
+                    max_lifetime: 0.3,
                 },
                 PlayingEntity,
             ));

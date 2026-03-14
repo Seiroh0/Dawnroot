@@ -10,6 +10,7 @@ impl Plugin for PlayerPlugin {
             .add_event::<PlayerDamaged>()
             .add_event::<PlayerDied>()
             .add_event::<PlayerDashed>()
+            .add_event::<PlayerBlocked>()
             .add_systems(OnEnter(GameState::Playing), spawn_player)
             .add_systems(
                 Update,
@@ -42,6 +43,11 @@ pub struct PlayerDashed {
     pub position: Vec3,
     pub facing: f32,
 }
+/// Fired when the player successfully blocks an attack.
+#[derive(Event)]
+pub struct PlayerBlocked {
+    pub position: Vec3,
+}
 
 #[derive(Component)]
 pub struct Player {
@@ -64,6 +70,9 @@ pub struct Player {
     pub is_dashing: bool,
     pub dash_timer: f32,
     pub dash_cooldown: f32,
+    pub is_blocking: bool,
+    pub block_timer: f32,
+    pub block_cooldown: f32,
     pub anim_time: f32,
     pub land_squash: f32,
     /// Permanent attack bonus from shop upgrades (stacks per purchase).
@@ -87,6 +96,7 @@ impl Default for Player {
             melee_cooldown: 0.0,
             ranged_cooldown: 0.0,
             is_dashing: false, dash_timer: 0.0, dash_cooldown: 0.0,
+            is_blocking: false, block_timer: 0.0, block_cooldown: 0.0,
             anim_time: 0.0, land_squash: 0.0,
             bonus_attack: 0, bonus_defense: 0, bonus_speed: 0.0,
         }
@@ -199,8 +209,17 @@ fn player_input(
     player.melee_cooldown = (player.melee_cooldown - dt).max(0.0);
     player.ranged_cooldown = (player.ranged_cooldown - dt).max(0.0);
     player.dash_cooldown = (player.dash_cooldown - dt).max(0.0);
+    player.block_cooldown = (player.block_cooldown - dt).max(0.0);
     player.jump_buffer = (player.jump_buffer - dt).max(0.0);
     player.land_squash = (player.land_squash - dt * 5.0).max(0.0);
+
+    // Block timer
+    if player.is_blocking {
+        player.block_timer -= dt;
+        if player.block_timer <= 0.0 {
+            player.is_blocking = false;
+        }
+    }
 
     if player.is_dashing {
         player.dash_timer -= dt;
@@ -266,8 +285,16 @@ fn player_input(
         });
     }
 
-    // Melee: E/J/LMB + gamepad West(X)
-    let attack = keys.just_pressed(KeyCode::KeyE) || keys.just_pressed(KeyCode::KeyJ) || mouse.just_pressed(MouseButton::Left) || gp.map_or(false, |g| g.just_pressed(GamepadButton::West));
+    // Block: K / RMB + gamepad North(Y)
+    let block_pressed = keys.just_pressed(KeyCode::KeyK) || mouse.just_pressed(MouseButton::Right) || gp.map_or(false, |g| g.just_pressed(GamepadButton::North));
+    if block_pressed && player.block_cooldown <= 0.0 && !player.is_blocking {
+        player.is_blocking = true;
+        player.block_timer = BLOCK_DURATION;
+        player.block_cooldown = BLOCK_COOLDOWN;
+    }
+
+    // Melee: J/LMB + gamepad West(X)
+    let attack = keys.just_pressed(KeyCode::KeyJ) || mouse.just_pressed(MouseButton::Left) || gp.map_or(false, |g| g.just_pressed(GamepadButton::West));
     if attack && player.melee_cooldown <= 0.0 {
         player.melee_cooldown = MELEE_COOLDOWN;
         ev_attack.send(PlayerAttack);

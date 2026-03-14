@@ -35,6 +35,11 @@ pub const DASH_SPEED: f32 = 600.0;
 pub const DASH_DURATION: f32 = 0.15;
 pub const DASH_COOLDOWN: f32 = 0.8;
 
+// Block
+pub const BLOCK_COOLDOWN: f32 = 3.0;
+pub const BLOCK_DURATION: f32 = 0.6;
+pub const BLOCK_DAMAGE_REDUCTION: f32 = 0.7; // blocks 70% of damage
+
 // Melee attack
 pub const MELEE_RANGE: f32 = 36.0;
 pub const MELEE_WIDTH: f32 = 28.0;

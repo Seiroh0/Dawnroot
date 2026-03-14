@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use crate::{
     constants::*,
     GameState, RunData,
-    player::{Player, MeleeHitbox, PlayerProjectile, PlayerDamaged, PlayerDied},
+    player::{Player, MeleeHitbox, PlayerProjectile, PlayerDamaged, PlayerDied, PlayerBlocked},
     enemy::{Enemy, EnemyDefeated, EnemyProjectile},
     spell::{SpellProjectile, LightningStrike},
     camera::{ScreenShake, trigger_shake},
@@ -188,6 +188,7 @@ fn player_vs_enemy(
     enemy_q: Query<(&Transform, &Enemy, &Sprite), Without<Player>>,
     mut ev_damaged: EventWriter<PlayerDamaged>,
     mut ev_died: EventWriter<PlayerDied>,
+    mut ev_blocked: EventWriter<PlayerBlocked>,
     mut shake_q: Query<&mut ScreenShake>,
     stats: Res<PlayerStats>,
 ) {
@@ -200,8 +201,13 @@ fn player_vs_enemy(
 
         if dist.x < 10.0 + e_size.x / 2.0 && dist.y < 16.0 + e_size.y / 2.0 {
             if player.invulnerable <= 0.0 {
-                let raw_dmg = enemy.contact_damage;
-                let reduced = (raw_dmg - stats.defense).max(1);
+                let raw_dmg = (enemy.contact_damage - stats.defense).max(1);
+                let reduced = if player.is_blocking {
+                    ev_blocked.send(PlayerBlocked { position: p_tf.translation });
+                    ((raw_dmg as f32) * (1.0 - BLOCK_DAMAGE_REDUCTION)).ceil() as i32
+                } else {
+                    raw_dmg
+                }.max(0);
                 player.health -= reduced;
                 player.invulnerable = INVULN_TIME;
                 ev_damaged.send(PlayerDamaged {
@@ -210,12 +216,14 @@ fn player_vs_enemy(
                 });
 
                 if let Ok(mut shake) = shake_q.get_single_mut() {
-                    trigger_shake(&mut shake, 14.0, 0.3);
+                    let intensity = if player.is_blocking { 6.0 } else { 14.0 };
+                    trigger_shake(&mut shake, intensity, 0.3);
                 }
 
                 let kb_dir = if diff.x >= 0.0 { 1.0 } else { -1.0 };
-                player.vx = kb_dir * 250.0;
-                player.vy = 200.0;
+                let kb_mult = if player.is_blocking { 0.5 } else { 1.0 };
+                player.vx = kb_dir * 250.0 * kb_mult;
+                player.vy = 200.0 * kb_mult;
 
                 if player.health <= 0 {
                     ev_died.send(PlayerDied);
@@ -232,6 +240,7 @@ fn enemy_projectile_vs_player(
     mut player_q: Query<(&Transform, &mut Player), Without<EnemyProjectile>>,
     mut ev_damaged: EventWriter<PlayerDamaged>,
     mut ev_died: EventWriter<PlayerDied>,
+    mut ev_blocked: EventWriter<PlayerBlocked>,
     mut shake_q: Query<&mut ScreenShake>,
     stats: Res<PlayerStats>,
 ) {
@@ -242,7 +251,13 @@ fn enemy_projectile_vs_player(
         if dist.x < 14.0 && dist.y < 20.0 {
             commands.entity(proj_entity).despawn();
             if player.invulnerable <= 0.0 {
-                let dmg = (1 - stats.defense).max(1);
+                let raw_dmg = (1 - stats.defense).max(1);
+                let dmg = if player.is_blocking {
+                    ev_blocked.send(PlayerBlocked { position: p_tf.translation });
+                    ((raw_dmg as f32) * (1.0 - BLOCK_DAMAGE_REDUCTION)).ceil() as i32
+                } else {
+                    raw_dmg
+                }.max(0);
                 player.health -= dmg;
                 player.invulnerable = INVULN_TIME;
                 ev_damaged.send(PlayerDamaged {
@@ -250,7 +265,8 @@ fn enemy_projectile_vs_player(
                     remaining: player.health,
                 });
                 if let Ok(mut shake) = shake_q.get_single_mut() {
-                    trigger_shake(&mut shake, 10.0, 0.2);
+                    let intensity = if player.is_blocking { 4.0 } else { 10.0 };
+                    trigger_shake(&mut shake, intensity, 0.2);
                 }
                 if player.health <= 0 {
                     ev_died.send(PlayerDied);

@@ -944,17 +944,20 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             spawn_crystal(commands, TILE_SIZE * 2.5, TILE_SIZE * 4.0, 1.8);
         }
 
-        // ── 7: Tunnel / low platforms inside a corridor ───────────────────────
+        // ── 7: Tunnel / open corridor with overhangs ────────────────────────
         7 => {
-            // Raised false ceiling at row 8 (lower than before)
-            spawn_platform(commands, 4, 19, 8, plat_color);
+            // Partial overhangs instead of sealed ceiling — gaps allow flight
+            spawn_platform(commands, 4,  9,  8, plat_color);  // left overhang
+            spawn_platform(commands, 14, 19, 8, plat_color);  // right overhang
             // Ground bumps inside the corridor
             spawn_platform(commands, 5,  7,  2, plat_color);
             spawn_platform(commands, 11, 13, 3, plat_color);
             spawn_platform(commands, 16, 18, 2, plat_color);
-            // Side pillars to define the tunnel entrance/exit
-            spawn_pillar(commands, 4, 1, 8, Color::srgb(0.25, 0.18, 0.10));
-            spawn_pillar(commands, 19, 1, 8, Color::srgb(0.25, 0.18, 0.10));
+            // Mid-height stepping stone in the gap for player to reach flyers
+            spawn_platform(commands, 10, 13, 6, plat_color);
+            // Shorter pillars — decorative, not sealing
+            spawn_pillar(commands, 4,  1, 5, Color::srgb(0.25, 0.18, 0.10));
+            spawn_pillar(commands, 19, 1, 5, Color::srgb(0.25, 0.18, 0.10));
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 3.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 3.0);
