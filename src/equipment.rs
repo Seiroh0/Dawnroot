@@ -340,7 +340,7 @@ fn init_equipment(
 
 fn recalculate_stats(
     mut ev: EventReader<RecalcStats>,
-    equipment_q: Query<&Equipment, With<crate::player::Player>>,
+    player_equip_q: Query<(&Equipment, &crate::player::Player)>,
     mut stats: ResMut<PlayerStats>,
 ) {
     // Recalc on event, or on first frame if stats are default
@@ -350,7 +350,7 @@ fn recalculate_stats(
 
     if !should_recalc { return; }
 
-    let Ok(equip) = equipment_q.get_single() else { return };
+    let Ok((equip, player)) = player_equip_q.get_single() else { return };
 
     // Start from base
     let mut total = StatModifiers::default();
@@ -382,14 +382,14 @@ fn recalculate_stats(
         }
     }
 
-    // Write computed stats
+    // Write computed stats (equipment + player shop bonuses)
     *stats = PlayerStats {
-        attack: total.attack_flat,
-        defense: total.defense_flat,
+        attack: total.attack_flat + player.bonus_attack,
+        defense: total.defense_flat + player.bonus_defense,
         max_health_bonus: total.max_health_flat,
         max_mana_bonus: total.max_mana_flat,
         mana_regen_mult: 1.0 + total.mana_regen_percent,
-        speed_mult: 1.0 + total.speed_percent,
+        speed_mult: 1.0 + total.speed_percent + player.bonus_speed,
         crit_chance: total.crit_chance,
         gold_bonus: total.gold_bonus_percent,
         lifesteal: total.lifesteal,

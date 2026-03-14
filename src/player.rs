@@ -66,6 +66,12 @@ pub struct Player {
     pub dash_cooldown: f32,
     pub anim_time: f32,
     pub land_squash: f32,
+    /// Permanent attack bonus from shop upgrades (stacks per purchase).
+    pub bonus_attack: i32,
+    /// Permanent defense bonus from shop upgrades.
+    pub bonus_defense: i32,
+    /// Permanent speed bonus from shop upgrades (0.1 = +10%).
+    pub bonus_speed: f32,
 }
 
 impl Default for Player {
@@ -82,6 +88,7 @@ impl Default for Player {
             ranged_cooldown: 0.0,
             is_dashing: false, dash_timer: 0.0, dash_cooldown: 0.0,
             anim_time: 0.0, land_squash: 0.0,
+            bonus_attack: 0, bonus_defense: 0, bonus_speed: 0.0,
         }
     }
 }
