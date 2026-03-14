@@ -12,6 +12,7 @@ mod effects;
 mod animation;
 mod loot;
 mod hazards;
+mod dialogue;
 mod death_screen;
 mod floor_complete;
 
@@ -127,11 +128,14 @@ fn main() {
             spell::SpellPlugin,
             hud::HudPlugin,
             shop::ShopPlugin,
+        ))
+        .add_plugins((
             camera::CameraPlugin,
             effects::EffectsPlugin,
             animation::AnimationPlugin,
             loot::LootPlugin,
             hazards::HazardsPlugin,
+            dialogue::DialoguePlugin,
             death_screen::DeathScreenPlugin,
             floor_complete::FloorCompletePlugin,
         ))
