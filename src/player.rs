@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, MetaProgression, LoadedSave};
+use crate::{constants::*, GameState, PlayingEntity, MetaProgression, LoadedSave, equipment::PlayerStats};
 
 pub struct PlayerPlugin;
 
@@ -179,6 +179,7 @@ fn player_input(
     mut ev_attack: EventWriter<PlayerAttack>,
     mut ev_dashed: EventWriter<PlayerDashed>,
     time: Res<Time>,
+    stats: Res<PlayerStats>,
 ) {
     let Ok((mut player, tf)) = query.get_single_mut() else { return };
     let dt = time.delta_secs();
@@ -210,7 +211,7 @@ fn player_input(
     input_dir = input_dir.clamp(-1.0, 1.0);
     if input_dir != 0.0 { player.facing = input_dir.signum(); }
 
-    let target = input_dir * if player.is_on_floor { MOVE_SPEED } else { AIR_SPEED };
+    let target = input_dir * if player.is_on_floor { MOVE_SPEED } else { AIR_SPEED } * stats.speed_mult;
     let acc = if player.is_on_floor { ACCEL_GROUND } else { ACCEL_AIR };
     if input_dir == 0.0 && player.is_on_floor {
         player.vx = move_toward(player.vx, 0.0, FRICTION * dt);

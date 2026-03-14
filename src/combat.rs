@@ -6,6 +6,7 @@ use crate::{
     enemy::{Enemy, EnemyDefeated, EnemyProjectile},
     spell::{SpellProjectile, LightningStrike},
     camera::{ScreenShake, trigger_shake},
+    equipment::PlayerStats,
 };
 
 pub struct CombatPlugin;
@@ -34,6 +35,7 @@ fn melee_vs_enemy(
     mut ev_defeated: EventWriter<EnemyDefeated>,
     mut run: ResMut<RunData>,
     mut shake_q: Query<&mut ScreenShake>,
+    stats: Res<PlayerStats>,
 ) {
     for (h_tf, hitbox) in &hitbox_q {
         for (e_entity, e_tf, mut enemy, sprite) in &mut enemy_q {
@@ -43,7 +45,8 @@ fn melee_vs_enemy(
             if dist.x < MELEE_RANGE / 2.0 + e_size.x / 2.0
                 && dist.y < MELEE_WIDTH / 2.0 + e_size.y / 2.0
             {
-                enemy.health -= hitbox.damage;
+                let bonus = stats.attack + ((hitbox.damage as f32 * stats.crit_chance) as i32);
+                enemy.health -= hitbox.damage + bonus;
 
                 if enemy.health <= 0 {
                     run.score += enemy.score_reward;
@@ -72,6 +75,7 @@ fn ranged_vs_enemy(
     mut ev_defeated: EventWriter<EnemyDefeated>,
     mut run: ResMut<RunData>,
     mut shake_q: Query<&mut ScreenShake>,
+    stats: Res<PlayerStats>,
 ) {
     for (p_entity, p_tf, proj) in &proj_q {
         for (e_entity, e_tf, mut enemy, sprite) in &mut enemy_q {
@@ -79,7 +83,7 @@ fn ranged_vs_enemy(
             let dist = (p_tf.translation.xy() - e_tf.translation.xy()).abs();
 
             if dist.x < 5.0 + e_size.x / 2.0 && dist.y < 3.0 + e_size.y / 2.0 {
-                enemy.health -= proj.damage;
+                enemy.health -= proj.damage + stats.attack;
                 commands.entity(p_entity).try_despawn_recursive();
 
                 if enemy.health <= 0 {
@@ -110,6 +114,7 @@ fn spell_vs_enemy(
     mut ev_defeated: EventWriter<EnemyDefeated>,
     mut run: ResMut<RunData>,
     mut shake_q: Query<&mut ScreenShake>,
+    stats: Res<PlayerStats>,
 ) {
     for (p_entity, p_tf, proj) in &proj_q {
         for (e_entity, e_tf, mut enemy, sprite) in &mut enemy_q {
@@ -117,7 +122,7 @@ fn spell_vs_enemy(
             let dist = (p_tf.translation.xy() - e_tf.translation.xy()).abs();
 
             if dist.x < 8.0 + e_size.x / 2.0 && dist.y < 8.0 + e_size.y / 2.0 {
-                enemy.health -= proj.damage;
+                enemy.health -= proj.damage + stats.attack;
                 commands.entity(p_entity).despawn();
 
                 if enemy.health <= 0 {
@@ -184,6 +189,7 @@ fn player_vs_enemy(
     mut ev_damaged: EventWriter<PlayerDamaged>,
     mut ev_died: EventWriter<PlayerDied>,
     mut shake_q: Query<&mut ScreenShake>,
+    stats: Res<PlayerStats>,
 ) {
     let Ok((p_tf, mut player)) = player_q.get_single_mut() else { return };
 
@@ -194,10 +200,12 @@ fn player_vs_enemy(
 
         if dist.x < 10.0 + e_size.x / 2.0 && dist.y < 16.0 + e_size.y / 2.0 {
             if player.invulnerable <= 0.0 {
-                player.health -= enemy.contact_damage;
+                let raw_dmg = enemy.contact_damage;
+                let reduced = (raw_dmg - stats.defense).max(1);
+                player.health -= reduced;
                 player.invulnerable = INVULN_TIME;
                 ev_damaged.send(PlayerDamaged {
-                    amount: enemy.contact_damage,
+                    amount: reduced,
                     remaining: player.health,
                 });
 
@@ -225,6 +233,7 @@ fn enemy_projectile_vs_player(
     mut ev_damaged: EventWriter<PlayerDamaged>,
     mut ev_died: EventWriter<PlayerDied>,
     mut shake_q: Query<&mut ScreenShake>,
+    stats: Res<PlayerStats>,
 ) {
     let Ok((p_tf, mut player)) = player_q.get_single_mut() else { return };
 
@@ -233,10 +242,11 @@ fn enemy_projectile_vs_player(
         if dist.x < 14.0 && dist.y < 20.0 {
             commands.entity(proj_entity).despawn();
             if player.invulnerable <= 0.0 {
-                player.health -= 1;
+                let dmg = (1 - stats.defense).max(1);
+                player.health -= dmg;
                 player.invulnerable = INVULN_TIME;
                 ev_damaged.send(PlayerDamaged {
-                    amount: 1,
+                    amount: dmg,
                     remaining: player.health,
                 });
                 if let Ok(mut shake) = shake_q.get_single_mut() {

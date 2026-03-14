@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, enemy::EnemyDefeated, room::TreasureChest};
+use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, enemy::EnemyDefeated, room::TreasureChest, equipment::PlayerStats};
 
 pub struct LootPlugin;
 
@@ -123,6 +123,7 @@ fn collect_pickups(
     mut player_mut: Query<&mut Player>,
     mut run: ResMut<RunData>,
     time: Res<Time>,
+    stats: Res<PlayerStats>,
 ) {
     let Ok(p_tf) = player_q.get_single() else { return };
 
@@ -132,8 +133,9 @@ fn collect_pickups(
         if dist < 18.0 {
             match pickup.kind {
                 PickupKind::Gold(amount) => {
-                    run.gold += amount;
-                    run.score += amount * 10;
+                    let bonus = (amount as f32 * stats.gold_bonus) as i32;
+                    run.gold += amount + bonus;
+                    run.score += (amount + bonus) * 10;
                 }
                 PickupKind::Health => {
                     if let Ok(mut player) = player_mut.get_single_mut() {

@@ -16,6 +16,7 @@ mod dialogue;
 mod death_screen;
 mod floor_complete;
 mod audio;
+mod equipment;
 
 use bevy::prelude::*;
 use constants::*;
@@ -146,6 +147,7 @@ fn main() {
             death_screen::DeathScreenPlugin,
             floor_complete::FloorCompletePlugin,
             audio::GameAudioPlugin,
+            equipment::EquipmentPlugin,
         ))
         .add_systems(OnEnter(GameState::Playing), (setup_run, apply_loaded_save).chain())
         .add_systems(OnExit(GameState::Playing), cleanup_run)
