@@ -77,8 +77,9 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 
 ### World & Atmosphere
 - **Well intro cutscene** -- animated descent into the dungeon
-- **8 combat room templates** -- staircase, arena, pit bridges, towers, zigzag, floating islands, walkways, tunnel
+- **16 combat room templates** -- staircase, arena, pit bridges, towers, zigzag, floating islands, walkways, tunnel, lava gauntlet, swamp marsh, elevator shaft, split path, pillared hall, crumbling ruins, the pit, alternating hazards
 - **Visual decorations** -- flickering torches, pulsing crystals, stalactites, mushrooms, moss & cracks
+- **3-part platform visuals** -- beveled edge caps, surface highlights, bottom shadows
 - Unique color palette per room type
 
 </td>
@@ -86,9 +87,12 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 
 ### Progression & Loot
 - **Gold, Health, Mana** drops with magnet pickup
-- **In-room shop** -- heal, upgrade max HP, expand mana pool, buy spells
+- **Tiered shop** -- 30+ items across 3 tiers, milestone-gated unlocks
+- **Equipment system** -- 20 items across 4 slots (Weapon, Armor, Relic, Charm)
+- **3 item sets** (Fire, Ice, Storm) with 2-piece and 3-piece bonuses
+- **Stat upgrades** -- Attack, Defense, Speed purchasable in shop
 - **Meta-progression** -- persistent upgrades between runs
-- **Score system** with combo potential
+- **Score system** with gold bonus from equipment
 - Room-cleared confetti celebration
 
 </td>
@@ -127,7 +131,8 @@ src/
  |- camera.rs         Smooth follow camera + screen shake
  |- animation.rs      Generic frame-based animation support
  |- loot.rs           Drops, magnet pickup, treasure chest
- |- shop.rs           In-room shop purchases
+ |- shop.rs           Tiered shop with milestone gating, equipment purchases
+ |- equipment.rs      20 items, 4 slots, 3 sets, stat calculation
  |- dialogue.rs       NPC dialogue with typewriter effect
  |- hazards.rs        Lava, water, moving platforms
  |- death_screen.rs   Game over screen with run stats
@@ -178,10 +183,13 @@ cargo run
 - [x] Floor complete screen with confetti celebration
 - [ ] Spritesheet art (replace procedural rectangles)
 - [ ] Audio engine (background music + SFX)
+- [x] Equipment & set-bonus system (20 items, 4 slots, 3 sets with 2pc/3pc bonuses)
+- [x] Economy rebalance with tiered item unlocks (3 tiers, milestone gating)
+- [x] Platform visual polish (3-part caps, surface highlights, boss arena glow)
+- [x] Stat upgrades in shop (Attack, Defense, Speed)
+- [x] Purchase feedback (floating text)
+- [x] Windows executable icon
 - [ ] Shop UI overhaul (Cuphead-style NPC merchant)
-- [ ] Equipment & set-bonus system
-- [ ] Economy rebalance with tiered item unlocks
-- [ ] Platform visual polish (variable sizes, rounded edges)
 
 ---
 
