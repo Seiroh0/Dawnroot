@@ -369,24 +369,114 @@ fn spawn_tile_cracked(commands: &mut Commands, x: f32, y: f32, color: Color) {
 
 fn spawn_platform(commands: &mut Commands, col_start: i32, col_end: i32, row: i32, color: Color) {
     let y = row as f32 * TILE_SIZE + TILE_SIZE / 2.0;
+    let len = col_end - col_start + 1;
     for col in col_start..=col_end {
         if col <= 0 || col >= ROOM_COLUMNS - 1 { continue; }
         let x = col as f32 * TILE_SIZE + TILE_SIZE / 2.0;
+        let is_left  = col == col_start;
+        let is_right = col == col_end;
         spawn_tile(commands, x, y, color);
+        // 3-part visual: left cap, right cap, and surface highlight
+        if is_left {
+            spawn_platform_cap(commands, x, y, color, true);
+        }
+        if is_right {
+            spawn_platform_cap(commands, x, y, color, false);
+        }
+        // Surface highlight on middle tiles
+        if !is_left && !is_right && len > 2 {
+            spawn_platform_surface(commands, x, y, color);
+        }
     }
 }
 
 fn spawn_platform_worn(commands: &mut Commands, col_start: i32, col_end: i32, row: i32, color: Color) {
     let y = row as f32 * TILE_SIZE + TILE_SIZE / 2.0;
+    let len = col_end - col_start + 1;
     for col in col_start..=col_end {
         if col <= 0 || col >= ROOM_COLUMNS - 1 { continue; }
         let x = col as f32 * TILE_SIZE + TILE_SIZE / 2.0;
+        let is_left  = col == col_start;
+        let is_right = col == col_end;
         if (col - col_start) % 3 == 1 {
             spawn_tile_cracked(commands, x, y, color);
         } else {
             spawn_tile(commands, x, y, color);
         }
+        if is_left {
+            spawn_platform_cap(commands, x, y, color, true);
+        }
+        if is_right {
+            spawn_platform_cap(commands, x, y, color, false);
+        }
+        if !is_left && !is_right && len > 2 {
+            spawn_platform_surface(commands, x, y, color);
+        }
     }
+}
+
+/// Left or right rounded cap for platform edges.
+fn spawn_platform_cap(commands: &mut Commands, x: f32, y: f32, base_color: Color, is_left: bool) {
+    let srgb = base_color.to_srgba();
+
+    // Edge bevel — a slightly darker strip on the outer side
+    let bevel_color = Color::srgb(
+        (srgb.red - 0.06).max(0.0),
+        (srgb.green - 0.05).max(0.0),
+        (srgb.blue - 0.04).max(0.0),
+    );
+    let bevel_x = if is_left { x - TILE_SIZE * 0.35 } else { x + TILE_SIZE * 0.35 };
+    commands.spawn((
+        Sprite {
+            color: bevel_color,
+            custom_size: Some(Vec2::new(TILE_SIZE * 0.3, TILE_SIZE)),
+            ..default()
+        },
+        Transform::from_xyz(bevel_x, y, Z_TILES + 0.05),
+        Tile, RoomEntity, PlayingEntity,
+    ));
+
+    // Top edge highlight — lighter strip across the top of the cap
+    let highlight_color = Color::srgba(1.0, 1.0, 0.95, 0.08);
+    commands.spawn((
+        Sprite {
+            color: highlight_color,
+            custom_size: Some(Vec2::new(TILE_SIZE, TILE_SIZE * 0.15)),
+            ..default()
+        },
+        Transform::from_xyz(x, y + TILE_SIZE * 0.42, Z_TILES + 0.08),
+        RoomEntity, PlayingEntity,
+    ));
+
+    // Bottom shadow on the cap edge
+    let shadow_color = Color::srgba(0.0, 0.0, 0.0, 0.12);
+    commands.spawn((
+        Sprite {
+            color: shadow_color,
+            custom_size: Some(Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 0.12)),
+            ..default()
+        },
+        Transform::from_xyz(
+            if is_left { x - TILE_SIZE * 0.25 } else { x + TILE_SIZE * 0.25 },
+            y - TILE_SIZE * 0.44,
+            Z_TILES + 0.06,
+        ),
+        RoomEntity, PlayingEntity,
+    ));
+}
+
+/// Surface highlight on middle platform tiles — subtle top-of-platform shine.
+fn spawn_platform_surface(commands: &mut Commands, x: f32, y: f32, _color: Color) {
+    // Thin light strip across the top
+    commands.spawn((
+        Sprite {
+            color: Color::srgba(1.0, 1.0, 0.9, 0.06),
+            custom_size: Some(Vec2::new(TILE_SIZE, TILE_SIZE * 0.12)),
+            ..default()
+        },
+        Transform::from_xyz(x, y + TILE_SIZE * 0.44, Z_TILES + 0.08),
+        RoomEntity, PlayingEntity,
+    ));
 }
 
 // ─── Decoration Helpers ───────────────────────────────────────────────────────
@@ -1212,6 +1302,31 @@ fn spawn_boss_room(commands: &mut Commands, floor: i32) {
             PlayingEntity,
         ));
     }
+
+    // Arena border: darkened edge tiles along bottom of main platform
+    for col in [3i32, 20] {
+        let x = col as f32 * TILE_SIZE + TILE_SIZE / 2.0;
+        commands.spawn((
+            Sprite {
+                color: Color::srgba(0.0, 0.0, 0.0, 0.15),
+                custom_size: Some(Vec2::new(TILE_SIZE, TILE_SIZE * 0.3)),
+                ..default()
+            },
+            Transform::from_xyz(x, TILE_SIZE * 4.0 + TILE_SIZE * 0.15, Z_TILES + 0.12),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // Ominous floor glow in center of arena
+    commands.spawn((
+        Sprite {
+            color: Color::srgba(0.7, 0.1, 0.05, 0.08),
+            custom_size: Some(Vec2::new(TILE_SIZE * 10.0, TILE_SIZE * 2.0)),
+            ..default()
+        },
+        Transform::from_xyz(ROOM_W / 2.0, TILE_SIZE * 4.5, Z_TILES + 0.02),
+        RoomEntity, PlayingEntity,
+    ));
 }
 
 fn spawn_boss_crystal(commands: &mut Commands, x: f32, y: f32, phase_offset: f32) {
