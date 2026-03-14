@@ -49,6 +49,7 @@ fn shop_interaction(
     room_state: Res<RoomState>,
     mut run: ResMut<RunData>,
     keys: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
     shop_items: Query<(Entity, &ShopItem, &Transform)>,
     player_q: Query<&Transform, (With<crate::player::Player>, Without<ShopItem>)>,
     mut player_mut: Query<&mut crate::player::Player, Without<crate::spell::SpellSlots>>,
@@ -98,8 +99,9 @@ fn shop_interaction(
         }
     }
 
-    // Purchase on E key when near item
-    if !keys.just_pressed(KeyCode::KeyE) { return; }
+    // Purchase on E key / gamepad West(X) when near item
+    let gp_buy = gamepads.iter().next().map_or(false, |g| g.just_pressed(GamepadButton::West));
+    if !keys.just_pressed(KeyCode::KeyE) && !gp_buy { return; }
     let Ok(p_tf) = player_q.get_single() else { return };
 
     for (entity, item, tf) in &shop_items {

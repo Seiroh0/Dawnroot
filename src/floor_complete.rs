@@ -150,6 +150,7 @@ struct VictoryConfetti {
 
 fn floor_complete_input(
     keys: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
     mut state: ResMut<FloorCompleteState>,
     mut commands: Commands,
     ui_q: Query<Entity, With<FloorCompleteUI>>,
@@ -186,7 +187,9 @@ fn floor_complete_input(
         return;
     }
 
-    if keys.just_pressed(KeyCode::Space) {
+    let gp = gamepads.iter().next();
+    let gp_descend = gp.map_or(false, |g| g.just_pressed(GamepadButton::South) || g.just_pressed(GamepadButton::Start));
+    if keys.just_pressed(KeyCode::Space) || gp_descend {
         // Descend deeper
         state.active = false;
         state.ui_spawned = false;
@@ -198,7 +201,8 @@ fn floor_complete_input(
         ev_advance.send(AdvanceFloor);
     }
 
-    if keys.just_pressed(KeyCode::Escape) {
+    let gp_quit = gp.map_or(false, |g| g.just_pressed(GamepadButton::East));
+    if keys.just_pressed(KeyCode::Escape) || gp_quit {
         // Save and quit
         state.active = false;
         state.ui_spawned = false;

@@ -232,7 +232,7 @@ fn setup_title(mut commands: Commands) {
         TitleEntity,
     ));
     commands.spawn((
-        Text2d::new("A/D: Move  |  Space: Jump  |  E: Melee  |  F: Ranged  |  Shift: Dash  |  1-4: Spells"),
+        Text2d::new("A/D: Move | Space: Jump | E: Melee | F: Ranged | Shift: Dash | 1-4: Spells | Gamepad OK"),
         TextFont { font_size: 11.0, ..default() },
         TextColor(Color::srgb(0.45, 0.35, 0.25)),
         Transform::from_xyz(0.0, -200.0, Z_HUD),
@@ -535,6 +535,7 @@ fn cleanup_title(mut commands: Commands, q: Query<Entity, With<TitleEntity>>) {
 
 fn handle_title_input(
     keys: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
     mut commands: Commands,
     mut slot_state: ResMut<SlotMenuState>,
     mut prompt_q: Query<&mut TextColor, With<PromptText>>,
@@ -548,7 +549,9 @@ fn handle_title_input(
 
     if slot_state.open { return; }
 
-    if keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter) {
+    let gp = gamepads.iter().next();
+    let gp_confirm = gp.map_or(false, |g| g.just_pressed(GamepadButton::South) || g.just_pressed(GamepadButton::Start));
+    if keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter) || gp_confirm {
         slot_state.open = true;
         spawn_slot_menu(&mut commands);
     }
@@ -615,7 +618,7 @@ fn spawn_slot_menu(commands: &mut Commands) {
             parent.spawn(Node { height: Val::Px(20.0), ..default() });
 
             parent.spawn((
-                Text::new("Press 1/2/3 to select  |  DEL to erase  |  ESC to go back"),
+                Text::new("1/2/3 or X/Y/A to select  |  DEL to erase  |  ESC/B to go back"),
                 TextFont { font_size: 13.0, ..default() },
                 TextColor(Color::srgb(0.45, 0.38, 0.3)),
             ));
@@ -624,6 +627,7 @@ fn spawn_slot_menu(commands: &mut Commands) {
 
 fn handle_slot_input(
     keys: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
     mut commands: Commands,
     slot_state: Option<Res<SlotMenuState>>,
     ui_q: Query<Entity, With<SlotUI>>,
@@ -631,10 +635,12 @@ fn handle_slot_input(
     mut active_slot: ResMut<ActiveSaveSlot>,
 ) {
     let Some(state) = slot_state else { return };
-    if !state.open { return; }
+    if !state.open { return };
+    let gp = gamepads.iter().next();
 
-    // ESC closes the slot menu
-    if keys.just_pressed(KeyCode::Escape) {
+    // ESC / gamepad East(B) closes the slot menu
+    let back = keys.just_pressed(KeyCode::Escape) || gp.map_or(false, |g| g.just_pressed(GamepadButton::East));
+    if back {
         for e in &ui_q {
             commands.entity(e).despawn_recursive();
         }
@@ -642,15 +648,16 @@ fn handle_slot_input(
         return;
     }
 
-    // DEL + digit to erase a slot
+    // DEL + digit to erase a slot (keyboard only — gamepad: Select + face button)
     let digit_keys = [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3];
+    let gp_slot_buttons = [GamepadButton::West, GamepadButton::North, GamepadButton::South];
+    let deleting = keys.pressed(KeyCode::Delete) || gp.map_or(false, |g| g.pressed(GamepadButton::Select));
 
-    // Check for delete: hold Delete then press digit
-    if keys.pressed(KeyCode::Delete) {
+    if deleting {
         for (i, &key) in digit_keys.iter().enumerate() {
-            if keys.just_pressed(key) {
+            let gp_pressed = gp.map_or(false, |g| g.just_pressed(gp_slot_buttons[i]));
+            if keys.just_pressed(key) || gp_pressed {
                 delete_slot(i);
-                // Refresh the menu
                 for e in &ui_q {
                     commands.entity(e).despawn_recursive();
                 }
@@ -660,9 +667,10 @@ fn handle_slot_input(
         }
     }
 
-    // Select slot
+    // Select slot: keyboard 1/2/3 or gamepad X/Y/A (West/North/South)
     for (i, &key) in digit_keys.iter().enumerate() {
-        if keys.just_pressed(key) {
+        let gp_pressed = !deleting && gp.map_or(false, |g| g.just_pressed(gp_slot_buttons[i]));
+        if keys.just_pressed(key) || gp_pressed {
             active_slot.0 = i;
 
             if let Some(save) = load_slot(i) {

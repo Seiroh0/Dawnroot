@@ -99,9 +99,13 @@ fn setup_death_screen(mut commands: Commands, run: Res<RunData>) {
 
 fn death_screen_input(
     keys: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
-    if keys.just_pressed(KeyCode::Space) {
+    let gp_confirm = gamepads.iter().next().map_or(false, |g| {
+        g.just_pressed(GamepadButton::South) || g.just_pressed(GamepadButton::Start)
+    });
+    if keys.just_pressed(KeyCode::Space) || gp_confirm {
         next_state.set(GameState::Title);
     }
 }

@@ -179,6 +179,7 @@ fn init_spell_slots(mut commands: Commands, loaded: Option<Res<LoadedSave>>) {
 
 fn spell_input(
     keys: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
     mut player_q: Query<(&mut Player, &Transform)>,
     mut slots_q: Query<&mut SpellSlots>,
     mut commands: Commands,
@@ -186,6 +187,7 @@ fn spell_input(
 ) {
     let Ok((mut player, tf)) = player_q.get_single_mut() else { return };
     let Ok(mut slots) = slots_q.get_single_mut() else { return };
+    let gp = gamepads.iter().next();
 
     let keys_map = [
         KeyCode::Digit1,
@@ -194,8 +196,17 @@ fn spell_input(
         KeyCode::Digit4,
     ];
 
+    // Gamepad: LB=Spell1, RB=Spell2, LT=Spell3, RT=Spell4
+    let gp_spell_buttons = [
+        GamepadButton::LeftTrigger,
+        GamepadButton::RightTrigger,
+        GamepadButton::LeftTrigger2,
+        GamepadButton::RightTrigger2,
+    ];
+
     for (i, &key) in keys_map.iter().enumerate() {
-        if !keys.just_pressed(key) { continue; }
+        let gp_pressed = gp.map_or(false, |g| g.just_pressed(gp_spell_buttons[i]));
+        if !keys.just_pressed(key) && !gp_pressed { continue; }
         let Some(spell_id) = slots.slots[i] else { continue; };
         if slots.cooldowns[i] > 0.0 { continue; }
         if player.mana < spell_id.mana_cost() { continue; }

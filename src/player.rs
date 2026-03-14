@@ -173,6 +173,7 @@ fn spawn_player(mut commands: Commands, meta: Res<MetaProgression>, loaded: Opti
 fn player_input(
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
+    gamepads: Query<&Gamepad>,
     mut query: Query<(&mut Player, &Transform)>,
     mut commands: Commands,
     mut ev_attack: EventWriter<PlayerAttack>,
@@ -181,6 +182,7 @@ fn player_input(
 ) {
     let Ok((mut player, tf)) = query.get_single_mut() else { return };
     let dt = time.delta_secs();
+    let gp = gamepads.iter().next();
 
     player.anim_time += dt;
     player.melee_cooldown = (player.melee_cooldown - dt).max(0.0);
@@ -195,10 +197,18 @@ fn player_input(
         return;
     }
 
+    // Movement: keyboard + gamepad left stick / dpad
     let mut input_dir = 0.0_f32;
     if keys.pressed(KeyCode::KeyA) || keys.pressed(KeyCode::ArrowLeft) { input_dir -= 1.0; }
     if keys.pressed(KeyCode::KeyD) || keys.pressed(KeyCode::ArrowRight) { input_dir += 1.0; }
-    if input_dir != 0.0 { player.facing = input_dir; }
+    if let Some(gp) = gp {
+        let stick_x = gp.get(GamepadAxis::LeftStickX).unwrap_or(0.0);
+        if stick_x.abs() > 0.2 { input_dir += stick_x; }
+        if gp.pressed(GamepadButton::DPadLeft) { input_dir -= 1.0; }
+        if gp.pressed(GamepadButton::DPadRight) { input_dir += 1.0; }
+    }
+    input_dir = input_dir.clamp(-1.0, 1.0);
+    if input_dir != 0.0 { player.facing = input_dir.signum(); }
 
     let target = input_dir * if player.is_on_floor { MOVE_SPEED } else { AIR_SPEED };
     let acc = if player.is_on_floor { ACCEL_GROUND } else { ACCEL_AIR };
@@ -208,9 +218,13 @@ fn player_input(
         player.vx = move_toward(player.vx, target, acc * dt);
     }
 
-    let jp = keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::KeyW) || keys.just_pressed(KeyCode::ArrowUp);
-    let jh = keys.pressed(KeyCode::Space) || keys.pressed(KeyCode::KeyW) || keys.pressed(KeyCode::ArrowUp);
-    let jr = keys.just_released(KeyCode::Space) || keys.just_released(KeyCode::KeyW) || keys.just_released(KeyCode::ArrowUp);
+    // Jump: Space/W/Up + gamepad South(A)/DPadUp
+    let gp_jp = gp.map_or(false, |g| g.just_pressed(GamepadButton::South) || g.just_pressed(GamepadButton::DPadUp));
+    let gp_jh = gp.map_or(false, |g| g.pressed(GamepadButton::South) || g.pressed(GamepadButton::DPadUp));
+    let gp_jr = gp.map_or(false, |g| g.just_released(GamepadButton::South) || g.just_released(GamepadButton::DPadUp));
+    let jp = keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::KeyW) || keys.just_pressed(KeyCode::ArrowUp) || gp_jp;
+    let jh = keys.pressed(KeyCode::Space) || keys.pressed(KeyCode::KeyW) || keys.pressed(KeyCode::ArrowUp) || gp_jh;
+    let jr = keys.just_released(KeyCode::Space) || keys.just_released(KeyCode::KeyW) || keys.just_released(KeyCode::ArrowUp) || gp_jr;
 
     if jp { player.jump_buffer = JUMP_BUFFER_TIME; }
     let can_jump = player.is_on_floor || player.coyote_timer > 0.0;
@@ -226,7 +240,9 @@ fn player_input(
         player.jump_hold_time = (player.jump_hold_time - dt).max(0.0);
     } else if jr { player.is_jumping = false; }
 
-    if keys.just_pressed(KeyCode::ShiftLeft) && player.dash_cooldown <= 0.0 {
+    // Dash: Shift + gamepad East(B)
+    let dash_pressed = keys.just_pressed(KeyCode::ShiftLeft) || gp.map_or(false, |g| g.just_pressed(GamepadButton::East));
+    if dash_pressed && player.dash_cooldown <= 0.0 {
         player.is_dashing = true;
         player.dash_timer = DASH_DURATION;
         player.dash_cooldown = DASH_COOLDOWN;
@@ -239,7 +255,8 @@ fn player_input(
         });
     }
 
-    let attack = keys.just_pressed(KeyCode::KeyE) || keys.just_pressed(KeyCode::KeyJ) || mouse.just_pressed(MouseButton::Left);
+    // Melee: E/J/LMB + gamepad West(X)
+    let attack = keys.just_pressed(KeyCode::KeyE) || keys.just_pressed(KeyCode::KeyJ) || mouse.just_pressed(MouseButton::Left) || gp.map_or(false, |g| g.just_pressed(GamepadButton::West));
     if attack && player.melee_cooldown <= 0.0 {
         player.melee_cooldown = MELEE_COOLDOWN;
         ev_attack.send(PlayerAttack);
@@ -252,8 +269,8 @@ fn player_input(
         ));
     }
 
-    // Ranged attack (F key or right-click)
-    let ranged = keys.just_pressed(KeyCode::KeyF) || mouse.just_pressed(MouseButton::Right);
+    // Ranged attack (F key or right-click or gamepad North/Y)
+    let ranged = keys.just_pressed(KeyCode::KeyF) || mouse.just_pressed(MouseButton::Right) || gp.map_or(false, |g| g.just_pressed(GamepadButton::North));
     if ranged && player.ranged_cooldown <= 0.0 {
         player.ranged_cooldown = RANGED_COOLDOWN;
         let origin = Vec3::new(
