@@ -94,6 +94,10 @@ pub struct SaveSlotData {
 #[derive(Resource)]
 pub struct ActiveSaveSlot(pub usize);
 
+/// Global game font handle.
+#[derive(Resource)]
+pub struct GameFont(pub Handle<Font>);
+
 /// When present, the next OnEnter(Playing) should restore from this data
 /// instead of starting a fresh run.
 #[derive(Resource)]
@@ -107,7 +111,8 @@ fn main() {
                     primary_window: Some(Window {
                         title: "Dawnroot".into(),
                         resolution: (VIEWPORT_W, VIEWPORT_H).into(),
-                        resizable: false,
+                        resizable: true,
+                        mode: bevy::window::WindowMode::BorderlessFullscreen(MonitorSelection::Current),
                         ..default()
                     }),
                     ..default()
@@ -119,6 +124,7 @@ fn main() {
         .insert_resource(RunData::default())
         .insert_resource(load_meta())
         .insert_resource(ActiveSaveSlot(0))
+        .add_systems(Startup, load_game_font)
         .add_plugins((
             title::TitlePlugin,
             player::PlayerPlugin,
@@ -151,6 +157,7 @@ fn main() {
             )
                 .run_if(in_state(GameState::Playing)),
         )
+        .add_systems(Update, toggle_fullscreen)
         .run();
 }
 
@@ -235,8 +242,28 @@ fn check_player_died(
     }
 }
 
+fn load_game_font(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let font = asset_server.load("fonts/PressStart2P-Regular.ttf");
+    commands.insert_resource(GameFont(font));
+}
+
 fn update_run_time(mut run: ResMut<RunData>, time: Res<Time>) {
     run.time += time.delta_secs();
+}
+
+fn toggle_fullscreen(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut windows: Query<&mut Window>,
+) {
+    if keys.just_pressed(KeyCode::F11) {
+        let mut window = windows.single_mut();
+        window.mode = match window.mode {
+            bevy::window::WindowMode::BorderlessFullscreen(_) => {
+                bevy::window::WindowMode::Windowed
+            }
+            _ => bevy::window::WindowMode::BorderlessFullscreen(MonitorSelection::Current),
+        };
+    }
 }
 
 fn tick_deferred_save_cleanup(

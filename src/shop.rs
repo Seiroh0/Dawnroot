@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{GameState, RunData, PlayingEntity, room::{RoomState, RoomType, RoomTransition}};
+use crate::{GameState, GameFont, RunData, PlayingEntity, room::{RoomState, RoomType, RoomTransition}};
 
 pub struct ShopPlugin;
 
@@ -55,6 +55,7 @@ fn shop_interaction(
     mut player_mut: Query<&mut crate::player::Player, Without<crate::spell::SpellSlots>>,
     mut spell_slots_q: Query<&mut crate::spell::SpellSlots, Without<crate::player::Player>>,
     shop_spawned: Option<Res<ShopSpawned>>,
+    font: Res<GameFont>,
 ) {
     if room_state.current_type != RoomType::Shop { return; }
 
@@ -91,7 +92,7 @@ fn shop_interaction(
             // Price label
             commands.spawn((
                 Text2d::new(format!("{}: {}g", name, cost)),
-                TextFont { font_size: 12.0, ..default() },
+                TextFont { font: font.0.clone(), font_size: 7.0, ..default() },
                 TextColor(Color::srgb(0.9, 0.85, 0.5)),
                 Transform::from_xyz(x, 130.0, crate::constants::Z_HUD),
                 PlayingEntity,

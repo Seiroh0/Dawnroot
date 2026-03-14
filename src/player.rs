@@ -72,7 +72,7 @@ impl Default for Player {
     fn default() -> Self {
         Self {
             vx: 0.0, vy: 0.0, facing: 1.0,
-            max_health: 5, health: 5,
+            max_health: 10, health: 10,
             mana: MANA_MAX, max_mana: MANA_MAX,
             invulnerable: 0.0,
             is_on_floor: false, was_on_floor: false,
@@ -108,7 +108,7 @@ fn spawn_player(mut commands: Commands, meta: Res<MetaProgression>, loaded: Opti
     let max_hp = if let Some(ref save) = loaded {
         save.0.max_health
     } else {
-        5 + meta.max_health_bonus
+        10 + meta.max_health_bonus
     };
     let max_mp = if let Some(ref save) = loaded {
         save.0.max_mana
@@ -327,7 +327,16 @@ fn player_physics(
     let Ok((mut player, mut tf)) = query.get_single_mut() else { return };
     let dt = time.delta_secs();
 
-    if player.is_dashing { tf.translation.x += player.vx * dt; return; }
+    if player.is_dashing {
+        let new_x = tf.translation.x + player.vx * dt;
+        let phw = 10.0;
+        tf.translation.x = new_x.clamp(phw, ROOM_W - phw);
+        if (tf.translation.x - new_x).abs() > 0.1 {
+            player.vx = 0.0;
+            player.is_dashing = false;
+        }
+        return;
+    }
 
     if player.vy > -TERMINAL_VELOCITY {
         player.vy = (player.vy - GRAVITY * dt).max(-TERMINAL_VELOCITY);

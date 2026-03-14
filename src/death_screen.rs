@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{GameState, RunData};
+use crate::{GameState, GameFont, RunData};
 
 pub struct DeathScreenPlugin;
 
@@ -17,7 +17,7 @@ impl Plugin for DeathScreenPlugin {
 #[derive(Component)]
 struct DeathScreenUI;
 
-fn setup_death_screen(mut commands: Commands, run: Res<RunData>) {
+fn setup_death_screen(mut commands: Commands, run: Res<RunData>, font: Res<GameFont>) {
     let minutes = (run.time / 60.0) as i32;
     let seconds = (run.time % 60.0) as i32;
 
@@ -39,10 +39,11 @@ fn setup_death_screen(mut commands: Commands, run: Res<RunData>) {
             DeathScreenUI,
         ))
         .with_children(|parent| {
+            let f = font.0.clone();
             // Title
             parent.spawn((
                 Text::new("YOU HAVE FALLEN"),
-                TextFont { font_size: 38.0, ..default() },
+                TextFont { font: f.clone(), font_size: 18.0, ..default() },
                 TextColor(Color::srgb(0.9, 0.25, 0.08)),
             ));
 
@@ -54,35 +55,35 @@ fn setup_death_screen(mut commands: Commands, run: Res<RunData>) {
                     "Floor {} - Room {}",
                     run.current_floor, run.current_room,
                 )),
-                TextFont { font_size: 22.0, ..default() },
+                TextFont { font: f.clone(), font_size: 10.0, ..default() },
                 TextColor(Color::srgb(0.8, 0.65, 0.45)),
             ));
 
             // Time
             parent.spawn((
-                Text::new(format!("Time Survived: {}:{:02}", minutes, seconds)),
-                TextFont { font_size: 18.0, ..default() },
+                Text::new(format!("Time: {}:{:02}", minutes, seconds)),
+                TextFont { font: f.clone(), font_size: 9.0, ..default() },
                 TextColor(Color::srgb(0.65, 0.55, 0.4)),
             ));
 
             // Enemies
             parent.spawn((
-                Text::new(format!("Enemies Defeated: {}", run.enemies_killed)),
-                TextFont { font_size: 18.0, ..default() },
+                Text::new(format!("Defeated: {}", run.enemies_killed)),
+                TextFont { font: f.clone(), font_size: 9.0, ..default() },
                 TextColor(Color::srgb(0.65, 0.55, 0.4)),
             ));
 
             // Gold
             parent.spawn((
-                Text::new(format!("Gold Earned: {}", run.gold)),
-                TextFont { font_size: 18.0, ..default() },
+                Text::new(format!("Gold: {}", run.gold)),
+                TextFont { font: f.clone(), font_size: 9.0, ..default() },
                 TextColor(Color::srgb(0.9, 0.8, 0.3)),
             ));
 
             // Score
             parent.spawn((
                 Text::new(format!("Score: {:06}", run.score)),
-                TextFont { font_size: 20.0, ..default() },
+                TextFont { font: f.clone(), font_size: 10.0, ..default() },
                 TextColor(Color::WHITE),
             ));
 
@@ -91,7 +92,7 @@ fn setup_death_screen(mut commands: Commands, run: Res<RunData>) {
             // Prompt
             parent.spawn((
                 Text::new("Press SPACE to return"),
-                TextFont { font_size: 16.0, ..default() },
+                TextFont { font: f.clone(), font_size: 8.0, ..default() },
                 TextColor(Color::srgb(0.5, 0.4, 0.3)),
             ));
         });

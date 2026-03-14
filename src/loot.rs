@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, enemy::EnemyDefeated};
+use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, enemy::EnemyDefeated, room::TreasureChest};
 
 pub struct LootPlugin;
 
@@ -11,6 +11,7 @@ impl Plugin for LootPlugin {
                 spawn_drops,
                 pickup_magnet,
                 collect_pickups,
+                chest_auto_open,
             )
                 .chain()
                 .run_if(in_state(GameState::Playing)),
@@ -153,4 +154,63 @@ fn collect_pickups(
     // Note: We can't mutably borrow Pickup in the loop above due to the Query constraints,
     // so handle lifetime separately. For now pickups persist until collected.
     let _ = time;
+}
+
+/// Auto-open treasure chests when the player touches them.
+fn chest_auto_open(
+    mut commands: Commands,
+    player_q: Query<&Transform, With<Player>>,
+    mut chest_q: Query<(&Transform, &mut TreasureChest, &mut Sprite), Without<Player>>,
+    mut run: ResMut<RunData>,
+    mut player_mut: Query<&mut Player, Without<TreasureChest>>,
+) {
+    let Ok(p_tf) = player_q.get_single() else { return };
+
+    for (c_tf, mut chest, mut sprite) in &mut chest_q {
+        if chest.opened { continue; }
+        let dist = (p_tf.translation.xy() - c_tf.translation.xy()).length();
+        if dist > 40.0 { continue; }
+
+        chest.opened = true;
+        // Visual: darken the chest to show it's been opened
+        sprite.color = Color::srgb(0.30, 0.22, 0.08);
+
+        let cx = c_tf.translation.x;
+        let cy = c_tf.translation.y;
+
+        // Spawn loot burst: gold + health + mana
+        let gold_amount = 15 + (rand::random::<i32>() % 20);
+        run.gold += gold_amount;
+        run.score += gold_amount * 10;
+
+        // Heal player
+        if let Ok(mut player) = player_mut.get_single_mut() {
+            player.health = (player.health + 2).min(player.max_health);
+            player.mana = (player.mana + 30.0).min(player.max_mana);
+        }
+
+        // Spawn visual gold coins flying out
+        for i in 0..6_u32 {
+            let angle = (i as f32 / 6.0) * std::f32::consts::TAU;
+            let spread = 20.0 + (i as f32 * 7.3 % 15.0);
+            commands.spawn((
+                Sprite {
+                    color: Color::srgb(1.0, 0.85, 0.15),
+                    custom_size: Some(Vec2::new(8.0, 8.0)),
+                    ..default()
+                },
+                Transform::from_xyz(
+                    cx + angle.cos() * spread,
+                    cy + 20.0 + angle.sin() * spread,
+                    Z_EFFECTS,
+                ),
+                Pickup {
+                    kind: PickupKind::Gold(0), // visual only, gold already added
+                    magnet_radius: 100.0,
+                    lifetime: 3.0,
+                },
+                PlayingEntity,
+            ));
+        }
+    }
 }

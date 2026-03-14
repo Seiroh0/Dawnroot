@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, room::{RoomState, RoomType, RoomTransition}};
+use crate::{constants::*, GameState, GameFont, PlayingEntity, room::{RoomState, RoomType, RoomTransition}};
 
 pub struct DialoguePlugin;
 
@@ -359,6 +359,7 @@ fn update_dialogue_ui(
     mut body_q: Query<&mut Text, (With<DialogueBodyText>, Without<DialogueSpeakerText>)>,
     ui_q: Query<Entity, With<DialogueUI>>,
     time: Res<Time>,
+    font: Res<GameFont>,
 ) {
     if !state.active {
         // Despawn UI if dialogue closed externally
@@ -374,7 +375,7 @@ fn update_dialogue_ui(
     // Spawn UI if needed
     if !state.ui_spawned {
         state.ui_spawned = true;
-        spawn_dialogue_box(&mut commands, &state.speaker);
+        spawn_dialogue_box(&mut commands, &state.speaker, &font.0);
     }
 
     // Typewriter effect
@@ -396,7 +397,7 @@ fn update_dialogue_ui(
     }
 }
 
-fn spawn_dialogue_box(commands: &mut Commands, speaker: &str) {
+fn spawn_dialogue_box(commands: &mut Commands, speaker: &str, font: &Handle<Font>) {
     commands
         .spawn((
             Node {
@@ -417,10 +418,11 @@ fn spawn_dialogue_box(commands: &mut Commands, speaker: &str) {
             PlayingEntity,
         ))
         .with_children(|parent| {
+            let f = font.clone();
             // Speaker name
             parent.spawn((
                 Text::new(speaker.to_string()),
-                TextFont { font_size: 16.0, ..default() },
+                TextFont { font: f.clone(), font_size: 10.0, ..default() },
                 TextColor(Color::srgb(0.95, 0.7, 0.25)),
                 DialogueSpeakerText,
             ));
@@ -428,15 +430,15 @@ fn spawn_dialogue_box(commands: &mut Commands, speaker: &str) {
             // Body text (starts empty, filled by typewriter)
             parent.spawn((
                 Text::new("".to_string()),
-                TextFont { font_size: 14.0, ..default() },
+                TextFont { font: f.clone(), font_size: 8.0, ..default() },
                 TextColor(Color::srgb(0.85, 0.78, 0.65)),
                 DialogueBodyText,
             ));
 
             // Advance hint
             parent.spawn((
-                Text::new("[E / Space / A] continue"),
-                TextFont { font_size: 10.0, ..default() },
+                Text::new("[E/Space/A] continue"),
+                TextFont { font: f.clone(), font_size: 6.0, ..default() },
                 TextColor(Color::srgb(0.5, 0.4, 0.3)),
             ));
         });

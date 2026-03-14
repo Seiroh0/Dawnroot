@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{GameState, constants::*, ActiveSaveSlot, LoadedSave, load_slot, delete_slot};
+use crate::{GameState, GameFont, constants::*, ActiveSaveSlot, LoadedSave, load_slot, delete_slot};
 
 pub struct TitlePlugin;
 
@@ -38,7 +38,7 @@ struct SlotMenuState {
 
 // ── Title screen ──────────────────────────────────────────────────
 
-fn setup_title(mut commands: Commands) {
+fn setup_title(mut commands: Commands, font: Res<GameFont>) {
     commands.spawn((Camera2d, TitleEntity));
     commands.insert_resource(SlotMenuState { open: false });
 
@@ -224,23 +224,34 @@ fn setup_title(mut commands: Commands) {
 
     // Title logo
     spawn_logo(&mut commands);
+    let f = font.0.clone();
+    // Subtitle backdrop (so text is readable over sun rays)
+    commands.spawn((
+        Sprite {
+            color: Color::srgba(0.06, 0.03, 0.02, 0.75),
+            custom_size: Some(Vec2::new(220.0, 28.0)),
+            ..default()
+        },
+        Transform::from_xyz(0.0, 120.0, Z_HUD - 0.1),
+        TitleEntity,
+    ));
     commands.spawn((
         Text2d::new("Into the Depths"),
-        TextFont { font_size: 20.0, ..default() },
-        TextColor(Color::srgb(0.75, 0.55, 0.3)),
+        TextFont { font: f.clone(), font_size: 12.0, ..default() },
+        TextColor(Color::srgb(0.85, 0.65, 0.35)),
         Transform::from_xyz(0.0, 120.0, Z_HUD),
         TitleEntity,
     ));
     commands.spawn((
-        Text2d::new("A/D: Move | Space: Jump | E: Melee | F: Ranged | Shift: Dash | 1-4: Spells | Gamepad OK"),
-        TextFont { font_size: 11.0, ..default() },
+        Text2d::new("A/D Move  Space Jump  E Melee  F Ranged  Shift Dash  1-4 Spells  Gamepad OK"),
+        TextFont { font: f.clone(), font_size: 6.0, ..default() },
         TextColor(Color::srgb(0.45, 0.35, 0.25)),
         Transform::from_xyz(0.0, -200.0, Z_HUD),
         TitleEntity,
     ));
     commands.spawn((
         Text2d::new("- Press SPACE to descend -"),
-        TextFont { font_size: 22.0, ..default() },
+        TextFont { font: f.clone(), font_size: 10.0, ..default() },
         TextColor(Color::srgba(0.95, 0.7, 0.25, 1.0)),
         Transform::from_xyz(0.0, -230.0, Z_HUD),
         TitleEntity,
@@ -540,6 +551,7 @@ fn handle_title_input(
     mut slot_state: ResMut<SlotMenuState>,
     mut prompt_q: Query<&mut TextColor, With<PromptText>>,
     time: Res<Time>,
+    font: Res<GameFont>,
 ) {
     // Animate prompt pulse
     if let Ok(mut color) = prompt_q.get_single_mut() {
@@ -553,11 +565,11 @@ fn handle_title_input(
     let gp_confirm = gp.map_or(false, |g| g.just_pressed(GamepadButton::South) || g.just_pressed(GamepadButton::Start));
     if keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter) || gp_confirm {
         slot_state.open = true;
-        spawn_slot_menu(&mut commands);
+        spawn_slot_menu(&mut commands, &font.0);
     }
 }
 
-fn spawn_slot_menu(commands: &mut Commands) {
+fn spawn_slot_menu(commands: &mut Commands, font: &Handle<Font>) {
     let slots: [Option<crate::SaveSlotData>; 3] = [
         load_slot(0),
         load_slot(1),
@@ -580,10 +592,11 @@ fn spawn_slot_menu(commands: &mut Commands) {
             TitleEntity,
         ))
         .with_children(|parent| {
+            let f = font.clone();
             // Header
             parent.spawn((
                 Text::new("Choose Your Path"),
-                TextFont { font_size: 30.0, ..default() },
+                TextFont { font: f.clone(), font_size: 16.0, ..default() },
                 TextColor(Color::srgb(0.95, 0.7, 0.25)),
             ));
 
@@ -596,21 +609,21 @@ fn spawn_slot_menu(commands: &mut Commands) {
                     let secs = (save.time_played % 60.0) as i32;
                     (
                         format!(
-                            "[{}]  Slot {} - Floor {} | {}g | {}:{:02}",
+                            "[{}] Slot {} - Floor {} | {}g | {}:{:02}",
                             i + 1, i + 1, save.floor, save.gold, mins, secs
                         ),
                         Color::srgb(0.85, 0.65, 0.25),
                     )
                 } else {
                     (
-                        format!("[{}]  Slot {} - Empty (New Game)", i + 1, i + 1),
+                        format!("[{}] Slot {} - Empty (New Game)", i + 1, i + 1),
                         Color::srgb(0.55, 0.45, 0.35),
                     )
                 };
 
                 parent.spawn((
                     Text::new(label),
-                    TextFont { font_size: 19.0, ..default() },
+                    TextFont { font: f.clone(), font_size: 9.0, ..default() },
                     TextColor(detail_color),
                 ));
             }
@@ -618,8 +631,8 @@ fn spawn_slot_menu(commands: &mut Commands) {
             parent.spawn(Node { height: Val::Px(20.0), ..default() });
 
             parent.spawn((
-                Text::new("1/2/3 or X/Y/A to select  |  DEL to erase  |  ESC/B to go back"),
-                TextFont { font_size: 13.0, ..default() },
+                Text::new("1/2/3 or X/Y/A select | DEL erase | ESC/B back"),
+                TextFont { font: f.clone(), font_size: 7.0, ..default() },
                 TextColor(Color::srgb(0.45, 0.38, 0.3)),
             ));
         });
@@ -633,6 +646,7 @@ fn handle_slot_input(
     ui_q: Query<Entity, With<SlotUI>>,
     mut next_state: ResMut<NextState<GameState>>,
     mut active_slot: ResMut<ActiveSaveSlot>,
+    font: Res<GameFont>,
 ) {
     let Some(state) = slot_state else { return };
     if !state.open { return };
@@ -661,7 +675,7 @@ fn handle_slot_input(
                 for e in &ui_q {
                     commands.entity(e).despawn_recursive();
                 }
-                spawn_slot_menu(&mut commands);
+                spawn_slot_menu(&mut commands, &font.0);
                 return;
             }
         }

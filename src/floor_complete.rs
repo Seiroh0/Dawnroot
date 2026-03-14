@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use crate::{
     constants::*,
-    GameState, RunData, PlayingEntity, ActiveSaveSlot, SaveSlotData,
+    GameState, GameFont, RunData, PlayingEntity, ActiveSaveSlot, SaveSlotData,
     room::{AdvanceFloor, RoomState},
 };
 
@@ -33,6 +33,7 @@ fn spawn_floor_complete_ui(
     mut commands: Commands,
     mut state: ResMut<FloorCompleteState>,
     run: Res<RunData>,
+    font: Res<GameFont>,
 ) {
     if !state.active || state.ui_spawned {
         return;
@@ -58,10 +59,11 @@ fn spawn_floor_complete_ui(
             PlayingEntity,
         ))
         .with_children(|parent| {
+            let f = font.0.clone();
             // Title
             parent.spawn((
                 Text::new(format!("FLOOR {} CONQUERED!", state.floor_completed)),
-                TextFont { font_size: 38.0, ..default() },
+                TextFont { font: f.clone(), font_size: 16.0, ..default() },
                 TextColor(Color::srgb(0.95, 0.7, 0.2)),
             ));
 
@@ -69,26 +71,26 @@ fn spawn_floor_complete_ui(
 
             // Stats
             parent.spawn((
-                Text::new(format!("Enemies Defeated: {}", run.enemies_killed)),
-                TextFont { font_size: 18.0, ..default() },
+                Text::new(format!("Defeated: {}", run.enemies_killed)),
+                TextFont { font: f.clone(), font_size: 9.0, ..default() },
                 TextColor(Color::srgb(0.75, 0.6, 0.4)),
             ));
 
             parent.spawn((
                 Text::new(format!("Gold: {}", run.gold)),
-                TextFont { font_size: 20.0, ..default() },
+                TextFont { font: f.clone(), font_size: 9.0, ..default() },
                 TextColor(Color::srgb(0.9, 0.8, 0.3)),
             ));
 
             parent.spawn((
                 Text::new(format!("Score: {:06}", run.score)),
-                TextFont { font_size: 20.0, ..default() },
+                TextFont { font: f.clone(), font_size: 10.0, ..default() },
                 TextColor(Color::WHITE),
             ));
 
             parent.spawn((
                 Text::new(format!("Time: {}:{:02}", minutes, seconds)),
-                TextFont { font_size: 18.0, ..default() },
+                TextFont { font: f.clone(), font_size: 9.0, ..default() },
                 TextColor(Color::srgb(0.75, 0.6, 0.4)),
             ));
 
@@ -96,14 +98,14 @@ fn spawn_floor_complete_ui(
 
             // Options
             parent.spawn((
-                Text::new("[SPACE]  Descend Deeper"),
-                TextFont { font_size: 20.0, ..default() },
+                Text::new("[SPACE] Descend Deeper"),
+                TextFont { font: f.clone(), font_size: 10.0, ..default() },
                 TextColor(Color::srgb(0.9, 0.65, 0.2)),
             ));
 
             parent.spawn((
-                Text::new("[ESC]  Save & Return to Surface"),
-                TextFont { font_size: 17.0, ..default() },
+                Text::new("[ESC] Save & Return"),
+                TextFont { font: f.clone(), font_size: 8.0, ..default() },
                 TextColor(Color::srgb(0.6, 0.5, 0.35)),
             ));
         });

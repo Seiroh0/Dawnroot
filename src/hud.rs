@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{GameState, RunData, PlayingEntity, player::Player, spell::SpellSlots, room::RoomState};
+use crate::{GameState, GameFont, RunData, PlayingEntity, player::Player, spell::SpellSlots, room::RoomState};
 
 pub struct HudPlugin;
 
@@ -37,7 +37,7 @@ struct ScoreText;
 #[derive(Component)]
 struct EnemyText;
 
-fn setup_hud(mut commands: Commands) {
+fn setup_hud(mut commands: Commands, font: Res<GameFont>) {
     commands
         .spawn((
             Node {
@@ -66,21 +66,22 @@ fn setup_hud(mut commands: Commands) {
                         ..default()
                     })
                     .with_children(|col| {
+                        let f = font.0.clone();
                         col.spawn((
-                            Text::new("HP: 5/5"),
-                            TextFont { font_size: 18.0, ..default() },
+                            Text::new("HP: 10/10"),
+                            TextFont { font: f.clone(), font_size: 9.0, ..default() },
                             TextColor(Color::srgb(0.9, 0.35, 0.15)),
                             HealthText,
                         ));
                         col.spawn((
                             Text::new("MANA: 100/100"),
-                            TextFont { font_size: 14.0, ..default() },
+                            TextFont { font: f.clone(), font_size: 7.0, ..default() },
                             TextColor(Color::srgb(0.7, 0.45, 0.9)),
                             ManaText,
                         ));
                         col.spawn((
                             Text::new(""),
-                            TextFont { font_size: 14.0, ..default() },
+                            TextFont { font: f.clone(), font_size: 7.0, ..default() },
                             TextColor(Color::srgb(0.9, 0.5, 0.2)),
                             EnemyText,
                         ));
@@ -94,21 +95,22 @@ fn setup_hud(mut commands: Commands) {
                         ..default()
                     })
                     .with_children(|col| {
+                        let f = font.0.clone();
                         col.spawn((
                             Text::new("000000"),
-                            TextFont { font_size: 20.0, ..default() },
+                            TextFont { font: f.clone(), font_size: 10.0, ..default() },
                             TextColor(Color::WHITE),
                             ScoreText,
                         ));
                         col.spawn((
                             Text::new("Gold: 0"),
-                            TextFont { font_size: 14.0, ..default() },
+                            TextFont { font: f.clone(), font_size: 7.0, ..default() },
                             TextColor(Color::srgb(0.9, 0.8, 0.3)),
                             GoldText,
                         ));
                         col.spawn((
                             Text::new("Floor 1 - Room 1"),
-                            TextFont { font_size: 14.0, ..default() },
+                            TextFont { font: f.clone(), font_size: 7.0, ..default() },
                             TextColor(Color::srgb(0.65, 0.55, 0.4)),
                             FloorText,
                         ));
@@ -117,8 +119,8 @@ fn setup_hud(mut commands: Commands) {
 
             // Bottom: Spell slots
             parent.spawn((
-                Text::new("[1] Fireball  [2] Ice  [3] Lightning  [4] Shield"),
-                TextFont { font_size: 14.0, ..default() },
+                Text::new("[1] Fireball [2] Ice [3] Lightning [4] Shield"),
+                TextFont { font: font.0.clone(), font_size: 7.0, ..default() },
                 TextColor(Color::srgb(0.75, 0.6, 0.4)),
                 Node {
                     position_type: PositionType::Absolute,

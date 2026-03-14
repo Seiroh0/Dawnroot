@@ -65,6 +65,12 @@ pub struct CrystalGlow {
     pub phase: f32,
 }
 
+/// Marker for treasure chests that auto-open on player contact.
+#[derive(Component)]
+pub struct TreasureChest {
+    pub opened: bool,
+}
+
 // ─── Start-room door delay ────────────────────────────────────────────────────
 
 /// Counts down before the Start room door automatically unlocks.
@@ -724,7 +730,13 @@ fn spawn_start_room(commands: &mut Commands, seed: u64) {
 
 fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
     let plat_color = Color::srgb(0.32, 0.24, 0.14);
-    let template = (seed % 16) as i32;
+    // Floor 1: only safe templates (no hazards). Floor 2+: all 16 templates.
+    let safe_templates: &[i32] = &[0, 1, 3, 4, 7];
+    let template = if floor <= 1 {
+        safe_templates[(seed % safe_templates.len() as u64) as usize]
+    } else {
+        (seed % 16) as i32
+    };
 
     match template {
         // ── 0: Low staircase – left to right flow ─────────────────────────────
@@ -1063,10 +1075,11 @@ fn spawn_treasure_room(commands: &mut Commands, seed: u64) {
     let chest_x = ROOM_W / 2.0;
     let chest_y = 2.0 * TILE_SIZE + TILE_SIZE + 14.0;
 
-    // Main body (dark wood)
+    // Main body (dark wood) — has TreasureChest for auto-open
     commands.spawn((
         Sprite { color: Color::srgb(0.50, 0.32, 0.08), custom_size: Some(Vec2::new(32.0, 20.0)), ..default() },
         Transform::from_xyz(chest_x, chest_y, Z_PICKUPS),
+        TreasureChest { opened: false },
         RoomEntity, PlayingEntity,
     ));
     // Metal band bottom
@@ -1153,7 +1166,7 @@ fn spawn_treasure_room(commands: &mut Commands, seed: u64) {
 
 // ─── Boss Room ────────────────────────────────────────────────────────────────
 
-fn spawn_boss_room(commands: &mut Commands, _floor: i32) {
+fn spawn_boss_room(commands: &mut Commands, floor: i32) {
     let plat_color = Color::srgb(0.32, 0.16, 0.08);
     let pillar_color = Color::srgb(0.28, 0.14, 0.07);
 
@@ -1175,9 +1188,11 @@ fn spawn_boss_room(commands: &mut Commands, _floor: i32) {
     spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 9.0);
     spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 9.0);
 
-    // Lava pits flanking the arena
-    spawn_lava_strip(commands, 2, 3, 1);
-    spawn_lava_strip(commands, 20, 21, 1);
+    // Lava pits flanking the arena (floor 2+)
+    if floor >= 2 {
+        spawn_lava_strip(commands, 2, 3, 1);
+        spawn_lava_strip(commands, 20, 21, 1);
+    }
 
     // Ominous red crystals
     spawn_boss_crystal(commands, TILE_SIZE * 2.0,  TILE_SIZE, 0.0);
