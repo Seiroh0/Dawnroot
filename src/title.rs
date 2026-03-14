@@ -539,7 +539,7 @@ fn spawn_logo(commands: &mut Commands) {
 
 fn cleanup_title(mut commands: Commands, q: Query<Entity, With<TitleEntity>>) {
     for e in &q {
-        commands.entity(e).despawn_recursive();
+        commands.entity(e).try_despawn_recursive();
     }
     commands.remove_resource::<SlotMenuState>();
 }
@@ -656,7 +656,7 @@ fn handle_slot_input(
     let back = keys.just_pressed(KeyCode::Escape) || gp.map_or(false, |g| g.just_pressed(GamepadButton::East));
     if back {
         for e in &ui_q {
-            commands.entity(e).despawn_recursive();
+            commands.entity(e).try_despawn_recursive();
         }
         commands.insert_resource(SlotMenuState { open: false });
         return;
@@ -673,7 +673,7 @@ fn handle_slot_input(
             if keys.just_pressed(key) || gp_pressed {
                 delete_slot(i);
                 for e in &ui_q {
-                    commands.entity(e).despawn_recursive();
+                    commands.entity(e).try_despawn_recursive();
                 }
                 spawn_slot_menu(&mut commands, &font.0);
                 return;
@@ -972,7 +972,7 @@ fn cleanup_well_intro(
     q: Query<Entity, With<IntroEntity>>,
 ) {
     for e in &q {
-        commands.entity(e).despawn_recursive();
+        commands.entity(e).try_despawn_recursive();
     }
     commands.remove_resource::<IntroState>();
 }

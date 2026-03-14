@@ -449,7 +449,7 @@ fn player_projectile_movement(
         tf.translation.y += proj.vy * dt;
         proj.lifetime -= dt;
         if proj.lifetime <= 0.0 {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).try_despawn_recursive();
         }
     }
 }

@@ -49,7 +49,7 @@ fn start_bgm(
 ) {
     // Stop old BGM if any
     if let Some(e) = bgm.entity.take() {
-        commands.entity(e).despawn_recursive();
+        commands.entity(e).try_despawn_recursive();
     }
 
     let entity = commands.spawn((
@@ -68,7 +68,7 @@ fn stop_bgm(
     mut bgm: ResMut<BgmHandle>,
 ) {
     if let Some(e) = bgm.entity.take() {
-        commands.entity(e).despawn_recursive();
+        commands.entity(e).try_despawn_recursive();
     }
 }
 

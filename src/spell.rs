@@ -500,7 +500,7 @@ fn spell_lifetime_system(
     for (entity, mut proj) in &mut proj_q {
         proj.lifetime -= dt;
         if proj.lifetime <= 0.0 {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).try_despawn_recursive();
         }
     }
 
@@ -517,14 +517,14 @@ fn spell_lifetime_system(
             }
         }
         if strike.lifetime <= 0.0 {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).try_despawn_recursive();
         }
     }
 
     for (entity, mut buff) in &mut shield_q {
         buff.remaining -= dt;
         if buff.remaining <= 0.0 {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).try_despawn_recursive();
         }
     }
 }

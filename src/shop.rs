@@ -136,7 +136,7 @@ fn shop_interaction(
                 }
             }
 
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).try_despawn_recursive();
         }
     }
 }

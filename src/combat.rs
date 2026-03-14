@@ -54,7 +54,7 @@ fn melee_vs_enemy(
                         score: enemy.score_reward,
                         gold_drop: enemy.gold_drop,
                     });
-                    commands.entity(e_entity).despawn_recursive();
+                    commands.entity(e_entity).try_despawn_recursive();
 
                     if let Ok(mut shake) = shake_q.get_single_mut() {
                         trigger_shake(&mut shake, 8.0, 0.15);
@@ -80,7 +80,7 @@ fn ranged_vs_enemy(
 
             if dist.x < 5.0 + e_size.x / 2.0 && dist.y < 3.0 + e_size.y / 2.0 {
                 enemy.health -= proj.damage;
-                commands.entity(p_entity).despawn_recursive();
+                commands.entity(p_entity).try_despawn_recursive();
 
                 if enemy.health <= 0 {
                     run.score += enemy.score_reward;
@@ -91,7 +91,7 @@ fn ranged_vs_enemy(
                         score: enemy.score_reward,
                         gold_drop: enemy.gold_drop,
                     });
-                    commands.entity(e_entity).despawn_recursive();
+                    commands.entity(e_entity).try_despawn_recursive();
 
                     if let Ok(mut shake) = shake_q.get_single_mut() {
                         trigger_shake(&mut shake, 6.0, 0.12);
@@ -129,7 +129,7 @@ fn spell_vs_enemy(
                         score: enemy.score_reward,
                         gold_drop: enemy.gold_drop,
                     });
-                    commands.entity(e_entity).despawn_recursive();
+                    commands.entity(e_entity).try_despawn_recursive();
 
                     if let Ok(mut shake) = shake_q.get_single_mut() {
                         trigger_shake(&mut shake, 10.0, 0.2);
@@ -167,7 +167,7 @@ fn lightning_vs_enemy(
                         score: enemy.score_reward,
                         gold_drop: enemy.gold_drop,
                     });
-                    commands.entity(e_entity).despawn_recursive();
+                    commands.entity(e_entity).try_despawn_recursive();
                 }
             }
         }

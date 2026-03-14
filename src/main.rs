@@ -213,7 +213,7 @@ fn cleanup_run(
     q: Query<Entity, With<PlayingEntity>>,
 ) {
     for e in &q {
-        commands.entity(e).despawn_recursive();
+        commands.entity(e).try_despawn_recursive();
     }
     commands.remove_resource::<LoadedSave>();
     commands.remove_resource::<DeferredSaveCleanup>();

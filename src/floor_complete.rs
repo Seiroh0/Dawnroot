@@ -197,7 +197,7 @@ fn floor_complete_input(
         state.ui_spawned = false;
 
         for e in &ui_q {
-            commands.entity(e).despawn_recursive();
+            commands.entity(e).try_despawn_recursive();
         }
 
         ev_advance.send(AdvanceFloor);

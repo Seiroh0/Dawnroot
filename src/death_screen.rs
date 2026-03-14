@@ -116,6 +116,6 @@ fn cleanup_death_screen(
     q: Query<Entity, With<DeathScreenUI>>,
 ) {
     for e in &q {
-        commands.entity(e).despawn_recursive();
+        commands.entity(e).try_despawn_recursive();
     }
 }

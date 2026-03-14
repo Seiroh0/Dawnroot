@@ -1372,7 +1372,7 @@ fn check_room_exit(
             ev_transition.send(RoomTransition);
 
             for entity in &room_entities {
-                commands.entity(entity).despawn_recursive();
+                commands.entity(entity).try_despawn_recursive();
             }
 
             room_state.room_index += 1;
@@ -1423,7 +1423,7 @@ fn handle_advance_floor(
     for _ in ev.read() {
         // Despawn old room
         for entity in &room_entities {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).try_despawn_recursive();
         }
 
         ev_transition.send(RoomTransition);

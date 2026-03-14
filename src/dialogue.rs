@@ -332,7 +332,7 @@ fn advance_dialogue(
             state.active = false;
             state.ui_spawned = false;
             for e in &ui_q {
-                commands.entity(e).despawn_recursive();
+                commands.entity(e).try_despawn_recursive();
             }
         } else {
             state.char_index = 0;
@@ -366,7 +366,7 @@ fn update_dialogue_ui(
         if state.ui_spawned {
             state.ui_spawned = false;
             for e in &ui_q {
-                commands.entity(e).despawn_recursive();
+                commands.entity(e).try_despawn_recursive();
             }
         }
         return;
