@@ -45,22 +45,59 @@ struct BgmHandle {
 fn start_bgm(
     mut commands: Commands,
     mut bgm: ResMut<BgmHandle>,
-    asset_server: Res<AssetServer>,
+    mut audio_sources: ResMut<Assets<AudioSource>>,
 ) {
     // Stop old BGM if any
     if let Some(e) = bgm.entity.take() {
         commands.entity(e).try_despawn_recursive();
     }
 
+    // Generate a procedural ambient loop (dark dungeon drone)
+    let handle = make_bgm_loop(&mut audio_sources);
     let entity = commands.spawn((
-        AudioPlayer::<AudioSource>(asset_server.load("audio/GAME_SOUND.mp3")),
+        AudioPlayer::<AudioSource>(handle),
         PlaybackSettings {
             mode: PlaybackMode::Loop,
-            volume: Volume::new(0.35),
+            volume: Volume::new(0.18),
             ..default()
         },
     )).id();
     bgm.entity = Some(entity);
+}
+
+/// Generate a ~8-second ambient dungeon drone that loops seamlessly.
+fn make_bgm_loop(audio_sources: &mut Assets<AudioSource>) -> Handle<AudioSource> {
+    let sample_rate = 44100u32;
+    let duration = 8.0_f32;
+    let num_samples = (sample_rate as f32 * duration) as usize;
+    let mut samples = Vec::with_capacity(num_samples * 2);
+
+    for i in 0..num_samples {
+        let t = i as f32 / sample_rate as f32;
+
+        // Deep bass drone (55 Hz = A1)
+        let bass = (t * 55.0 * std::f32::consts::TAU).sin() * 0.25;
+        // Sub-harmonic rumble
+        let sub = (t * 27.5 * std::f32::consts::TAU).sin() * 0.15;
+        // Eerie mid tone that slowly modulates
+        let mod_freq = 0.2; // slow LFO
+        let mid_freq = 110.0 + (t * mod_freq * std::f32::consts::TAU).sin() * 8.0;
+        let mid = (t * mid_freq * std::f32::consts::TAU).sin() * 0.08;
+        // High atmospheric whisper
+        let atmo = (t * 330.0 * std::f32::consts::TAU).sin()
+            * (t * 0.15 * std::f32::consts::TAU).sin().abs() * 0.04;
+        // Filtered noise for texture
+        let noise = ((t * 3571.0 * std::f32::consts::TAU).sin()
+            * (t * 1.3 * std::f32::consts::TAU).sin().abs()) * 0.03;
+
+        let sample = bass + sub + mid + atmo + noise;
+        let s = (sample * 32000.0).clamp(-32000.0, 32000.0) as i16;
+        samples.push(s);
+        samples.push(s);
+    }
+
+    let wav_data = build_wav(sample_rate, 2, &samples);
+    audio_sources.add(AudioSource { bytes: wav_data.into() })
 }
 
 fn stop_bgm(
