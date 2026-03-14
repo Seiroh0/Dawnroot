@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use crate::{
     GameState, GameFont, RunData, MetaProgression, PlayingEntity,
-    room::{RoomState, RoomType, RoomTransition},
+    room::{RoomState, RoomType, RoomTransition, RoomEntity},
     equipment::{ItemId, Equipment, RecalcStats},
     spell::SpellId,
 };
@@ -76,6 +76,7 @@ pub enum ShopEffect {
 
 /// Requirement to unlock a shop item.
 #[derive(Clone)]
+#[allow(dead_code)]
 pub enum UnlockReq {
     None,
     MinFloor(i32),
@@ -302,10 +303,15 @@ struct ShopItemCost(usize);
 fn reset_shop_on_transition(
     mut ev: EventReader<RoomTransition>,
     mut commands: Commands,
+    overlay_q: Query<Entity, With<ShopOverlayUI>>,
 ) {
     for _ in ev.read() {
         commands.insert_resource(MerchantSpawned(false));
         commands.remove_resource::<ShopUiState>();
+        // Despawn shop overlay UI on room transition
+        for e in &overlay_q {
+            commands.entity(e).try_despawn_recursive();
+        }
     }
 }
 
@@ -331,6 +337,7 @@ fn spawn_merchant_npc(
         },
         Transform::from_xyz(x, y, crate::constants::Z_PLAYER - 0.5),
         MerchantNpc { interacted: false },
+        RoomEntity,
         PlayingEntity,
     )).with_children(|p| {
         // ── Stone body: large rounded boulder base ──
@@ -853,7 +860,7 @@ fn shop_ui_update_visuals(
     shop_state: Option<Res<ShopUiState>>,
     run: Res<RunData>,
     mut gold_text_q: Query<&mut Text, (With<ShopGoldText>, Without<ShopMerchantText>, Without<ShopItemName>, Without<ShopItemCost>)>,
-    mut item_list_q: Query<(Entity, &Children), With<ShopItemList>>,
+    item_list_q: Query<Entity, With<ShopItemList>>,
     item_row_q: Query<&ShopItemRow>,
     mut bg_q: Query<&mut BackgroundColor, With<ShopItemRow>>,
     mut name_q: Query<(&mut Text, &mut TextColor, &ShopItemName), (Without<ShopGoldText>, Without<ShopMerchantText>, Without<ShopItemCost>)>,
@@ -870,12 +877,12 @@ fn shop_ui_update_visuals(
     }
 
     // Check if item rows exist; if not, spawn them
-    let Ok((list_entity, children)) = item_list_q.get_single_mut() else { return };
+    let Ok(list_entity) = item_list_q.get_single() else { return };
 
-    let has_rows = children.iter().any(|c| item_row_q.get(*c).is_ok());
+    let has_rows = item_row_q.iter().next().is_some();
 
     if !has_rows {
-        // Spawn item rows
+        // Spawn item rows as children of the list container
         let f = font.0.clone();
         commands.entity(list_entity).with_children(|list| {
             for (i, entry) in state.items.iter().enumerate() {

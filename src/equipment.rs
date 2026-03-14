@@ -72,6 +72,7 @@ pub enum ItemTier {
 
 /// Static item data — stats, slot, set, tier, cost.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ItemData {
     pub id: ItemId,
     pub name: &'static str,
@@ -287,6 +288,7 @@ impl Equipment {
 // ---------------------------------------------------------------------------
 
 #[derive(Resource, Debug, Clone)]
+#[allow(dead_code)]
 pub struct PlayerStats {
     pub attack: i32,
     pub defense: i32,

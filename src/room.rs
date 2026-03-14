@@ -1154,12 +1154,105 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
 
 fn spawn_treasure_room(commands: &mut Commands, seed: u64) {
     let plat_color = Color::srgb(0.34, 0.30, 0.22);
+    let gold_accent = Color::srgb(0.85, 0.70, 0.20);
+    let gold_dark = Color::srgb(0.65, 0.50, 0.12);
 
     // Raised central altar – lower than before (row 2 instead of 3)
     spawn_platform(commands, 7, 16, 2, plat_color);
     // Side wings at row 4
     spawn_platform(commands, 3, 6,  4, plat_color);
     spawn_platform(commands, 17, 20, 4, plat_color);
+
+    // ── Golden carpet/runner on the altar ──
+    for col in 8..=15 {
+        let x = col as f32 * TILE_SIZE + TILE_SIZE / 2.0;
+        commands.spawn((
+            Sprite {
+                color: Color::srgba(0.75, 0.55, 0.10, 0.25),
+                custom_size: Some(Vec2::new(TILE_SIZE * 0.9, TILE_SIZE * 0.15)),
+                ..default()
+            },
+            Transform::from_xyz(x, 2.0 * TILE_SIZE + TILE_SIZE, Z_TILES + 0.08),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // ── Gold coin piles on the sides ──
+    let pile_positions = [
+        (TILE_SIZE * 4.0, 4.0 * TILE_SIZE + TILE_SIZE),
+        (TILE_SIZE * 5.5, 4.0 * TILE_SIZE + TILE_SIZE),
+        (TILE_SIZE * 18.0, 4.0 * TILE_SIZE + TILE_SIZE),
+        (TILE_SIZE * 19.5, 4.0 * TILE_SIZE + TILE_SIZE),
+    ];
+    for (px, py) in pile_positions {
+        // Pile base
+        commands.spawn((
+            Sprite { color: gold_dark, custom_size: Some(Vec2::new(14.0, 6.0)), ..default() },
+            Transform::from_xyz(px, py + 3.0, Z_PICKUPS - 0.2),
+            RoomEntity, PlayingEntity,
+        ));
+        // Individual coins (scattered on top)
+        commands.spawn((
+            Sprite { color: gold_accent, custom_size: Some(Vec2::new(5.0, 5.0)), ..default() },
+            Transform::from_xyz(px - 3.0, py + 7.0, Z_PICKUPS - 0.15),
+            RoomEntity, PlayingEntity,
+        ));
+        commands.spawn((
+            Sprite { color: gold_accent, custom_size: Some(Vec2::new(4.0, 4.0)), ..default() },
+            Transform::from_xyz(px + 4.0, py + 6.0, Z_PICKUPS - 0.15),
+            RoomEntity, PlayingEntity,
+        ));
+        commands.spawn((
+            Sprite { color: Color::srgb(0.95, 0.80, 0.25), custom_size: Some(Vec2::new(3.0, 3.0)), ..default() },
+            Transform::from_xyz(px + 1.0, py + 9.0, Z_PICKUPS - 0.1),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // ── Golden goblets on altar edges ──
+    for gx in [TILE_SIZE * 8.0, TILE_SIZE * 15.0] {
+        let gy = 2.0 * TILE_SIZE + TILE_SIZE;
+        // Cup base
+        commands.spawn((
+            Sprite { color: gold_dark, custom_size: Some(Vec2::new(8.0, 4.0)), ..default() },
+            Transform::from_xyz(gx, gy + 2.0, Z_PICKUPS - 0.1),
+            RoomEntity, PlayingEntity,
+        ));
+        // Cup body
+        commands.spawn((
+            Sprite { color: gold_accent, custom_size: Some(Vec2::new(6.0, 10.0)), ..default() },
+            Transform::from_xyz(gx, gy + 8.0, Z_PICKUPS - 0.08),
+            RoomEntity, PlayingEntity,
+        ));
+        // Cup rim
+        commands.spawn((
+            Sprite { color: Color::srgb(0.95, 0.82, 0.30), custom_size: Some(Vec2::new(9.0, 3.0)), ..default() },
+            Transform::from_xyz(gx, gy + 13.0, Z_PICKUPS - 0.05),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // ── Golden wall banners on left and right walls ──
+    for bx in [TILE_SIZE * 1.5, ROOM_W - TILE_SIZE * 1.5] {
+        // Banner pole
+        commands.spawn((
+            Sprite { color: Color::srgb(0.45, 0.35, 0.15), custom_size: Some(Vec2::new(3.0, 60.0)), ..default() },
+            Transform::from_xyz(bx, TILE_SIZE * 5.0, Z_TILES + 0.3),
+            RoomEntity, PlayingEntity,
+        ));
+        // Banner fabric
+        commands.spawn((
+            Sprite { color: Color::srgba(0.70, 0.50, 0.08, 0.7), custom_size: Some(Vec2::new(18.0, 50.0)), ..default() },
+            Transform::from_xyz(bx, TILE_SIZE * 4.5, Z_TILES + 0.28),
+            RoomEntity, PlayingEntity,
+        ));
+        // Gold emblem on banner
+        commands.spawn((
+            Sprite { color: Color::srgba(0.95, 0.80, 0.20, 0.8), custom_size: Some(Vec2::new(8.0, 8.0)), ..default() },
+            Transform::from_xyz(bx, TILE_SIZE * 5.0, Z_TILES + 0.32),
+            RoomEntity, PlayingEntity,
+        ));
+    }
 
     // Treasure chest
     let chest_x = ROOM_W / 2.0;
@@ -1214,13 +1307,45 @@ fn spawn_treasure_room(commands: &mut Commands, seed: u64) {
         Transform::from_xyz(chest_x, chest_y + 7.0, Z_PICKUPS + 0.22),
         RoomEntity, PlayingEntity,
     ));
-    // Gold glow halo (animated)
+    // Gold glow halo (animated, larger)
     commands.spawn((
-        Sprite { color: Color::srgba(1.0, 0.85, 0.20, 0.18), custom_size: Some(Vec2::new(60.0, 60.0)), ..default() },
+        Sprite { color: Color::srgba(1.0, 0.85, 0.20, 0.22), custom_size: Some(Vec2::new(80.0, 80.0)), ..default() },
         Transform::from_xyz(chest_x, chest_y + 8.0, Z_PICKUPS - 0.1),
         CrystalGlow { timer: 0.0, phase: 0.0 },
         RoomEntity, PlayingEntity,
     ));
+    // Secondary glow ring
+    commands.spawn((
+        Sprite { color: Color::srgba(0.95, 0.75, 0.15, 0.10), custom_size: Some(Vec2::new(120.0, 50.0)), ..default() },
+        Transform::from_xyz(chest_x, chest_y, Z_PICKUPS - 0.15),
+        CrystalGlow { timer: 0.5, phase: 0.5 },
+        RoomEntity, PlayingEntity,
+    ));
+
+    // ── Scattered gems near chest ──
+    let gem_colors = [
+        Color::srgb(0.9, 0.2, 0.2),   // ruby
+        Color::srgb(0.2, 0.7, 0.9),   // sapphire
+        Color::srgb(0.3, 0.9, 0.3),   // emerald
+    ];
+    let gem_positions = [
+        (chest_x - 30.0, chest_y - 8.0),
+        (chest_x + 35.0, chest_y - 6.0),
+        (chest_x - 20.0, chest_y - 10.0),
+    ];
+    for (i, (gx, gy)) in gem_positions.iter().enumerate() {
+        commands.spawn((
+            Sprite { color: gem_colors[i], custom_size: Some(Vec2::new(5.0, 5.0)), ..default() },
+            Transform::from_xyz(*gx, *gy, Z_PICKUPS - 0.05),
+            RoomEntity, PlayingEntity,
+        ));
+        // Gem sparkle
+        commands.spawn((
+            Sprite { color: Color::srgba(1.0, 1.0, 1.0, 0.3), custom_size: Some(Vec2::new(2.0, 2.0)), ..default() },
+            Transform::from_xyz(*gx + 1.5, *gy + 1.5, Z_PICKUPS - 0.03),
+            RoomEntity, PlayingEntity,
+        ));
+    }
 
     // Crystal decorations on corners
     spawn_crystal(commands, TILE_SIZE * 2.5,  TILE_SIZE,       0.0);
@@ -1228,11 +1353,13 @@ fn spawn_treasure_room(commands: &mut Commands, seed: u64) {
     spawn_crystal(commands, TILE_SIZE * 4.0,  TILE_SIZE * 5.0, 2.0);
     spawn_crystal(commands, TILE_SIZE * 19.5, TILE_SIZE * 5.0, 3.0);
 
-    // Torches on left and right walls only
+    // Torches on left and right walls
     spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 5.0);
     spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 5.0);
+    spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 8.0);
+    spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 8.0);
 
-    // Mushrooms on the side platforms
+    // Mushrooms on the side platforms (anchored to platform top)
     spawn_mushroom(commands, TILE_SIZE * 4.5, TILE_SIZE * 4.0 + TILE_SIZE);
     spawn_mushroom(commands, TILE_SIZE * 18.5, TILE_SIZE * 4.0 + TILE_SIZE);
 
@@ -1259,34 +1386,133 @@ fn spawn_treasure_room(commands: &mut Commands, seed: u64) {
 fn spawn_boss_room(commands: &mut Commands, floor: i32) {
     let plat_color = Color::srgb(0.32, 0.16, 0.08);
     let pillar_color = Color::srgb(0.28, 0.14, 0.07);
+    let arena_top = 4.0 * TILE_SIZE + TILE_SIZE;
+    let center_x = ROOM_W / 2.0;
 
     // Wide ground arena
     spawn_platform(commands, 3, 20, 4, plat_color);
-    // Two raised side platforms (was row 7, lowered to row 5 for reachability from row 4)
-    spawn_platform_worn(commands, 4,  7,  5, plat_color);
-    spawn_platform_worn(commands, 16, 19, 5, plat_color);
+    // Two raised side platforms
+    spawn_platform_worn(commands, 4,  7,  6, plat_color);
+    spawn_platform_worn(commands, 16, 19, 6, plat_color);
+    // Small stepping stones to side platforms
+    spawn_platform(commands, 3, 4, 5, plat_color);
+    spawn_platform(commands, 19, 20, 5, plat_color);
 
-    // Dramatic stone pillars
-    spawn_pillar(commands, 4,  5, 8, pillar_color);
-    spawn_pillar(commands, 19, 5, 8, pillar_color);
-    spawn_pillar(commands, 8,  2, 4, pillar_color);
-    spawn_pillar(commands, 15, 2, 4, pillar_color);
+    // ── Dramatic stone pillars with capitals ──
+    spawn_pillar(commands, 4,  5, 9, pillar_color);
+    spawn_pillar(commands, 19, 5, 9, pillar_color);
+    // Pillar capitals (wider tops)
+    for px in [4i32, 19] {
+        let cx = px as f32 * TILE_SIZE + TILE_SIZE / 2.0;
+        commands.spawn((
+            Sprite { color: Color::srgb(0.32, 0.18, 0.09), custom_size: Some(Vec2::new(TILE_SIZE * 1.4, TILE_SIZE * 0.6)), ..default() },
+            Transform::from_xyz(cx, 9.0 * TILE_SIZE + TILE_SIZE * 0.3, Z_TILES + 0.15),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+    // Inner shorter pillars
+    spawn_pillar(commands, 8,  2, 5, pillar_color);
+    spawn_pillar(commands, 15, 2, 5, pillar_color);
 
-    // Torches on walls only
+    // ── Torches on walls and pillars ──
     spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 6.0);
     spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 6.0);
     spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 9.0);
     spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 9.0);
+    // Pillar torches
+    spawn_wall_torch(commands, 4.0 * TILE_SIZE + TILE_SIZE / 2.0 + 8.0, TILE_SIZE * 7.5);
+    spawn_wall_torch(commands, 19.0 * TILE_SIZE + TILE_SIZE / 2.0 - 8.0, TILE_SIZE * 7.5);
 
-    // Lava pits flanking the arena (floor 2+)
+    // Lava pits flanking the arena
+    spawn_lava_strip(commands, 2, 3, 1);
+    spawn_lava_strip(commands, 20, 21, 1);
     if floor >= 2 {
-        spawn_lava_strip(commands, 2, 3, 1);
-        spawn_lava_strip(commands, 20, 21, 1);
+        spawn_lava_strip(commands, 2, 2, 2);
+        spawn_lava_strip(commands, 21, 21, 2);
     }
 
-    // Ominous red crystals
+    // ── Ominous red crystals (more on higher floors) ──
     spawn_boss_crystal(commands, TILE_SIZE * 2.0,  TILE_SIZE, 0.0);
     spawn_boss_crystal(commands, TILE_SIZE * 21.0, TILE_SIZE, 1.5);
+    if floor >= 2 {
+        spawn_boss_crystal(commands, TILE_SIZE * 5.0, TILE_SIZE * 6.0 + TILE_SIZE, 0.8);
+        spawn_boss_crystal(commands, TILE_SIZE * 18.0, TILE_SIZE * 6.0 + TILE_SIZE, 2.3);
+    }
+
+    // ── Arena ritual circle (dark rune pattern on floor) ──
+    // Outer line
+    commands.spawn((
+        Sprite { color: Color::srgba(0.6, 0.08, 0.05, 0.15), custom_size: Some(Vec2::new(TILE_SIZE * 12.0, TILE_SIZE * 0.15)), ..default() },
+        Transform::from_xyz(center_x, arena_top + 0.1, Z_TILES + 0.03),
+        RoomEntity, PlayingEntity,
+    ));
+    // Inner cross pattern
+    commands.spawn((
+        Sprite { color: Color::srgba(0.5, 0.06, 0.04, 0.12), custom_size: Some(Vec2::new(TILE_SIZE * 0.15, TILE_SIZE * 2.5)), ..default() },
+        Transform::from_xyz(center_x, arena_top - TILE_SIZE, Z_TILES + 0.04),
+        RoomEntity, PlayingEntity,
+    ));
+    commands.spawn((
+        Sprite { color: Color::srgba(0.5, 0.06, 0.04, 0.12), custom_size: Some(Vec2::new(TILE_SIZE * 6.0, TILE_SIZE * 0.15)), ..default() },
+        Transform::from_xyz(center_x, arena_top - TILE_SIZE, Z_TILES + 0.04),
+        RoomEntity, PlayingEntity,
+    ));
+
+    // ── Skull decorations near inner pillars ──
+    for sx in [TILE_SIZE * 8.5, TILE_SIZE * 14.5] {
+        commands.spawn((
+            Sprite { color: Color::srgb(0.75, 0.70, 0.60), custom_size: Some(Vec2::new(8.0, 7.0)), ..default() },
+            Transform::from_xyz(sx, arena_top + 4.0, Z_TILES + 0.12),
+            RoomEntity, PlayingEntity,
+        ));
+        commands.spawn((
+            Sprite { color: Color::srgb(0.15, 0.08, 0.05), custom_size: Some(Vec2::new(2.5, 2.5)), ..default() },
+            Transform::from_xyz(sx - 2.0, arena_top + 5.0, Z_TILES + 0.14),
+            RoomEntity, PlayingEntity,
+        ));
+        commands.spawn((
+            Sprite { color: Color::srgb(0.15, 0.08, 0.05), custom_size: Some(Vec2::new(2.5, 2.5)), ..default() },
+            Transform::from_xyz(sx + 2.0, arena_top + 5.0, Z_TILES + 0.14),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // ── Dark crimson banners on walls ──
+    for bx in [TILE_SIZE * 1.5, ROOM_W - TILE_SIZE * 1.5] {
+        commands.spawn((
+            Sprite { color: Color::srgb(0.35, 0.18, 0.08), custom_size: Some(Vec2::new(3.0, 70.0)), ..default() },
+            Transform::from_xyz(bx, TILE_SIZE * 7.0, Z_TILES + 0.3),
+            RoomEntity, PlayingEntity,
+        ));
+        commands.spawn((
+            Sprite { color: Color::srgba(0.45, 0.08, 0.05, 0.7), custom_size: Some(Vec2::new(20.0, 60.0)), ..default() },
+            Transform::from_xyz(bx, TILE_SIZE * 6.5, Z_TILES + 0.28),
+            RoomEntity, PlayingEntity,
+        ));
+        commands.spawn((
+            Sprite { color: Color::srgba(0.8, 0.15, 0.10, 0.8), custom_size: Some(Vec2::new(10.0, 10.0)), ..default() },
+            Transform::from_xyz(bx, TILE_SIZE * 7.0, Z_TILES + 0.32),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // ── Chains hanging from ceiling ──
+    for chain_col in [6i32, 10, 13, 17] {
+        let cx = chain_col as f32 * TILE_SIZE + TILE_SIZE / 2.0;
+        let chain_len = 3 + (chain_col % 3) as i32;
+        for link in 0..chain_len {
+            let ly = ROOM_H - TILE_SIZE - (link as f32 * 12.0);
+            commands.spawn((
+                Sprite {
+                    color: Color::srgb(0.35, 0.30, 0.22),
+                    custom_size: Some(Vec2::new(4.0, 10.0)),
+                    ..default()
+                },
+                Transform::from_xyz(cx, ly, Z_TILES + 0.2),
+                RoomEntity, PlayingEntity,
+            ));
+        }
+    }
 
     // Crack overlays on arena
     for col in [4i32, 7, 10, 13, 16, 19] {
@@ -1303,7 +1529,7 @@ fn spawn_boss_room(commands: &mut Commands, floor: i32) {
         ));
     }
 
-    // Arena border: darkened edge tiles along bottom of main platform
+    // Arena border: darkened edge tiles
     for col in [3i32, 20] {
         let x = col as f32 * TILE_SIZE + TILE_SIZE / 2.0;
         commands.spawn((
@@ -1317,14 +1543,25 @@ fn spawn_boss_room(commands: &mut Commands, floor: i32) {
         ));
     }
 
-    // Ominous floor glow in center of arena
+    // Ominous floor glow (pulsing)
     commands.spawn((
         Sprite {
-            color: Color::srgba(0.7, 0.1, 0.05, 0.08),
-            custom_size: Some(Vec2::new(TILE_SIZE * 10.0, TILE_SIZE * 2.0)),
+            color: Color::srgba(0.7, 0.1, 0.05, 0.10),
+            custom_size: Some(Vec2::new(TILE_SIZE * 12.0, TILE_SIZE * 2.5)),
             ..default()
         },
-        Transform::from_xyz(ROOM_W / 2.0, TILE_SIZE * 4.5, Z_TILES + 0.02),
+        Transform::from_xyz(center_x, TILE_SIZE * 4.5, Z_TILES + 0.02),
+        CrystalGlow { timer: 0.0, phase: 0.0 },
+        RoomEntity, PlayingEntity,
+    ));
+    commands.spawn((
+        Sprite {
+            color: Color::srgba(0.8, 0.05, 0.02, 0.06),
+            custom_size: Some(Vec2::new(TILE_SIZE * 8.0, TILE_SIZE * 1.5)),
+            ..default()
+        },
+        Transform::from_xyz(center_x, TILE_SIZE * 4.5, Z_TILES + 0.025),
+        CrystalGlow { timer: 1.5, phase: 1.5 },
         RoomEntity, PlayingEntity,
     ));
 }

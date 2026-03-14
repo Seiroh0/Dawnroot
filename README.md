@@ -82,6 +82,8 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - **16 combat room templates** -- staircase, arena, pit bridges, towers, zigzag, floating islands, walkways, tunnel, lava gauntlet, swamp marsh, elevator shaft, split path, pillared hall, crumbling ruins, the pit, alternating hazards
 - **Visual decorations** -- flickering torches, pulsing crystals, stalactites, mushrooms, moss & cracks
 - **3-part platform visuals** -- beveled edge caps, surface highlights, bottom shadows
+- **Treasure room** -- gold coin piles, goblets, gemstones, golden banners, animated glow
+- **Boss arena** -- ritual circle, skull decorations, crimson banners, chains, pulsing floor glow, pillar capitals
 - Unique color palette per room type
 
 </td>
