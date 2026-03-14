@@ -43,7 +43,9 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 | Ice Shards | `2` |
 | Lightning | `3` |
 | Shield | `4` |
-| Buy Item (Shop) | `E` |
+| Open Shop / Buy | `E` / `Enter` |
+| Navigate Shop | `Up` / `Down` |
+| Close Shop | `Escape` |
 
 ---
 
@@ -87,6 +89,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 
 ### Progression & Loot
 - **Gold, Health, Mana** drops with magnet pickup
+- **Cuphead-style shop UI** -- stone merchant NPC, overlay panel with item list, keyboard/gamepad navigation
 - **Tiered shop** -- 30+ items across 3 tiers, milestone-gated unlocks
 - **Equipment system** -- 20 items across 4 slots (Weapon, Armor, Relic, Charm)
 - **3 item sets** (Fire, Ice, Storm) with 2-piece and 3-piece bonuses
@@ -131,7 +134,7 @@ src/
  |- camera.rs         Smooth follow camera + screen shake
  |- animation.rs      Generic frame-based animation support
  |- loot.rs           Drops, magnet pickup, treasure chest
- |- shop.rs           Tiered shop with milestone gating, equipment purchases
+ |- shop.rs           Cuphead-style shop UI, stone merchant NPC, overlay panel
  |- equipment.rs      20 items, 4 slots, 3 sets, stat calculation
  |- dialogue.rs       NPC dialogue with typewriter effect
  |- hazards.rs        Lava, water, moving platforms
@@ -189,7 +192,7 @@ cargo run
 - [x] Stat upgrades in shop (Attack, Defense, Speed)
 - [x] Purchase feedback (floating text)
 - [x] Windows executable icon
-- [ ] Shop UI overhaul (Cuphead-style NPC merchant)
+- [x] Shop UI overhaul (Cuphead-style stone merchant NPC with overlay panel)
 
 ---
 

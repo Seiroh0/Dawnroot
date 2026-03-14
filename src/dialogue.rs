@@ -93,14 +93,6 @@ fn start_room_npc(floor: i32) -> (&'static str, Vec<String>) {
     }
 }
 
-fn shop_npc_lines() -> (&'static str, Vec<String>) {
-    ("Merchant", vec![
-        "Welcome, traveler! Take a look at my wares.".into(),
-        "Walk near an item and press E to purchase.".into(),
-        "Gold well spent is the difference between life and death down here.".into(),
-    ])
-}
-
 fn boss_taunt(floor: i32) -> (&'static str, Vec<String>) {
     match floor {
         1 => ("Guardian of the Shallows", vec![
@@ -143,8 +135,7 @@ fn spawn_npcs_in_rooms(
                 spawn_npc(&mut commands, name, lines, 200.0, 120.0);
             }
             RoomType::Shop => {
-                let (name, lines) = shop_npc_lines();
-                spawn_npc(&mut commands, name, lines, 80.0, 120.0);
+                // Merchant NPC is now spawned by shop.rs (stone merchant)
             }
             RoomType::Boss => {
                 let (name, lines) = boss_taunt(room_state.floor);

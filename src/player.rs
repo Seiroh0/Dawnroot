@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, MetaProgression, LoadedSave, equipment::PlayerStats};
+use crate::{constants::*, GameState, PlayingEntity, MetaProgression, LoadedSave, equipment::PlayerStats, shop::ShopUiState};
 
 pub struct PlayerPlugin;
 
@@ -187,8 +187,11 @@ fn player_input(
     mut ev_dashed: EventWriter<PlayerDashed>,
     time: Res<Time>,
     stats: Res<PlayerStats>,
+    shop_state: Option<Res<ShopUiState>>,
 ) {
     let Ok((mut player, tf)) = query.get_single_mut() else { return };
+    // Block player movement/actions while shop overlay is open
+    if shop_state.map_or(false, |s| s.active) { return; }
     let dt = time.delta_secs();
     let gp = gamepads.iter().next();
 
