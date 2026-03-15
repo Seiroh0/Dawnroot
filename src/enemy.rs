@@ -16,12 +16,24 @@ impl Plugin for EnemyPlugin {
                     flying_enemy_ai,
                     turret_enemy_ai,
                     charger_enemy_ai,
+                    mage_enemy_ai,
+                    slime_enemy_ai,
+                    ghost_enemy_ai,
                     enemy_projectile_movement,
                     count_alive_enemies,
+                )
+                    .run_if(in_state(GameState::Playing)),
+            )
+            .add_systems(
+                Update,
+                (
                     animate_ground_enemies,
                     animate_flying_enemies,
                     animate_charger_enemies,
                     animate_turret_eye,
+                    animate_mage_staff,
+                    animate_ghost_wisps,
+                    animate_slime_enemies,
                     update_enemy_health_bars,
                     apply_elite_to_new_enemies,
                     apply_elite_buffs,
@@ -137,6 +149,53 @@ pub struct BoarHorn {
 #[derive(Component)]
 pub struct TurretEye;
 
+// --- New enemy types (Sprint 3) ---
+
+/// Skeleton Mage — teleports and shoots fireballs at the player.
+#[derive(Component)]
+pub struct MageEnemy {
+    pub teleport_cooldown: f32,
+    pub cast_cooldown: f32,
+    pub is_invisible: bool,
+    pub invis_timer: f32,
+}
+
+/// Slime — splits into 2 smaller slimes on death.
+#[derive(Component)]
+pub struct SlimeEnemy {
+    pub size: SlimeSize,
+    pub hop_timer: f32,
+    pub vy: f32,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SlimeSize {
+    Large,
+    Small,
+}
+
+/// Ghost — phases in and out of visibility/invulnerability.
+#[derive(Component)]
+pub struct GhostEnemy {
+    pub phase_timer: f32,
+    pub phase_duration: f32,
+    pub is_phased: bool,
+    pub speed: f32,
+    pub direction: f32,
+}
+
+/// Marker: this enemy is currently intangible (Ghost phase / Mage teleport).
+#[derive(Component)]
+pub struct Intangible;
+
+/// Child glow sprite for mage staff.
+#[derive(Component)]
+pub struct MageStaffGlow;
+
+/// Child sprite for ghost wisp trail.
+#[derive(Component)]
+pub struct GhostWisp;
+
 /// Marker component for boss entities (enables phase behavior).
 #[derive(Component)]
 pub struct BossEnemy;
@@ -227,16 +286,22 @@ fn spawn_room_enemies(
     let enemy_count = 3 + (floor as usize).min(4);
     run.enemies_alive = enemy_count as i32;
 
+    // Floor 1-2: original 4 types. Floor 3+: all 7 types including new enemies.
+    let type_count: u64 = if floor >= 3 { 7 } else { 4 };
+
     for i in 0..enemy_count {
         let x = 200.0 + (i as f32) * ((ROOM_W - 300.0) / enemy_count as f32);
         let y = 120.0 + ((seed.wrapping_add(i as u64) % 3) as f32) * 80.0;
-        let enemy_type = ((seed.wrapping_add(i as u64)) % 4) as i32;
+        let enemy_type = ((seed.wrapping_add(i as u64)) % type_count) as i32;
 
         match enemy_type {
             0 => spawn_ground_enemy(&mut commands, x, y, floor),
             1 => spawn_flying_enemy(&mut commands, x, y, floor),
             2 => spawn_turret_enemy(&mut commands, x, y, floor),
-            _ => spawn_charger_enemy(&mut commands, x, y, floor),
+            3 => spawn_charger_enemy(&mut commands, x, y, floor),
+            4 => spawn_mage_enemy(&mut commands, x, y, floor),
+            5 => spawn_slime_enemy(&mut commands, x, y, floor, SlimeSize::Large),
+            _ => spawn_ghost_enemy(&mut commands, x, y, floor),
         }
     }
 
@@ -1063,6 +1128,145 @@ fn spawn_charger_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
 ///   Spike inner R       8x4   offset ( 8,  32)     inner spike
 ///   Spike outer R      10x5   offset ( 14, 30)     near-black spike
 fn spawn_boss(commands: &mut Commands, floor: i32) {
+    match (floor - 1) % 4 {
+        1 => spawn_boss_mushroom(commands, floor),
+        2 => spawn_boss_lava(commands, floor),
+        3 => spawn_boss_root(commands, floor),
+        _ => spawn_boss_warlord(commands, floor),
+    }
+}
+
+/// Floor 2: Mushroom Titan — massive fungal beast, slower but tanky, uses ChargerEnemy AI.
+fn spawn_boss_mushroom(commands: &mut Commands, floor: i32) {
+    let hp = 14 + floor * 4;
+    let cap_color = Color::srgb(0.55, 0.22, 0.18);
+    let cap_spots = Color::srgb(0.85, 0.80, 0.65);
+    let stem_color = Color::srgb(0.75, 0.70, 0.58);
+    let stem_dark = Color::srgb(0.55, 0.50, 0.40);
+    let eye_color = Color::srgb(0.9, 0.95, 0.1);
+    let mouth_color = Color::srgb(0.20, 0.08, 0.05);
+    let aura_color = Color::srgba(0.2, 0.5, 0.1, 0.25);
+
+    commands.spawn((
+        Sprite { color: Color::NONE, custom_size: Some(Vec2::new(48.0, 48.0)), ..default() },
+        Transform::from_xyz(ROOM_W / 2.0 + 100.0, 140.0, Z_ENEMIES),
+        Enemy { health: hp, max_health: hp, contact_damage: 2, score_reward: 600 + floor * 120, gold_drop: 60 + floor * 25 },
+        GroundEnemy { speed: 70.0 + floor as f32 * 8.0, direction: -1.0, vy: 0.0, detect_range: 350.0, leap_cooldown: 2.0, is_leaping: false },
+        BossEnemy,
+        RoomEntity, PlayingEntity,
+    )).with_children(|parent| {
+        parent.spawn((Sprite { color: aura_color, custom_size: Some(Vec2::new(56.0, 56.0)), ..default() }, Transform::from_xyz(0.0, 0.0, 0.0)));
+        // Thick stem body
+        parent.spawn((Sprite { color: stem_color, custom_size: Some(Vec2::new(30.0, 28.0)), ..default() }, Transform::from_xyz(0.0, -6.0, 0.1)));
+        parent.spawn((Sprite { color: stem_dark, custom_size: Some(Vec2::new(26.0, 8.0)), ..default() }, Transform::from_xyz(0.0, -16.0, 0.12)));
+        // Mushroom cap
+        parent.spawn((Sprite { color: cap_color, custom_size: Some(Vec2::new(44.0, 22.0)), ..default() }, Transform::from_xyz(0.0, 14.0, 0.14)));
+        parent.spawn((Sprite { color: cap_color, custom_size: Some(Vec2::new(36.0, 16.0)), ..default() }, Transform::from_xyz(0.0, 24.0, 0.14)));
+        // Cap spots
+        for (dx, dy) in [(-12.0, 18.0), (8.0, 20.0), (-4.0, 26.0), (14.0, 14.0)] {
+            parent.spawn((Sprite { color: cap_spots, custom_size: Some(Vec2::new(6.0, 6.0)), ..default() }, Transform::from_xyz(dx, dy, 0.16)));
+        }
+        // Eyes
+        parent.spawn((Sprite { color: eye_color, custom_size: Some(Vec2::new(5.0, 5.0)), ..default() }, Transform::from_xyz(-8.0, 6.0, 0.18)));
+        parent.spawn((Sprite { color: eye_color, custom_size: Some(Vec2::new(5.0, 5.0)), ..default() }, Transform::from_xyz(8.0, 6.0, 0.18)));
+        // Mouth
+        parent.spawn((Sprite { color: mouth_color, custom_size: Some(Vec2::new(10.0, 4.0)), ..default() }, Transform::from_xyz(0.0, 0.0, 0.18)));
+    });
+}
+
+/// Floor 3: Lava Wyrm — serpentine fire beast, uses ChargerEnemy AI for charges.
+fn spawn_boss_lava(commands: &mut Commands, floor: i32) {
+    let hp = 16 + floor * 4;
+    let body_color = Color::srgb(0.70, 0.20, 0.05);
+    let body_hi = Color::srgb(0.90, 0.40, 0.10);
+    let belly_color = Color::srgb(0.95, 0.60, 0.15);
+    let eye_color = Color::srgb(1.0, 0.9, 0.2);
+    let horn_color = Color::srgb(0.35, 0.10, 0.05);
+    let flame_color = Color::srgba(1.0, 0.5, 0.1, 0.6);
+
+    commands.spawn((
+        Sprite { color: Color::NONE, custom_size: Some(Vec2::new(48.0, 40.0)), ..default() },
+        Transform::from_xyz(ROOM_W / 2.0 + 100.0, 140.0, Z_ENEMIES),
+        Enemy { health: hp, max_health: hp, contact_damage: 3, score_reward: 700 + floor * 130, gold_drop: 70 + floor * 25 },
+        ChargerEnemy { speed: 280.0 + floor as f32 * 15.0, detect_range: 500.0, charging: false, charge_dir: -1.0, cooldown: 0.0, did_stomp: false },
+        BossEnemy,
+        RoomEntity, PlayingEntity,
+    )).with_children(|parent| {
+        // Flame aura
+        parent.spawn((Sprite { color: flame_color, custom_size: Some(Vec2::new(52.0, 44.0)), ..default() }, Transform::from_xyz(0.0, 0.0, 0.0)));
+        // Body
+        parent.spawn((Sprite { color: body_color, custom_size: Some(Vec2::new(40.0, 24.0)), ..default() }, Transform::from_xyz(0.0, 0.0, 0.1)));
+        parent.spawn((Sprite { color: body_hi, custom_size: Some(Vec2::new(16.0, 6.0)), ..default() }, Transform::from_xyz(-6.0, 8.0, 0.14)));
+        // Belly
+        parent.spawn((Sprite { color: belly_color, custom_size: Some(Vec2::new(30.0, 8.0)), ..default() }, Transform::from_xyz(0.0, -6.0, 0.14)));
+        // Head
+        parent.spawn((Sprite { color: body_color, custom_size: Some(Vec2::new(22.0, 18.0)), ..default() }, Transform::from_xyz(0.0, 14.0, 0.12)));
+        // Horns
+        parent.spawn((Sprite { color: horn_color, custom_size: Some(Vec2::new(4.0, 10.0)), ..default() }, Transform::from_xyz(-8.0, 24.0, 0.16)));
+        parent.spawn((Sprite { color: horn_color, custom_size: Some(Vec2::new(4.0, 10.0)), ..default() }, Transform::from_xyz(8.0, 24.0, 0.16)));
+        // Eyes
+        parent.spawn((Sprite { color: eye_color, custom_size: Some(Vec2::new(5.0, 4.0)), ..default() }, Transform::from_xyz(-5.0, 16.0, 0.18)));
+        parent.spawn((Sprite { color: eye_color, custom_size: Some(Vec2::new(5.0, 4.0)), ..default() }, Transform::from_xyz(5.0, 16.0, 0.18)));
+        // Tail segments
+        for i in 0..3 {
+            let dx = 18.0 + i as f32 * 10.0;
+            let sz = 14.0 - i as f32 * 3.0;
+            parent.spawn((Sprite { color: body_color, custom_size: Some(Vec2::new(sz, sz * 0.7)), ..default() }, Transform::from_xyz(dx, -2.0 - i as f32 * 2.0, 0.08 - i as f32 * 0.01)));
+        }
+    });
+}
+
+/// Floor 4: Root Ancient — massive tree creature, uses GroundEnemy AI.
+fn spawn_boss_root(commands: &mut Commands, floor: i32) {
+    let hp = 20 + floor * 5;
+    let bark_color = Color::srgb(0.30, 0.22, 0.12);
+    let bark_hi = Color::srgb(0.42, 0.34, 0.20);
+    let bark_dark = Color::srgb(0.18, 0.12, 0.06);
+    let leaf_color = Color::srgb(0.20, 0.50, 0.15);
+    let eye_color = Color::srgb(0.6, 1.0, 0.3);
+    let eye_glow = Color::srgba(0.3, 0.8, 0.1, 0.5);
+    let root_color = Color::srgb(0.25, 0.18, 0.10);
+    let moss_color = Color::srgba(0.3, 0.5, 0.2, 0.4);
+
+    commands.spawn((
+        Sprite { color: Color::NONE, custom_size: Some(Vec2::new(52.0, 52.0)), ..default() },
+        Transform::from_xyz(ROOM_W / 2.0 + 100.0, 150.0, Z_ENEMIES),
+        Enemy { health: hp, max_health: hp, contact_damage: 2, score_reward: 800 + floor * 150, gold_drop: 80 + floor * 30 },
+        GroundEnemy { speed: 60.0 + floor as f32 * 6.0, direction: -1.0, vy: 0.0, detect_range: 400.0, leap_cooldown: 3.0, is_leaping: false },
+        BossEnemy,
+        RoomEntity, PlayingEntity,
+    )).with_children(|parent| {
+        // Moss aura
+        parent.spawn((Sprite { color: moss_color, custom_size: Some(Vec2::new(58.0, 58.0)), ..default() }, Transform::from_xyz(0.0, 0.0, 0.0)));
+        // Trunk body
+        parent.spawn((Sprite { color: bark_color, custom_size: Some(Vec2::new(32.0, 36.0)), ..default() }, Transform::from_xyz(0.0, -2.0, 0.1)));
+        parent.spawn((Sprite { color: bark_hi, custom_size: Some(Vec2::new(12.0, 8.0)), ..default() }, Transform::from_xyz(-6.0, 8.0, 0.14)));
+        parent.spawn((Sprite { color: bark_dark, custom_size: Some(Vec2::new(28.0, 8.0)), ..default() }, Transform::from_xyz(0.0, -18.0, 0.12)));
+        // Bark texture lines
+        for dx in [-8.0_f32, 0.0, 8.0] {
+            parent.spawn((Sprite { color: bark_dark, custom_size: Some(Vec2::new(2.0, 20.0)), ..default() }, Transform::from_xyz(dx, 0.0, 0.13)));
+        }
+        // Head / crown of leaves
+        parent.spawn((Sprite { color: bark_color, custom_size: Some(Vec2::new(26.0, 20.0)), ..default() }, Transform::from_xyz(0.0, 18.0, 0.1)));
+        parent.spawn((Sprite { color: leaf_color, custom_size: Some(Vec2::new(36.0, 16.0)), ..default() }, Transform::from_xyz(0.0, 28.0, 0.15)));
+        parent.spawn((Sprite { color: leaf_color, custom_size: Some(Vec2::new(28.0, 10.0)), ..default() }, Transform::from_xyz(0.0, 36.0, 0.15)));
+        // Eyes (glowing green)
+        parent.spawn((Sprite { color: eye_glow, custom_size: Some(Vec2::new(8.0, 8.0)), ..default() }, Transform::from_xyz(-6.0, 18.0, 0.17)));
+        parent.spawn((Sprite { color: eye_color, custom_size: Some(Vec2::new(5.0, 5.0)), ..default() }, Transform::from_xyz(-6.0, 18.0, 0.19)));
+        parent.spawn((Sprite { color: eye_glow, custom_size: Some(Vec2::new(8.0, 8.0)), ..default() }, Transform::from_xyz(6.0, 18.0, 0.17)));
+        parent.spawn((Sprite { color: eye_color, custom_size: Some(Vec2::new(5.0, 5.0)), ..default() }, Transform::from_xyz(6.0, 18.0, 0.19)));
+        // Root arms
+        parent.spawn((Sprite { color: root_color, custom_size: Some(Vec2::new(16.0, 8.0)), ..default() }, Transform::from_xyz(-22.0, 2.0, 0.08)));
+        parent.spawn((Sprite { color: root_color, custom_size: Some(Vec2::new(8.0, 12.0)), ..default() }, Transform::from_xyz(-30.0, -4.0, 0.07)));
+        parent.spawn((Sprite { color: root_color, custom_size: Some(Vec2::new(16.0, 8.0)), ..default() }, Transform::from_xyz(22.0, 2.0, 0.08)));
+        parent.spawn((Sprite { color: root_color, custom_size: Some(Vec2::new(8.0, 12.0)), ..default() }, Transform::from_xyz(30.0, -4.0, 0.07)));
+        // Root base / feet
+        parent.spawn((Sprite { color: root_color, custom_size: Some(Vec2::new(40.0, 6.0)), ..default() }, Transform::from_xyz(0.0, -22.0, 0.06)));
+    });
+}
+
+/// Floor 1 (default): Crimson Warlord — the original boss.
+fn spawn_boss_warlord(commands: &mut Commands, floor: i32) {
     let hp = 10 + floor * 3;
 
     let body_color      = Color::srgb(0.45, 0.05, 0.08);
@@ -1341,7 +1545,311 @@ fn spawn_boss(commands: &mut Commands, floor: i32) {
 }
 
 // ---------------------------------------------------------------------------
-// AI systems (unchanged logic)
+// New enemy spawn helpers (Sprint 3)
+// ---------------------------------------------------------------------------
+
+/// Skeleton Mage — hooded skull with glowing staff
+pub fn spawn_mage_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
+    let robe_color = Color::srgb(0.20, 0.10, 0.30);
+    let robe_hi = Color::srgb(0.30, 0.18, 0.42);
+    let hood_color = Color::srgb(0.15, 0.08, 0.25);
+    let skull_color = Color::srgb(0.85, 0.82, 0.75);
+    let eye_color = Color::srgb(0.4, 1.0, 0.5);
+    let eye_glow = Color::srgba(0.2, 0.8, 0.3, 0.5);
+    let staff_color = Color::srgb(0.35, 0.25, 0.15);
+    let orb_color = Color::srgb(0.5, 0.2, 0.9);
+    let orb_glow = Color::srgba(0.4, 0.1, 0.8, 0.4);
+    let bone_color = Color::srgb(0.80, 0.75, 0.65);
+
+    commands.spawn((
+        Sprite {
+            color: Color::NONE,
+            custom_size: Some(Vec2::new(22.0, 22.0)),
+            ..default()
+        },
+        Transform::from_xyz(x, y, Z_ENEMIES),
+        Enemy {
+            health: 3 + floor.min(4),
+            max_health: 3 + floor.min(4),
+            contact_damage: 1,
+            score_reward: 150,
+            gold_drop: 15 + floor * 4,
+        },
+        MageEnemy {
+            teleport_cooldown: 4.0,
+            cast_cooldown: 2.0,
+            is_invisible: false,
+            invis_timer: 0.0,
+        },
+        RoomEntity,
+        PlayingEntity,
+    )).with_children(|parent| {
+        // Robe body
+        parent.spawn((
+            Sprite { color: robe_color, custom_size: Some(Vec2::new(18.0, 16.0)), ..default() },
+            Transform::from_xyz(0.0, -2.0, 0.1),
+        ));
+        // Robe highlight
+        parent.spawn((
+            Sprite { color: robe_hi, custom_size: Some(Vec2::new(8.0, 4.0)), ..default() },
+            Transform::from_xyz(-3.0, 4.0, 0.15),
+        ));
+        // Hood
+        parent.spawn((
+            Sprite { color: hood_color, custom_size: Some(Vec2::new(16.0, 12.0)), ..default() },
+            Transform::from_xyz(0.0, 12.0, 0.1),
+        ));
+        // Skull face
+        parent.spawn((
+            Sprite { color: skull_color, custom_size: Some(Vec2::new(12.0, 10.0)), ..default() },
+            Transform::from_xyz(0.0, 12.0, 0.12),
+        ));
+        // Eye glow left
+        parent.spawn((
+            Sprite { color: eye_glow, custom_size: Some(Vec2::new(5.0, 5.0)), ..default() },
+            Transform::from_xyz(-3.0, 13.0, 0.14),
+        ));
+        // Eye left
+        parent.spawn((
+            Sprite { color: eye_color, custom_size: Some(Vec2::new(3.0, 3.0)), ..default() },
+            Transform::from_xyz(-3.0, 13.0, 0.16),
+        ));
+        // Eye glow right
+        parent.spawn((
+            Sprite { color: eye_glow, custom_size: Some(Vec2::new(5.0, 5.0)), ..default() },
+            Transform::from_xyz(3.0, 13.0, 0.14),
+        ));
+        // Eye right
+        parent.spawn((
+            Sprite { color: eye_color, custom_size: Some(Vec2::new(3.0, 3.0)), ..default() },
+            Transform::from_xyz(3.0, 13.0, 0.16),
+        ));
+        // Jaw / teeth
+        parent.spawn((
+            Sprite { color: bone_color, custom_size: Some(Vec2::new(8.0, 2.0)), ..default() },
+            Transform::from_xyz(0.0, 8.0, 0.14),
+        ));
+        // Staff
+        parent.spawn((
+            Sprite { color: staff_color, custom_size: Some(Vec2::new(3.0, 24.0)), ..default() },
+            Transform::from_xyz(12.0, 4.0, 0.08),
+        ));
+        // Staff orb glow
+        parent.spawn((
+            Sprite { color: orb_glow, custom_size: Some(Vec2::new(12.0, 12.0)), ..default() },
+            Transform::from_xyz(12.0, 18.0, 0.09),
+            MageStaffGlow,
+        ));
+        // Staff orb
+        parent.spawn((
+            Sprite { color: orb_color, custom_size: Some(Vec2::new(6.0, 6.0)), ..default() },
+            Transform::from_xyz(12.0, 18.0, 0.1),
+        ));
+        // Robe bottom / skirt
+        parent.spawn((
+            Sprite { color: robe_color, custom_size: Some(Vec2::new(22.0, 6.0)), ..default() },
+            Transform::from_xyz(0.0, -12.0, 0.08),
+        ));
+        // Bony hand left
+        parent.spawn((
+            Sprite { color: bone_color, custom_size: Some(Vec2::new(4.0, 3.0)), ..default() },
+            Transform::from_xyz(-8.0, 0.0, 0.16),
+        ));
+    });
+}
+
+/// Slime — bouncy gelatinous blob
+pub fn spawn_slime_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32, size: SlimeSize) {
+    let (sz, hp, dmg, score, gold) = match size {
+        SlimeSize::Large => (20.0, 4 + floor.min(3), 1, 100, 12 + floor * 3),
+        SlimeSize::Small => (12.0, 1 + floor.min(2), 1, 40, 5 + floor),
+    };
+
+    let body_color = Color::srgb(0.30, 0.75, 0.25);
+    let body_hi = Color::srgba(0.5, 0.95, 0.4, 0.7);
+    let body_dark = Color::srgb(0.18, 0.55, 0.15);
+    let eye_white = Color::srgb(0.95, 0.95, 0.90);
+    let pupil_color = Color::srgb(0.05, 0.08, 0.05);
+    let mouth_color = Color::srgb(0.12, 0.40, 0.10);
+    let bubble_color = Color::srgba(0.7, 1.0, 0.7, 0.3);
+
+    commands.spawn((
+        Sprite {
+            color: Color::NONE,
+            custom_size: Some(Vec2::new(sz, sz)),
+            ..default()
+        },
+        Transform::from_xyz(x, y, Z_ENEMIES),
+        Enemy {
+            health: hp,
+            max_health: hp,
+            contact_damage: dmg,
+            score_reward: score,
+            gold_drop: gold,
+        },
+        SlimeEnemy {
+            size,
+            hop_timer: 0.0,
+            vy: 0.0,
+        },
+        RoomEntity,
+        PlayingEntity,
+    )).with_children(|parent| {
+        let s = if size == SlimeSize::Large { 1.0 } else { 0.6 };
+        // Body blob
+        parent.spawn((
+            Sprite { color: body_color, custom_size: Some(Vec2::new(20.0 * s, 16.0 * s)), ..default() },
+            Transform::from_xyz(0.0, 0.0, 0.1),
+        ));
+        // Body top dome (rounder shape)
+        parent.spawn((
+            Sprite { color: body_color, custom_size: Some(Vec2::new(16.0 * s, 10.0 * s)), ..default() },
+            Transform::from_xyz(0.0, 6.0 * s, 0.12),
+        ));
+        // Highlight shimmer
+        parent.spawn((
+            Sprite { color: body_hi, custom_size: Some(Vec2::new(6.0 * s, 4.0 * s)), ..default() },
+            Transform::from_xyz(-3.0 * s, 6.0 * s, 0.16),
+        ));
+        // Bottom shadow
+        parent.spawn((
+            Sprite { color: body_dark, custom_size: Some(Vec2::new(18.0 * s, 4.0 * s)), ..default() },
+            Transform::from_xyz(0.0, -6.0 * s, 0.14),
+        ));
+        // Eye left white
+        parent.spawn((
+            Sprite { color: eye_white, custom_size: Some(Vec2::new(5.0 * s, 5.0 * s)), ..default() },
+            Transform::from_xyz(-4.0 * s, 4.0 * s, 0.18),
+        ));
+        // Eye left pupil
+        parent.spawn((
+            Sprite { color: pupil_color, custom_size: Some(Vec2::new(2.0 * s, 3.0 * s)), ..default() },
+            Transform::from_xyz(-3.0 * s, 3.5 * s, 0.2),
+        ));
+        // Eye right white
+        parent.spawn((
+            Sprite { color: eye_white, custom_size: Some(Vec2::new(5.0 * s, 5.0 * s)), ..default() },
+            Transform::from_xyz(4.0 * s, 4.0 * s, 0.18),
+        ));
+        // Eye right pupil
+        parent.spawn((
+            Sprite { color: pupil_color, custom_size: Some(Vec2::new(2.0 * s, 3.0 * s)), ..default() },
+            Transform::from_xyz(5.0 * s, 3.5 * s, 0.2),
+        ));
+        // Mouth (happy/derpy line)
+        parent.spawn((
+            Sprite { color: mouth_color, custom_size: Some(Vec2::new(6.0 * s, 2.0 * s)), ..default() },
+            Transform::from_xyz(0.0, 0.0, 0.2),
+        ));
+        // Internal bubble detail
+        parent.spawn((
+            Sprite { color: bubble_color, custom_size: Some(Vec2::new(3.0 * s, 3.0 * s)), ..default() },
+            Transform::from_xyz(5.0 * s, -2.0 * s, 0.15),
+        ));
+        parent.spawn((
+            Sprite { color: bubble_color, custom_size: Some(Vec2::new(2.0 * s, 2.0 * s)), ..default() },
+            Transform::from_xyz(-6.0 * s, 1.0 * s, 0.15),
+        ));
+    });
+}
+
+/// Ghost — ethereal floating specter
+pub fn spawn_ghost_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
+    let body_color = Color::srgba(0.75, 0.80, 0.90, 0.6);
+    let body_inner = Color::srgba(0.85, 0.88, 0.95, 0.4);
+    let eye_color = Color::srgb(0.2, 0.4, 1.0);
+    let eye_glow = Color::srgba(0.1, 0.3, 0.9, 0.5);
+    let wisp_color = Color::srgba(0.6, 0.7, 0.9, 0.3);
+    let mouth_color = Color::srgba(0.1, 0.1, 0.2, 0.7);
+    let chain_color = Color::srgba(0.5, 0.5, 0.55, 0.4);
+
+    commands.spawn((
+        Sprite {
+            color: Color::NONE,
+            custom_size: Some(Vec2::new(22.0, 22.0)),
+            ..default()
+        },
+        Transform::from_xyz(x, y + 80.0, Z_ENEMIES),
+        Enemy {
+            health: 2 + floor.min(3),
+            max_health: 2 + floor.min(3),
+            contact_damage: 1,
+            score_reward: 140,
+            gold_drop: 14 + floor * 3,
+        },
+        GhostEnemy {
+            phase_timer: 0.0,
+            phase_duration: 3.0,
+            is_phased: false,
+            speed: 50.0 + floor as f32 * 8.0,
+            direction: -1.0,
+        },
+        RoomEntity,
+        PlayingEntity,
+    )).with_children(|parent| {
+        // Main spectral body
+        parent.spawn((
+            Sprite { color: body_color, custom_size: Some(Vec2::new(20.0, 22.0)), ..default() },
+            Transform::from_xyz(0.0, 0.0, 0.1),
+        ));
+        // Inner glow
+        parent.spawn((
+            Sprite { color: body_inner, custom_size: Some(Vec2::new(14.0, 16.0)), ..default() },
+            Transform::from_xyz(0.0, 2.0, 0.12),
+        ));
+        // Tattered bottom (wispy tendrils)
+        for dx in [-6.0_f32, -2.0, 2.0, 6.0] {
+            parent.spawn((
+                Sprite { color: body_color, custom_size: Some(Vec2::new(4.0, 8.0)), ..default() },
+                Transform::from_xyz(dx, -13.0, 0.08),
+                GhostWisp,
+            ));
+        }
+        // Eye glow left
+        parent.spawn((
+            Sprite { color: eye_glow, custom_size: Some(Vec2::new(6.0, 6.0)), ..default() },
+            Transform::from_xyz(-4.0, 4.0, 0.14),
+        ));
+        // Eye left
+        parent.spawn((
+            Sprite { color: eye_color, custom_size: Some(Vec2::new(4.0, 4.0)), ..default() },
+            Transform::from_xyz(-4.0, 4.0, 0.16),
+        ));
+        // Eye glow right
+        parent.spawn((
+            Sprite { color: eye_glow, custom_size: Some(Vec2::new(6.0, 6.0)), ..default() },
+            Transform::from_xyz(4.0, 4.0, 0.14),
+        ));
+        // Eye right
+        parent.spawn((
+            Sprite { color: eye_color, custom_size: Some(Vec2::new(4.0, 4.0)), ..default() },
+            Transform::from_xyz(4.0, 4.0, 0.16),
+        ));
+        // Mouth (dark hollow)
+        parent.spawn((
+            Sprite { color: mouth_color, custom_size: Some(Vec2::new(6.0, 4.0)), ..default() },
+            Transform::from_xyz(0.0, -1.0, 0.16),
+        ));
+        // Wisp trail behind
+        parent.spawn((
+            Sprite { color: wisp_color, custom_size: Some(Vec2::new(10.0, 10.0)), ..default() },
+            Transform::from_xyz(0.0, -8.0, 0.05),
+            GhostWisp,
+        ));
+        // Broken chains (spectral chains hanging)
+        parent.spawn((
+            Sprite { color: chain_color, custom_size: Some(Vec2::new(2.0, 10.0)), ..default() },
+            Transform::from_xyz(-8.0, -4.0, 0.06),
+        ));
+        parent.spawn((
+            Sprite { color: chain_color, custom_size: Some(Vec2::new(2.0, 8.0)), ..default() },
+            Transform::from_xyz(9.0, -2.0, 0.06),
+        ));
+    });
+}
+
+// ---------------------------------------------------------------------------
+// AI systems
 // ---------------------------------------------------------------------------
 
 fn ground_enemy_ai(
@@ -1891,6 +2399,244 @@ fn animate_turret_eye(
                     eye_tf.rotation = Quat::from_rotation_z(angle);
                 }
             }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// New enemy AI systems (Sprint 3)
+// ---------------------------------------------------------------------------
+
+/// Skeleton Mage AI: teleport around, cast fireballs at player.
+fn mage_enemy_ai(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Transform, &mut MageEnemy, &mut Sprite), Without<Player>>,
+    player_q: Query<&Transform, (With<Player>, Without<MageEnemy>)>,
+    time: Res<Time>,
+) {
+    let player_pos = player_q.get_single().map(|t| t.translation).ok();
+
+    for (_entity, mut tf, mut mage, mut sprite) in &mut query {
+        let dt = time.delta_secs();
+        mage.teleport_cooldown = (mage.teleport_cooldown - dt).max(0.0);
+        mage.cast_cooldown = (mage.cast_cooldown - dt).max(0.0);
+
+        // Fade in/out during teleport
+        if mage.is_invisible {
+            mage.invis_timer -= dt;
+            if mage.invis_timer <= 0.0 {
+                mage.is_invisible = false;
+                // Teleport to a new position near the player
+                if let Some(pp) = player_pos {
+                    let offset = if pp.x > ROOM_W / 2.0 { -120.0 } else { 120.0 };
+                    tf.translation.x = (pp.x + offset).clamp(TILE_SIZE + 20.0, ROOM_W - TILE_SIZE - 20.0);
+                    tf.translation.y = (pp.y + 40.0).clamp(TILE_SIZE + 20.0, ROOM_H - TILE_SIZE * 2.0);
+                }
+            }
+        }
+
+        // Set alpha based on visibility
+        let target_alpha = if mage.is_invisible { 0.0 } else { 1.0 };
+        let c = sprite.color.to_srgba();
+        sprite.color = Color::srgba(c.red, c.green, c.blue, target_alpha);
+
+        // Teleport when player gets close
+        if let Some(pp) = player_pos {
+            let dist = (pp.xy() - tf.translation.xy()).length();
+            if dist < 80.0 && mage.teleport_cooldown <= 0.0 && !mage.is_invisible {
+                mage.is_invisible = true;
+                mage.invis_timer = 0.5;
+                mage.teleport_cooldown = 4.0;
+                // Temporarily make intangible
+                commands.entity(_entity).insert(Intangible);
+            }
+        }
+
+        // Remove intangible when visible again
+        if !mage.is_invisible {
+            commands.entity(_entity).remove::<Intangible>();
+        }
+
+        // Cast fireball at player
+        if mage.cast_cooldown <= 0.0 && !mage.is_invisible {
+            mage.cast_cooldown = 2.5;
+            if let Some(pp) = player_pos {
+                let (vx, vy) = aim_at_target(tf.translation, Some(pp), 250.0);
+                commands.spawn((
+                    Sprite {
+                        color: Color::srgb(0.5, 0.15, 0.9),
+                        custom_size: Some(Vec2::new(8.0, 8.0)),
+                        ..default()
+                    },
+                    Transform::from_xyz(tf.translation.x, tf.translation.y, Z_PROJECTILES),
+                    EnemyProjectile { vx, vy, lifetime: 2.5, damage: 2 },
+                    RoomEntity,
+                    PlayingEntity,
+                ));
+            }
+        }
+    }
+}
+
+/// Slime AI: hop toward player, splits on death handled by slime_split_on_death.
+fn slime_enemy_ai(
+    mut query: Query<(&mut Transform, &mut SlimeEnemy)>,
+    player_q: Query<&Transform, (With<Player>, Without<SlimeEnemy>)>,
+    time: Res<Time>,
+) {
+    let player_pos = player_q.get_single().map(|t| t.translation).ok();
+
+    for (mut tf, mut slime) in &mut query {
+        let dt = time.delta_secs();
+        slime.hop_timer -= dt;
+
+        // Apply gravity
+        slime.vy -= GRAVITY * 0.5 * dt;
+        slime.vy = slime.vy.max(-500.0);
+        tf.translation.y += slime.vy * dt;
+
+        // Ground check
+        if tf.translation.y < TILE_SIZE + 10.0 {
+            tf.translation.y = TILE_SIZE + 10.0;
+            slime.vy = 0.0;
+
+            // Hop toward player every 1.2 seconds
+            if slime.hop_timer <= 0.0 {
+                slime.hop_timer = match slime.size {
+                    SlimeSize::Large => 1.2,
+                    SlimeSize::Small => 0.8,
+                };
+                slime.vy = 300.0;
+
+                if let Some(pp) = player_pos {
+                    let dir = if pp.x > tf.translation.x { 1.0 } else { -1.0 };
+                    let hop_speed = match slime.size {
+                        SlimeSize::Large => 80.0,
+                        SlimeSize::Small => 120.0,
+                    };
+                    tf.translation.x += dir * hop_speed;
+                }
+            }
+        }
+
+        let margin = TILE_SIZE + 10.0;
+        tf.translation.x = tf.translation.x.clamp(margin, ROOM_W - margin);
+    }
+}
+
+/// When a large slime is killed, spawn 2 small slimes.
+pub fn slime_split_on_death(
+    commands: &mut Commands,
+    position: Vec3,
+    slime_size: SlimeSize,
+    floor: i32,
+    run: &mut crate::RunData,
+) {
+    if slime_size == SlimeSize::Large {
+        for offset in [-20.0_f32, 20.0] {
+            spawn_slime_enemy(
+                commands,
+                (position.x + offset).clamp(TILE_SIZE + 10.0, ROOM_W - TILE_SIZE - 10.0),
+                position.y + 10.0,
+                floor,
+                SlimeSize::Small,
+            );
+            run.enemies_alive += 1;
+        }
+    }
+}
+
+/// Ghost AI: floats toward player, phases in/out.
+fn ghost_enemy_ai(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Transform, &mut GhostEnemy, &mut Sprite)>,
+    player_q: Query<&Transform, (With<Player>, Without<GhostEnemy>)>,
+    time: Res<Time>,
+) {
+    let player_pos = player_q.get_single().map(|t| t.translation).ok();
+
+    for (entity, mut tf, mut ghost, mut sprite) in &mut query {
+        let dt = time.delta_secs();
+        ghost.phase_timer += dt;
+
+        // Phase cycle: visible for phase_duration, then invisible for phase_duration/2
+        let cycle = ghost.phase_duration + ghost.phase_duration * 0.5;
+        let t = ghost.phase_timer % cycle;
+        let was_phased = ghost.is_phased;
+        ghost.is_phased = t > ghost.phase_duration;
+
+        // Handle intangible component
+        if ghost.is_phased && !was_phased {
+            commands.entity(entity).insert(Intangible);
+        } else if !ghost.is_phased && was_phased {
+            commands.entity(entity).remove::<Intangible>();
+        }
+
+        // Set alpha based on phase
+        let alpha = if ghost.is_phased {
+            0.15 + (time.elapsed_secs() * 4.0).sin().abs() * 0.1
+        } else {
+            0.5 + (time.elapsed_secs() * 2.0).sin().abs() * 0.2
+        };
+        let c = sprite.color.to_srgba();
+        sprite.color = Color::srgba(c.red, c.green, c.blue, alpha);
+
+        // Float toward player
+        if let Some(pp) = player_pos {
+            ghost.direction = if pp.x > tf.translation.x { 1.0 } else { -1.0 };
+        }
+        tf.translation.x += ghost.direction * ghost.speed * dt;
+
+        // Vertical bobbing
+        let bob = (time.elapsed_secs() * 1.5 + entity.index() as f32).sin() * 15.0;
+        tf.translation.y = 120.0 + bob;
+
+        let margin = TILE_SIZE + 10.0;
+        tf.translation.x = tf.translation.x.clamp(margin, ROOM_W - margin);
+    }
+}
+
+/// Animate mage staff glow pulsing.
+fn animate_mage_staff(
+    time: Res<Time>,
+    mut glow_q: Query<(&mut Transform, &mut Sprite), With<MageStaffGlow>>,
+) {
+    let t = time.elapsed_secs();
+    for (mut tf, mut sprite) in &mut glow_q {
+        let pulse = 1.0 + (t * 3.0).sin() * 0.2;
+        tf.scale = Vec3::splat(pulse);
+        let c = sprite.color.to_srgba();
+        let alpha = 0.3 + (t * 2.5).sin().abs() * 0.3;
+        sprite.color = Color::srgba(c.red, c.green, c.blue, alpha);
+    }
+}
+
+/// Animate ghost wisps undulating.
+fn animate_ghost_wisps(
+    time: Res<Time>,
+    mut wisp_q: Query<&mut Transform, With<GhostWisp>>,
+) {
+    let t = time.elapsed_secs();
+    for mut tf in &mut wisp_q {
+        let wave = (t * 2.0 + tf.translation.x * 0.1).sin() * 3.0;
+        tf.translation.x += wave * 0.02;
+    }
+}
+
+/// Animate slime squash/stretch on hop.
+fn animate_slime_enemies(
+    mut query: Query<(&SlimeEnemy, &mut Transform)>,
+) {
+    for (slime, mut tf) in &mut query {
+        if slime.vy > 10.0 {
+            // Stretching upward
+            tf.scale = Vec3::new(0.85, 1.2, 1.0);
+        } else if slime.vy < -10.0 {
+            // Squashing on descent
+            tf.scale = Vec3::new(1.15, 0.85, 1.0);
+        } else {
+            // Resting
+            tf.scale = Vec3::ONE;
         }
     }
 }

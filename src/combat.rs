@@ -1,12 +1,14 @@
 use bevy::prelude::*;
 use crate::{
     constants::*,
-    GameState, RunData,
+    GameState, RunData, PlayingEntity,
     player::{Player, MeleeHitbox, PlayerProjectile, PlayerDamaged, PlayerDied, PlayerBlocked},
-    enemy::{Enemy, EnemyDefeated, EnemyProjectile},
+    enemy::{Enemy, EnemyDefeated, EnemyProjectile, Intangible, SlimeEnemy},
     spell::{SpellProjectile, LightningStrike},
     camera::{ScreenShake, trigger_shake},
     equipment::PlayerStats,
+    room::{RoomState, DestructibleWall},
+    loot::{Pickup, PickupKind},
 };
 
 #[derive(Event)]
@@ -38,6 +40,7 @@ impl Plugin for CombatPlugin {
                 lightning_vs_enemy,
                 player_vs_enemy,
                 enemy_projectile_vs_player,
+                melee_vs_wall,
             )
                 .run_if(in_state(GameState::Playing)),
         );
@@ -67,15 +70,17 @@ fn kill_enemy(
 fn melee_vs_enemy(
     mut commands: Commands,
     hitbox_q: Query<(&Transform, &MeleeHitbox)>,
-    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite)>,
+    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite, Option<&Intangible>, Option<&SlimeEnemy>)>,
     mut ev_defeated: EventWriter<EnemyDefeated>,
     mut ev_dmg: EventWriter<DamageNumberEvent>,
     mut run: ResMut<RunData>,
     mut shake_q: Query<&mut ScreenShake>,
     stats: Res<PlayerStats>,
+    room_state: Res<RoomState>,
 ) {
     for (h_tf, hitbox) in &hitbox_q {
-        for (e_entity, e_tf, mut enemy, sprite) in &mut enemy_q {
+        for (e_entity, e_tf, mut enemy, sprite, intangible, slime) in &mut enemy_q {
+            if intangible.is_some() { continue; }
             let e_size = sprite.custom_size.unwrap_or(Vec2::new(20.0, 20.0));
             let dist = (h_tf.translation.xy() - e_tf.translation.xy()).abs();
 
@@ -89,6 +94,10 @@ fn melee_vs_enemy(
                 ev_dmg.send(DamageNumberEvent { position: e_tf.translation, amount: total_dmg, kind });
 
                 if enemy.health <= 0 {
+                    // Slime split on death
+                    if let Some(se) = slime {
+                        crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run);
+                    }
                     kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy);
                     if let Ok(mut shake) = shake_q.get_single_mut() {
                         trigger_shake(&mut shake, 8.0, 0.15);
@@ -102,15 +111,17 @@ fn melee_vs_enemy(
 fn ranged_vs_enemy(
     mut commands: Commands,
     proj_q: Query<(Entity, &Transform, &PlayerProjectile)>,
-    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite)>,
+    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite, Option<&Intangible>, Option<&SlimeEnemy>)>,
     mut ev_defeated: EventWriter<EnemyDefeated>,
     mut ev_dmg: EventWriter<DamageNumberEvent>,
     mut run: ResMut<RunData>,
     mut shake_q: Query<&mut ScreenShake>,
     stats: Res<PlayerStats>,
+    room_state: Res<RoomState>,
 ) {
     for (p_entity, p_tf, proj) in &proj_q {
-        for (e_entity, e_tf, mut enemy, sprite) in &mut enemy_q {
+        for (e_entity, e_tf, mut enemy, sprite, intangible, slime) in &mut enemy_q {
+            if intangible.is_some() { continue; }
             let e_size = sprite.custom_size.unwrap_or(Vec2::new(20.0, 20.0));
             let dist = (p_tf.translation.xy() - e_tf.translation.xy()).abs();
 
@@ -121,6 +132,9 @@ fn ranged_vs_enemy(
                 commands.entity(p_entity).try_despawn_recursive();
 
                 if enemy.health <= 0 {
+                    if let Some(se) = slime {
+                        crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run);
+                    }
                     kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy);
                     if let Ok(mut shake) = shake_q.get_single_mut() {
                         trigger_shake(&mut shake, 6.0, 0.12);
@@ -135,15 +149,17 @@ fn ranged_vs_enemy(
 fn spell_vs_enemy(
     mut commands: Commands,
     proj_q: Query<(Entity, &Transform, &SpellProjectile)>,
-    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite)>,
+    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite, Option<&Intangible>, Option<&SlimeEnemy>)>,
     mut ev_defeated: EventWriter<EnemyDefeated>,
     mut ev_dmg: EventWriter<DamageNumberEvent>,
     mut run: ResMut<RunData>,
     mut shake_q: Query<&mut ScreenShake>,
     stats: Res<PlayerStats>,
+    room_state: Res<RoomState>,
 ) {
     for (p_entity, p_tf, proj) in &proj_q {
-        for (e_entity, e_tf, mut enemy, sprite) in &mut enemy_q {
+        for (e_entity, e_tf, mut enemy, sprite, intangible, slime) in &mut enemy_q {
+            if intangible.is_some() { continue; }
             let e_size = sprite.custom_size.unwrap_or(Vec2::new(20.0, 20.0));
             let dist = (p_tf.translation.xy() - e_tf.translation.xy()).abs();
 
@@ -154,6 +170,9 @@ fn spell_vs_enemy(
                 commands.entity(p_entity).despawn();
 
                 if enemy.health <= 0 {
+                    if let Some(se) = slime {
+                        crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run);
+                    }
                     kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy);
                     if let Ok(mut shake) = shake_q.get_single_mut() {
                         trigger_shake(&mut shake, 10.0, 0.2);
@@ -168,16 +187,18 @@ fn spell_vs_enemy(
 fn lightning_vs_enemy(
     mut commands: Commands,
     strike_q: Query<(&Transform, &LightningStrike)>,
-    mut enemy_q: Query<(Entity, &Transform, &mut Enemy)>,
+    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, Option<&Intangible>, Option<&SlimeEnemy>)>,
     mut ev_defeated: EventWriter<EnemyDefeated>,
     mut ev_dmg: EventWriter<DamageNumberEvent>,
     mut run: ResMut<RunData>,
     mut shake_q: Query<&mut ScreenShake>,
+    room_state: Res<RoomState>,
 ) {
     for (s_tf, strike) in &strike_q {
         if strike.lifetime < 0.12 { continue; }
 
-        for (e_entity, e_tf, mut enemy) in &mut enemy_q {
+        for (e_entity, e_tf, mut enemy, intangible, slime) in &mut enemy_q {
+            if intangible.is_some() { continue; }
             let dist = (s_tf.translation.xy() - e_tf.translation.xy()).length();
 
             if dist < strike.radius {
@@ -185,6 +206,9 @@ fn lightning_vs_enemy(
                 ev_dmg.send(DamageNumberEvent { position: e_tf.translation, amount: strike.damage, kind: DamageNumberKind::EnemyHit });
 
                 if enemy.health <= 0 {
+                    if let Some(se) = slime {
+                        crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run);
+                    }
                     kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy);
                 }
             }
@@ -207,7 +231,7 @@ fn apply_block_reduction(raw_dmg: i32, is_blocking: bool) -> i32 {
 
 fn player_vs_enemy(
     mut player_q: Query<(&Transform, &mut Player)>,
-    enemy_q: Query<(&Transform, &Enemy, &Sprite), Without<Player>>,
+    enemy_q: Query<(&Transform, &Enemy, &Sprite, Option<&Intangible>), Without<Player>>,
     mut ev_damaged: EventWriter<PlayerDamaged>,
     mut ev_died: EventWriter<PlayerDied>,
     mut ev_blocked: EventWriter<PlayerBlocked>,
@@ -217,7 +241,8 @@ fn player_vs_enemy(
 ) {
     let Ok((p_tf, mut player)) = player_q.get_single_mut() else { return };
 
-    for (e_tf, enemy, sprite) in &enemy_q {
+    for (e_tf, enemy, sprite, intangible) in &enemy_q {
+        if intangible.is_some() { continue; }
         let e_size = sprite.custom_size.unwrap_or(Vec2::new(20.0, 20.0));
         let diff = p_tf.translation.xy() - e_tf.translation.xy();
         let dist = diff.abs();
@@ -299,6 +324,95 @@ fn enemy_projectile_vs_player(
                 }
             }
             break;
+        }
+    }
+}
+
+/// Melee attacks can break destructible walls to reveal secret loot.
+fn melee_vs_wall(
+    mut commands: Commands,
+    hitbox_q: Query<&Transform, With<MeleeHitbox>>,
+    mut wall_q: Query<(Entity, &Transform, &mut DestructibleWall)>,
+    mut ev_dmg: EventWriter<DamageNumberEvent>,
+    mut shake_q: Query<&mut ScreenShake>,
+) {
+    for h_tf in &hitbox_q {
+        for (w_entity, w_tf, mut wall) in &mut wall_q {
+            let dist = (h_tf.translation.xy() - w_tf.translation.xy()).abs();
+
+            if dist.x < MELEE_RANGE / 2.0 + TILE_SIZE / 2.0
+                && dist.y < MELEE_WIDTH / 2.0 + TILE_SIZE / 2.0
+            {
+                wall.health -= 1;
+                ev_dmg.send(DamageNumberEvent {
+                    position: w_tf.translation,
+                    amount: 1,
+                    kind: DamageNumberKind::EnemyHit,
+                });
+
+                if wall.health <= 0 {
+                    let pos = w_tf.translation;
+                    commands.entity(w_entity).try_despawn_recursive();
+
+                    // Spawn secret loot: gold + health + mana burst
+                    for i in 0..4_u32 {
+                        let angle = (i as f32 / 4.0) * std::f32::consts::TAU;
+                        let spread = 15.0 + (i as f32 * 8.0);
+                        commands.spawn((
+                            Sprite {
+                                color: Color::srgb(1.0, 0.85, 0.15),
+                                custom_size: Some(Vec2::new(10.0, 10.0)),
+                                ..default()
+                            },
+                            Transform::from_xyz(
+                                pos.x + angle.cos() * spread,
+                                pos.y + angle.sin() * spread,
+                                Z_EFFECTS,
+                            ),
+                            Pickup {
+                                kind: PickupKind::Gold(5 + (i as i32 * 3)),
+                                magnet_radius: 100.0,
+                                lifetime: 10.0,
+                            },
+                            PlayingEntity,
+                        ));
+                    }
+                    // Health pickup
+                    commands.spawn((
+                        Sprite {
+                            color: Color::srgb(0.9, 0.3, 0.15),
+                            custom_size: Some(Vec2::new(10.0, 10.0)),
+                            ..default()
+                        },
+                        Transform::from_xyz(pos.x, pos.y + 20.0, Z_EFFECTS),
+                        Pickup {
+                            kind: PickupKind::Health,
+                            magnet_radius: 80.0,
+                            lifetime: 10.0,
+                        },
+                        PlayingEntity,
+                    ));
+                    // Mana pickup
+                    commands.spawn((
+                        Sprite {
+                            color: Color::srgb(0.7, 0.4, 0.85),
+                            custom_size: Some(Vec2::new(8.0, 8.0)),
+                            ..default()
+                        },
+                        Transform::from_xyz(pos.x, pos.y - 10.0, Z_EFFECTS),
+                        Pickup {
+                            kind: PickupKind::Mana(25.0),
+                            magnet_radius: 80.0,
+                            lifetime: 10.0,
+                        },
+                        PlayingEntity,
+                    ));
+
+                    if let Ok(mut shake) = shake_q.get_single_mut() {
+                        trigger_shake(&mut shake, 10.0, 0.2);
+                    }
+                }
+            }
         }
     }
 }

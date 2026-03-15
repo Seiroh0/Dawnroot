@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, floor_complete::FloorCompleteState,
     hazards::{spawn_lava_strip, spawn_water_strip, spawn_moving_platform, spawn_arrow_trap, spawn_spike_floor, spawn_poison_cloud},
-    relic::{RelicChoiceState, RelicInventory, start_relic_choice}};
+    relic::{RelicChoiceState, RelicInventory, start_relic_choice},
+    altar::{AltarState, AltarEntity, spawn_altar, check_altar_interaction}};
 
 pub struct RoomPlugin;
 
@@ -18,6 +19,7 @@ impl Plugin for RoomPlugin {
                 (
                     check_room_exit,
                     check_room_cleared,
+                    check_altar_proximity,
                     tick_start_door_timer,
                     handle_advance_floor,
                     animate_torches,
@@ -51,6 +53,17 @@ pub struct ExitDoor {
 
 #[derive(Component)]
 pub struct RoomEntity;
+
+/// Destructible wall that can be broken by melee attacks.
+#[derive(Component)]
+pub struct DestructibleWall {
+    pub health: i32,
+}
+
+/// Hidden loot spawned when a destructible wall breaks.
+#[derive(Component)]
+#[allow(dead_code)]
+pub struct SecretLootMarker;
 
 /// Animated torch glow child sprite.
 #[derive(Component)]
@@ -92,6 +105,7 @@ pub enum RoomType {
     Shop,
     Boss,
     Start,
+    Altar,
 }
 
 #[derive(Resource)]
@@ -127,6 +141,9 @@ fn generate_floor_layout(floor: i32) -> Vec<RoomType> {
     for i in 0..combat_count {
         if i == combat_count / 2 {
             layout.push(RoomType::Treasure);
+        } else if i == combat_count - 1 && floor >= 2 {
+            // Altar room before shop on floor 2+
+            layout.push(RoomType::Altar);
         } else {
             layout.push(RoomType::Combat);
         }
@@ -176,13 +193,7 @@ fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize) {
         .wrapping_add(room_idx as u64)
         .wrapping_mul(state.floor as u64 + 1);
 
-    let bg_color = match room_type {
-        RoomType::Start    => Color::srgb(0.08, 0.06, 0.04),
-        RoomType::Combat   => Color::srgb(0.07, 0.05, 0.03),
-        RoomType::Treasure => Color::srgb(0.08, 0.07, 0.05),
-        RoomType::Shop     => Color::srgb(0.08, 0.07, 0.05),
-        RoomType::Boss     => Color::srgb(0.10, 0.04, 0.03),
-    };
+    let bg_color = biome_bg_color(room_type, state.floor);
 
     // Background
     commands.spawn((
@@ -196,7 +207,7 @@ fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize) {
         PlayingEntity,
     ));
 
-    let (floor_color, ceil_color, wall_color) = room_tile_colors(room_type);
+    let (floor_color, ceil_color, wall_color) = room_tile_colors(room_type, state.floor);
 
     // Floor row
     for col in 0..ROOM_COLUMNS {
@@ -286,6 +297,9 @@ fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize) {
     // Small rubble near base of walls
     spawn_wall_rubble(commands, seed, floor_color);
 
+    // Biome-specific ambient decorations
+    spawn_biome_decorations(commands, seed, state.floor, room_type);
+
     // Room-specific content
     match room_type {
         RoomType::Start    => spawn_start_room(commands, seed),
@@ -293,38 +307,89 @@ fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize) {
         RoomType::Treasure => spawn_treasure_room(commands, seed),
         RoomType::Boss     => spawn_boss_room(commands, state.floor),
         RoomType::Shop     => {}
+        RoomType::Altar    => spawn_altar_room(commands, seed),
     }
 }
 
 // ─── Tile Color Palette ───────────────────────────────────────────────────────
 
-fn room_tile_colors(room_type: RoomType) -> (Color, Color, Color) {
+/// Floor-based biome background colors.
+fn biome_bg_color(room_type: RoomType, floor: i32) -> Color {
+    let biome = (floor - 1).clamp(0, 3);
     match room_type {
-        RoomType::Start    => (
-            Color::srgb(0.28, 0.22, 0.15),  // floor: warm dark stone
-            Color::srgb(0.22, 0.17, 0.12),  // ceiling: darker stone
-            Color::srgb(0.24, 0.19, 0.14),  // walls: neutral stone
+        RoomType::Boss => match biome {
+            1 => Color::srgb(0.06, 0.08, 0.04), // mushroom boss
+            2 => Color::srgb(0.12, 0.04, 0.02), // lava boss
+            3 => Color::srgb(0.04, 0.06, 0.04), // root boss
+            _ => Color::srgb(0.10, 0.04, 0.03), // stone boss
+        },
+        RoomType::Altar => match biome {
+            1 => Color::srgb(0.04, 0.06, 0.08),
+            2 => Color::srgb(0.08, 0.03, 0.06),
+            3 => Color::srgb(0.03, 0.05, 0.06),
+            _ => Color::srgb(0.06, 0.04, 0.08),
+        },
+        _ => match biome {
+            1 => Color::srgb(0.05, 0.07, 0.04), // mushroom cave: earthy green
+            2 => Color::srgb(0.09, 0.04, 0.02), // lava depths: dark red
+            3 => Color::srgb(0.03, 0.05, 0.04), // root heart: dark organic
+            _ => Color::srgb(0.08, 0.06, 0.04), // stone ruins: default
+        },
+    }
+}
+
+/// Floor-based biome tile colors: (floor, ceiling, walls).
+fn room_tile_colors(room_type: RoomType, floor: i32) -> (Color, Color, Color) {
+    let biome = (floor - 1).clamp(0, 3);
+
+    // Altar always uses its mystic palette
+    if room_type == RoomType::Altar {
+        return match biome {
+            1 => (Color::srgb(0.18, 0.22, 0.18), Color::srgb(0.14, 0.18, 0.14), Color::srgb(0.16, 0.20, 0.16)),
+            2 => (Color::srgb(0.25, 0.15, 0.22), Color::srgb(0.20, 0.10, 0.18), Color::srgb(0.22, 0.12, 0.20)),
+            3 => (Color::srgb(0.15, 0.20, 0.18), Color::srgb(0.12, 0.16, 0.14), Color::srgb(0.14, 0.18, 0.16)),
+            _ => (Color::srgb(0.22, 0.18, 0.28), Color::srgb(0.18, 0.14, 0.24), Color::srgb(0.20, 0.16, 0.26)),
+        };
+    }
+
+    // Boss rooms use dramatic biome colors
+    if room_type == RoomType::Boss {
+        return match biome {
+            1 => (Color::srgb(0.20, 0.25, 0.12), Color::srgb(0.16, 0.20, 0.08), Color::srgb(0.18, 0.22, 0.10)),
+            2 => (Color::srgb(0.32, 0.12, 0.06), Color::srgb(0.26, 0.08, 0.04), Color::srgb(0.28, 0.10, 0.05)),
+            3 => (Color::srgb(0.14, 0.22, 0.14), Color::srgb(0.10, 0.18, 0.10), Color::srgb(0.12, 0.20, 0.12)),
+            _ => (Color::srgb(0.28, 0.14, 0.08), Color::srgb(0.22, 0.10, 0.06), Color::srgb(0.25, 0.12, 0.07)),
+        };
+    }
+
+    // All other room types use biome-based stone palette
+    match biome {
+        // Floor 2: Mushroom Cave — earthy greens and browns
+        1 => (
+            Color::srgb(0.22, 0.24, 0.14),  // floor: mossy stone
+            Color::srgb(0.16, 0.18, 0.10),  // ceiling: dark green stone
+            Color::srgb(0.19, 0.21, 0.12),  // walls: earthy
         ),
-        RoomType::Combat   => (
-            Color::srgb(0.26, 0.20, 0.14),  // floor: dark stone
-            Color::srgb(0.20, 0.15, 0.10),  // ceiling: deep dark
-            Color::srgb(0.23, 0.18, 0.12),  // walls: stone gray
+        // Floor 3: Lava Depths — reds and dark oranges
+        2 => (
+            Color::srgb(0.28, 0.16, 0.10),  // floor: volcanic rock
+            Color::srgb(0.22, 0.10, 0.06),  // ceiling: charred
+            Color::srgb(0.25, 0.13, 0.08),  // walls: basalt
         ),
-        RoomType::Treasure => (
-            Color::srgb(0.28, 0.24, 0.16),
-            Color::srgb(0.22, 0.19, 0.13),
-            Color::srgb(0.26, 0.22, 0.15),
+        // Floor 4: Root Heart — dark organic greens and purples
+        3 => (
+            Color::srgb(0.16, 0.22, 0.16),  // floor: root-covered
+            Color::srgb(0.10, 0.16, 0.12),  // ceiling: organic canopy
+            Color::srgb(0.13, 0.19, 0.14),  // walls: root-woven
         ),
-        RoomType::Shop     => (
-            Color::srgb(0.24, 0.20, 0.14),
-            Color::srgb(0.20, 0.16, 0.10),
-            Color::srgb(0.22, 0.18, 0.12),
-        ),
-        RoomType::Boss     => (
-            Color::srgb(0.28, 0.14, 0.08),
-            Color::srgb(0.22, 0.10, 0.06),
-            Color::srgb(0.25, 0.12, 0.07),
-        ),
+        // Floor 1: Stone Ruins (default)
+        _ => match room_type {
+            RoomType::Start    => (Color::srgb(0.28, 0.22, 0.15), Color::srgb(0.22, 0.17, 0.12), Color::srgb(0.24, 0.19, 0.14)),
+            RoomType::Combat   => (Color::srgb(0.26, 0.20, 0.14), Color::srgb(0.20, 0.15, 0.10), Color::srgb(0.23, 0.18, 0.12)),
+            RoomType::Treasure => (Color::srgb(0.28, 0.24, 0.16), Color::srgb(0.22, 0.19, 0.13), Color::srgb(0.26, 0.22, 0.15)),
+            RoomType::Shop     => (Color::srgb(0.24, 0.20, 0.14), Color::srgb(0.20, 0.16, 0.10), Color::srgb(0.22, 0.18, 0.12)),
+            _ => (Color::srgb(0.26, 0.20, 0.14), Color::srgb(0.20, 0.15, 0.10), Color::srgb(0.23, 0.18, 0.12)),
+        },
     }
 }
 
@@ -706,6 +771,180 @@ fn spawn_ceiling_chains(commands: &mut Commands, seed: u64) {
 }
 
 /// Small stone rubble chunks near the base of each wall.
+/// Spawn a destructible wall section (cracked wall with secret behind it).
+fn spawn_secret_wall(commands: &mut Commands, _floor: i32, seed: u64) {
+    // Decide which wall (left or right) based on seed
+    let on_right = seed % 2 == 0;
+    let wall_x = if on_right { ROOM_W - TILE_SIZE / 2.0 } else { TILE_SIZE / 2.0 };
+    let row = 4 + (seed % 3) as i32; // Row 4-6 (above floor, below ceiling)
+    let wall_y = row as f32 * TILE_SIZE + TILE_SIZE / 2.0;
+
+    // Cracked wall tile (replaces normal wall at this position)
+    let crack_color = Color::srgb(0.30, 0.24, 0.16);
+    let crack_line = Color::srgba(0.0, 0.0, 0.0, 0.3);
+
+    commands.spawn((
+        Sprite {
+            color: crack_color,
+            custom_size: Some(Vec2::new(TILE_SIZE, TILE_SIZE)),
+            ..default()
+        },
+        Transform::from_xyz(wall_x, wall_y, Z_TILES + 0.01),
+        DestructibleWall { health: 3 },
+        RoomEntity,
+        PlayingEntity,
+    )).with_children(|parent| {
+        // Crack pattern overlay
+        parent.spawn((
+            Sprite { color: crack_line, custom_size: Some(Vec2::new(TILE_SIZE * 0.6, 2.0)), ..default() },
+            Transform::from_xyz(-2.0, 4.0, 0.1),
+        ));
+        parent.spawn((
+            Sprite { color: crack_line, custom_size: Some(Vec2::new(2.0, TILE_SIZE * 0.5)), ..default() },
+            Transform::from_xyz(4.0, -3.0, 0.1),
+        ));
+        parent.spawn((
+            Sprite { color: crack_line, custom_size: Some(Vec2::new(TILE_SIZE * 0.4, 2.0)), ..default() },
+            Transform::from_xyz(3.0, -6.0, 0.1),
+        ));
+        // Glowing hint behind the cracks
+        parent.spawn((
+            Sprite {
+                color: Color::srgba(1.0, 0.85, 0.2, 0.08),
+                custom_size: Some(Vec2::new(TILE_SIZE * 0.8, TILE_SIZE * 0.8)),
+                ..default()
+            },
+            Transform::from_xyz(0.0, 0.0, -0.1),
+            CrystalGlow { timer: 0.0, phase: seed as f32 * 0.1 },
+        ));
+    });
+}
+
+/// Spawn biome-specific decorations based on floor number.
+fn spawn_biome_decorations(commands: &mut Commands, seed: u64, floor: i32, room_type: RoomType) {
+    let biome = (floor - 1).clamp(0, 3);
+    if room_type == RoomType::Boss || room_type == RoomType::Shop { return; }
+
+    match biome {
+        1 => {
+            // Mushroom Cave: extra mushrooms, glowing moss patches
+            let moss_color = Color::srgba(0.3, 0.6, 0.2, 0.2);
+            let positions = [(3.0, 1.0), (8.0, 1.0), (14.0, 1.0), (19.0, 1.0)];
+            for (i, &(col, _row)) in positions.iter().enumerate() {
+                let hash = seed.wrapping_add(i as u64 * 37);
+                if hash % 3 != 0 { continue; }
+                let x = col * TILE_SIZE + TILE_SIZE / 2.0;
+                spawn_mushroom(commands, x, TILE_SIZE);
+            }
+            // Glowing moss patches on floor
+            for i in 0..3 {
+                let hash = seed.wrapping_add(i * 53 + 7);
+                let x = (2.0 + (hash % 18) as f32) * TILE_SIZE + TILE_SIZE / 2.0;
+                commands.spawn((
+                    Sprite {
+                        color: moss_color,
+                        custom_size: Some(Vec2::new(TILE_SIZE * 1.5, TILE_SIZE * 0.3)),
+                        ..default()
+                    },
+                    Transform::from_xyz(x, TILE_SIZE + 2.0, Z_TILES + 0.2),
+                    RoomEntity,
+                    PlayingEntity,
+                ));
+            }
+        }
+        2 => {
+            // Lava Depths: ember particles, lava glow on floor edges
+            let ember_color = Color::srgba(1.0, 0.5, 0.1, 0.25);
+            let glow_color = Color::srgba(0.9, 0.3, 0.05, 0.12);
+            // Floor lava glow
+            for i in 0..4 {
+                let hash = seed.wrapping_add(i * 41);
+                let x = (3.0 + (hash % 16) as f32) * TILE_SIZE + TILE_SIZE / 2.0;
+                commands.spawn((
+                    Sprite {
+                        color: glow_color,
+                        custom_size: Some(Vec2::new(TILE_SIZE * 2.0, TILE_SIZE * 0.5)),
+                        ..default()
+                    },
+                    Transform::from_xyz(x, TILE_SIZE + 4.0, Z_TILES + 0.15),
+                    RoomEntity,
+                    PlayingEntity,
+                ));
+            }
+            // Floating embers
+            for i in 0..5 {
+                let hash = seed.wrapping_add(i * 67);
+                let x = (2.0 + (hash % 20) as f32) * TILE_SIZE;
+                let y = TILE_SIZE * 3.0 + (hash % 200) as f32;
+                commands.spawn((
+                    Sprite {
+                        color: ember_color,
+                        custom_size: Some(Vec2::new(3.0, 3.0)),
+                        ..default()
+                    },
+                    Transform::from_xyz(x, y, Z_TILES + 0.3),
+                    RoomEntity,
+                    PlayingEntity,
+                ));
+            }
+        }
+        3 => {
+            // Root Heart: root tendrils from ceiling and floor
+            let root_color = Color::srgb(0.15, 0.25, 0.12);
+            let root_hi = Color::srgba(0.3, 0.5, 0.2, 0.3);
+            // Ceiling roots hanging down
+            for i in 0..5 {
+                let hash = seed.wrapping_add(i * 79);
+                let x = (3.0 + (hash % 18) as f32) * TILE_SIZE;
+                let h = 20.0 + (hash % 40) as f32;
+                commands.spawn((
+                    Sprite {
+                        color: root_color,
+                        custom_size: Some(Vec2::new(4.0, h)),
+                        ..default()
+                    },
+                    Transform::from_xyz(x, ROOM_H - TILE_SIZE - h / 2.0, Z_TILES + 0.25),
+                    RoomEntity,
+                    PlayingEntity,
+                ));
+            }
+            // Floor roots growing up
+            for i in 0..3 {
+                let hash = seed.wrapping_add(i * 101 + 33);
+                let x = (4.0 + (hash % 16) as f32) * TILE_SIZE;
+                let h = 15.0 + (hash % 25) as f32;
+                commands.spawn((
+                    Sprite {
+                        color: root_color,
+                        custom_size: Some(Vec2::new(3.0, h)),
+                        ..default()
+                    },
+                    Transform::from_xyz(x, TILE_SIZE + h / 2.0, Z_TILES + 0.25),
+                    RoomEntity,
+                    PlayingEntity,
+                ));
+            }
+            // Pulsing organic glow patches
+            for i in 0..2 {
+                let hash = seed.wrapping_add(i * 59);
+                let x = (5.0 + (hash % 14) as f32) * TILE_SIZE;
+                commands.spawn((
+                    Sprite {
+                        color: root_hi,
+                        custom_size: Some(Vec2::new(TILE_SIZE * 2.0, TILE_SIZE * 0.5)),
+                        ..default()
+                    },
+                    Transform::from_xyz(x, TILE_SIZE + 3.0, Z_TILES + 0.2),
+                    CrystalGlow { timer: i as f32 * 1.5, phase: i as f32 * 1.5 },
+                    RoomEntity,
+                    PlayingEntity,
+                ));
+            }
+        }
+        _ => {} // Floor 1 Stone Ruins uses existing decorations
+    }
+}
+
 fn spawn_wall_rubble(commands: &mut Commands, seed: u64, floor_color: Color) {
     let mut rng = seed.wrapping_mul(1103515245).wrapping_add(12345);
     let rubble_color = Color::srgb(
@@ -1167,10 +1406,85 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
     if floor >= 3 {
         spawn_crystal(commands, TILE_SIZE * 2.0, TILE_SIZE, 3.0);
     }
-    let _ = floor;
+
+    // Secret destructible wall (30% chance on floor 2+)
+    if floor >= 2 {
+        let secret_hash = seed.wrapping_mul(7919).wrapping_add(42);
+        if secret_hash % 100 < 30 {
+            spawn_secret_wall(commands, floor, seed);
+        }
+    }
 }
 
 // ─── Treasure Room ────────────────────────────────────────────────────────────
+
+fn spawn_altar_room(commands: &mut Commands, seed: u64) {
+    let plat_color = Color::srgb(0.28, 0.22, 0.32);
+
+    // Central raised platform with the altar
+    spawn_platform(commands, 8, 15, 2, plat_color);
+    // Steps up from left
+    spawn_platform(commands, 5, 7, 2, plat_color);
+    // Steps up from right
+    spawn_platform(commands, 16, 18, 2, plat_color);
+
+    // Spawn the altar in the center of the room
+    let altar_x = ROOM_W / 2.0;
+    let altar_y = TILE_SIZE * 3.0;
+    spawn_altar(commands, altar_x, altar_y);
+
+    // Atmospheric decorations
+    // Purple crystals flanking the altar
+    spawn_crystal(commands, altar_x - 80.0, TILE_SIZE * 2.5, 0.0);
+    spawn_crystal(commands, altar_x + 80.0, TILE_SIZE * 2.5, 1.5);
+    // Torches on walls
+    spawn_wall_torch(commands, LEFT_WALL_TORCH_X, TILE_SIZE * 4.0);
+    spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
+
+    // Runic floor decorations
+    let rune_color = Color::srgba(0.6, 0.4, 0.9, 0.15);
+    for i in 0..4 {
+        let rx = altar_x + (i as f32 - 1.5) * 30.0;
+        commands.spawn((
+            Sprite {
+                color: rune_color,
+                custom_size: Some(Vec2::new(8.0, 3.0)),
+                ..default()
+            },
+            Transform::from_xyz(rx, TILE_SIZE + 2.0, Z_TILES + 0.3),
+            RoomEntity,
+            PlayingEntity,
+        ));
+    }
+
+    // Mystical candles near the altar
+    for dx in [-50.0_f32, 50.0] {
+        let cx = altar_x + dx;
+        // Candle body
+        commands.spawn((
+            Sprite {
+                color: Color::srgb(0.80, 0.78, 0.70),
+                custom_size: Some(Vec2::new(4.0, 12.0)),
+                ..default()
+            },
+            Transform::from_xyz(cx, TILE_SIZE * 2.0 + 12.0, Z_TILES + 0.5),
+            RoomEntity,
+            PlayingEntity,
+        ));
+        // Candle flame
+        commands.spawn((
+            Sprite {
+                color: Color::srgba(0.8, 0.5, 1.0, 0.85),
+                custom_size: Some(Vec2::new(4.0, 8.0)),
+                ..default()
+            },
+            Transform::from_xyz(cx, TILE_SIZE * 2.0 + 22.0, Z_TILES + 0.6),
+            TorchFlicker { timer: seed as f32 * 0.1 + dx, base_alpha: 0.85 },
+            RoomEntity,
+            PlayingEntity,
+        ));
+    }
+}
 
 fn spawn_treasure_room(commands: &mut Commands, seed: u64) {
     let plat_color = Color::srgb(0.34, 0.30, 0.22);
@@ -1626,6 +1940,19 @@ fn spawn_boss_crystal(commands: &mut Commands, x: f32, y: f32, phase_offset: f32
 
 // ─── Animation Systems ────────────────────────────────────────────────────────
 
+fn check_altar_proximity(
+    keys: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
+    player_q: Query<&Transform, With<Player>>,
+    mut altar_q: Query<(&Transform, &mut AltarEntity), Without<Player>>,
+    mut state: ResMut<AltarState>,
+    room_state: Res<RoomState>,
+) {
+    if state.active { return; }
+    let Ok(p_tf) = player_q.get_single() else { return; };
+    check_altar_interaction(&keys, &gamepads, p_tf, &mut altar_q, &mut state, &room_state);
+}
+
 pub fn animate_torches(
     time: Res<Time>,
     mut query: Query<(&mut TorchFlicker, &mut Sprite)>,
@@ -1765,10 +2092,7 @@ fn check_room_exit(
             run.current_room += 1;
 
             room_state.current_type = room_state.floor_layout[room_state.room_index];
-            room_state.room_cleared = match room_state.current_type {
-                RoomType::Combat | RoomType::Boss => false,
-                _ => true,
-            };
+            room_state.room_cleared = !matches!(room_state.current_type, RoomType::Combat | RoomType::Boss);
 
             // Re-arm the start-room timer if transitioning into a Start room
             if room_state.current_type == RoomType::Start {

@@ -306,24 +306,21 @@ fn arrow_trap_tick(
 // ─── Spike Floor System ─────────────────────────────────────────────────────
 
 fn spike_floor_tick(
-    spike_q: Query<(&SpikeFloor, &Children)>,
+    mut spike_q: Query<(&mut SpikeFloor, &Children)>,
     mut vis_q: Query<&mut Transform, (With<SpikeVisual>, Without<SpikeFloor>)>,
-    mut spike_state_q: Query<&mut SpikeFloor, Without<Player>>,
     time: Res<Time>,
 ) {
     let dt = time.delta_secs();
 
-    // Update timers
-    for mut spike in &mut spike_state_q {
+    for (mut spike, children) in &mut spike_q {
+        // Update timer
         spike.cycle_timer -= dt;
         if spike.cycle_timer <= 0.0 {
             spike.raised = !spike.raised;
             spike.cycle_timer = if spike.raised { spike.raised_duration } else { spike.cycle_duration };
         }
-    }
 
-    // Animate spike visuals up/down based on parent raised state
-    for (spike, children) in &spike_q {
+        // Animate spike visuals up/down
         let target_y = if spike.raised { 6.0 } else { -5.0 };
         for &child in children.iter() {
             if let Ok(mut vtf) = vis_q.get_mut(child) {

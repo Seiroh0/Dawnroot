@@ -25,8 +25,8 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 ### Room Progression
 
 ```
- Start  -->  Combat x N  -->  Treasure  -->  Combat  -->  Shop  -->  Boss
-           (scales with floor)
+ Start --> Combat x N --> Treasure --> Combat --> [Altar] --> Shop --> Boss
+           (scales with floor)              (floor 2+)
 ```
 
 ---
@@ -69,12 +69,16 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 </td>
 <td width="50%">
 
-### Enemies & Boss
+### Enemies & Bosses
 - **Goblin** -- patrols and chases, animated legs, **leap attack**
 - **Bat** -- wave movement with flapping wings, **dive bomb**
 - **Stone Turret** -- aims and shoots, rotating eye, **burst fire**
 - **Boar** -- detects and charges, horns tilt forward, **ground shockwave**
-- **Floor Boss** -- large multi-part sprite with crown and claws, **3-phase AI** (normal / aggressive / enraged with AoE slam)
+- **Mage** -- teleports when player approaches, casts purple fireballs, goes invisible
+- **Slime** -- hops toward player, **splits into 2 small slimes on death**
+- **Ghost** -- phases in/out of existence (intangible when phased), floats toward player
+- **4 Unique Floor Bosses** -- Warlord (floor 1), Mushroom King (floor 2), Lava Golem (floor 3), Root Guardian (floor 4) -- each with distinct AI and multi-part sprites
+- **Boss phases** -- 50% HP aggressive, 25% HP enraged with AoE slam shockwave
 - **Elite Enemies** -- rare glowing variants (Armored, Swift, Brutal) with 2x HP, bonus loot, pulsing aura
 - **Floating damage numbers** on all hits (white, yellow crit, red player damage, blue block)
 - **Enemy health bars** above each enemy (green / yellow / red)
@@ -86,9 +90,12 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 
 ### World & Atmosphere
 - **Well intro cutscene** -- animated descent into the dungeon
+- **4 Biomes** -- Dark Dungeon (floor 1), Mushroom Cave (floor 2), Lava Caverns (floor 3), Root Depths (floor 4) -- each with unique tile colors, backgrounds, and ambient decorations
 - **16 combat room templates** -- staircase, arena, pit bridges, towers, zigzag, floating islands, walkways, tunnel, lava gauntlet, swamp marsh, elevator shaft, split path, pillared hall, crumbling ruins, the pit, alternating hazards
-- **Visual decorations** -- flickering torches, pulsing crystals, stalactites, mushrooms, moss & cracks
+- **Visual decorations** -- flickering torches, pulsing crystals, stalactites, mushrooms, glowing moss, embers, root tendrils
+- **Secret rooms** -- cracked walls (30% spawn chance, floor 2+) can be broken with 3 melee hits to reveal hidden loot
 - **3-part platform visuals** -- beveled edge caps, surface highlights, bottom shadows
+- **Altar room** -- curse/blessing choice with crystal flanks, rune floor, mystical candles
 - **Treasure room** -- gold coin piles, goblets, gemstones, golden banners, animated glow
 - **Boss arena** -- ritual circle, skull decorations, crimson banners, chains, pulsing floor glow, pillar capitals
 - Unique color palette per room type
@@ -106,7 +113,9 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - **Meta-progression** -- persistent upgrades between runs
 - **Score system** with gold bonus from equipment
 - Room-cleared confetti celebration
-- **Relic choice after boss** -- pick 1 of 3 random relics (10 relics with passive effects like crit, lifesteal, speed, defense)
+- **Relic choice after boss** -- pick 1 of 3 random relics (10 relics with procedural pixel art icons and passive effects like crit, lifesteal, speed, defense)
+- **Curse/Blessing Altars** (floor 2+) -- risk/reward choice: pick a blessing (HP, mana, heal, crit, gold) or accept a curse for a powerful tradeoff (e.g. +3 ATK / -2 HP)
+- **Minimap** -- bottom-right HUD indicator showing room progress with color-coded room types and current room highlight
 - **Pause menu** (ESC) -- Resume, Save & Quit, Quit without Saving
 
 </td>
@@ -137,12 +146,13 @@ src/
  |- title.rs          Title screen, save slots, WellIntro cutscene
  |- player.rs         Movement, melee, dash, gamepad input
  |- room.rs           Room generation, 16 templates, decorations
- |- enemy.rs          5 enemy types + boss, elite variants, health bars
+ |- enemy.rs          7 enemy types + 4 unique bosses, elite variants, health bars
  |- combat.rs         Melee / spell / projectile collision & damage
  |- spell.rs          4 spells with trails, frost, bolts, shield ring
  |- pause_menu.rs     ESC pause menu with save & quit
  |- effects.rs        Particles, afterimages, dust, confetti, flash, damage numbers
- |- hud.rs            UI overlay (HP, mana, gold, floor, spells)
+ |- altar.rs          Curse/blessing altar choice system
+ |- hud.rs            UI overlay (HP, mana, gold, floor, spells, minimap)
  |- camera.rs         Smooth follow camera + screen shake
  |- animation.rs      Generic frame-based animation support
  |- loot.rs           Drops, magnet pickup, treasure chest
@@ -215,7 +225,13 @@ cargo run
 - [x] Boss phases (50% aggressive, 25% enraged with AoE slam shockwave)
 - [x] Elite enemies (Armored, Swift, Brutal -- glowing aura, 2x HP, bonus loot)
 - [x] Traps -- arrow traps (wall-mounted, periodic fire), spike floors (retractable), poison clouds (DOT area)
-- [x] Relic choice after boss -- pick 1 of 3 random relics (10 relics with passive effects like crit, lifesteal, speed, defense)
+- [x] Relic choice after boss -- pick 1 of 3 random relics (10 relics with procedural pixel art icons)
+- [x] Curse/Blessing altars -- risk/reward choice rooms (5 blessings, 5 curses)
+- [x] 3 new enemy types -- Mage (teleport + cast), Slime (hop + split on death), Ghost (phase in/out)
+- [x] 4 biomes with unique tile colors, backgrounds, and ambient decorations
+- [x] 4 unique floor bosses -- Warlord, Mushroom King, Lava Golem, Root Guardian
+- [x] Secret rooms with destructible walls (break with melee, reveal hidden loot)
+- [x] Minimap HUD (room progress indicator with color-coded room types)
 
 ---
 

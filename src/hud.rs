@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{GameState, GameFont, RunData, PlayingEntity, player::Player, spell::SpellSlots, room::RoomState};
+use crate::{GameState, GameFont, RunData, PlayingEntity, player::Player, spell::SpellSlots, room::{RoomState, RoomType}};
 
 pub struct HudPlugin;
 
@@ -8,7 +8,7 @@ impl Plugin for HudPlugin {
         app.add_systems(OnEnter(GameState::Playing), setup_hud)
             .add_systems(
                 Update,
-                update_hud.run_if(in_state(GameState::Playing)),
+                (update_hud, update_minimap).run_if(in_state(GameState::Playing)),
             );
     }
 }
@@ -36,6 +36,14 @@ struct ScoreText;
 
 #[derive(Component)]
 struct EnemyText;
+
+#[derive(Component)]
+struct MinimapRoot;
+
+#[derive(Component)]
+struct MinimapCell {
+    room_index: usize,
+}
 
 fn setup_hud(mut commands: Commands, font: Res<GameFont>) {
     commands
@@ -130,6 +138,22 @@ fn setup_hud(mut commands: Commands, font: Res<GameFont>) {
                 },
                 SpellText,
             ));
+
+            // Minimap container (bottom-right)
+            parent.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    bottom: Val::Px(10.0),
+                    right: Val::Px(10.0),
+                    flex_direction: FlexDirection::Row,
+                    column_gap: Val::Px(3.0),
+                    align_items: AlignItems::Center,
+                    padding: UiRect::all(Val::Px(4.0)),
+                    ..default()
+                },
+                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.4)),
+                MinimapRoot,
+            ));
         });
 }
 
@@ -196,6 +220,94 @@ fn update_hud(
             **text = format!("Enemies: {}", run.enemies_alive);
         } else {
             **text = String::new();
+        }
+    }
+}
+
+/// Color for a minimap cell based on room type.
+fn minimap_room_color(room_type: RoomType) -> Color {
+    match room_type {
+        RoomType::Start    => Color::srgb(0.4, 0.6, 0.4),   // green
+        RoomType::Combat   => Color::srgb(0.7, 0.3, 0.25),  // red
+        RoomType::Treasure => Color::srgb(0.9, 0.75, 0.2),  // gold
+        RoomType::Shop     => Color::srgb(0.3, 0.5, 0.8),   // blue
+        RoomType::Boss     => Color::srgb(0.8, 0.15, 0.15), // bright red
+        RoomType::Altar    => Color::srgb(0.6, 0.3, 0.7),   // purple
+    }
+}
+
+/// Minimap system: rebuilds cells when floor layout changes, updates current room highlight.
+fn update_minimap(
+    mut commands: Commands,
+    room_state: Res<RoomState>,
+    minimap_root_q: Query<Entity, With<MinimapRoot>>,
+    mut cell_q: Query<(&MinimapCell, &mut BackgroundColor, &mut Node), Without<MinimapRoot>>,
+    mut last_floor: Local<i32>,
+    mut last_room_count: Local<usize>,
+) {
+    let Ok(root_entity) = minimap_root_q.get_single() else { return };
+    let layout = &room_state.floor_layout;
+
+    // Rebuild minimap cells if the floor changed or layout size changed
+    if *last_floor != room_state.floor || *last_room_count != layout.len() {
+        *last_floor = room_state.floor;
+        *last_room_count = layout.len();
+
+        // Despawn old children
+        commands.entity(root_entity).despawn_descendants();
+
+        // Spawn new cells
+        commands.entity(root_entity).with_children(|parent| {
+            for (i, &room_type) in layout.iter().enumerate() {
+                let color = minimap_room_color(room_type);
+                let is_current = i == room_state.room_index;
+                let size = if is_current { 12.0 } else { 8.0 };
+
+                parent.spawn((
+                    Node {
+                        width: Val::Px(size),
+                        height: Val::Px(size),
+                        border: if is_current {
+                            UiRect::all(Val::Px(1.0))
+                        } else {
+                            UiRect::ZERO
+                        },
+                        ..default()
+                    },
+                    BackgroundColor(color),
+                    BorderColor(if is_current { Color::WHITE } else { Color::NONE }),
+                    MinimapCell { room_index: i },
+                ));
+            }
+        });
+        return;
+    }
+
+    // Update existing cells (highlight current room)
+    for (cell, mut bg, mut node) in &mut cell_q {
+        let is_current = cell.room_index == room_state.room_index;
+        let room_type = layout.get(cell.room_index).copied().unwrap_or(RoomType::Combat);
+
+        let base_color = minimap_room_color(room_type);
+        if is_current {
+            // Brighten current room
+            *bg = BackgroundColor(Color::WHITE);
+            node.width = Val::Px(12.0);
+            node.height = Val::Px(12.0);
+            node.border = UiRect::all(Val::Px(1.0));
+        } else if cell.room_index < room_state.room_index {
+            // Visited rooms: dimmed
+            let Color::Srgba(c) = base_color else { *bg = BackgroundColor(base_color); continue; };
+            *bg = BackgroundColor(Color::srgba(c.red * 0.5, c.green * 0.5, c.blue * 0.5, 0.6));
+            node.width = Val::Px(8.0);
+            node.height = Val::Px(8.0);
+            node.border = UiRect::ZERO;
+        } else {
+            // Future rooms: normal color
+            *bg = BackgroundColor(base_color);
+            node.width = Val::Px(8.0);
+            node.height = Val::Px(8.0);
+            node.border = UiRect::ZERO;
         }
     }
 }

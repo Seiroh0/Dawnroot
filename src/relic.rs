@@ -268,16 +268,8 @@ fn spawn_relic_choice_ui(
                                 TextFont { font: f.clone(), font_size: 8.0, ..default() },
                                 TextColor(relic.color()),
                             ));
-                            // Relic icon (colored square)
-                            card.spawn((
-                                Node {
-                                    width: Val::Px(24.0),
-                                    height: Val::Px(24.0),
-                                    margin: UiRect::vertical(Val::Px(4.0)),
-                                    ..default()
-                                },
-                                BackgroundColor(relic.color()),
-                            ));
+                            // Relic icon (designed per relic)
+                            spawn_relic_icon(card, *relic);
                             // Description
                             card.spawn((
                                 Text::new(relic.description()),
@@ -403,4 +395,147 @@ fn apply_relic_effects(
     if inventory.has(Relic::StoneSkin) {
         stats.defense += 1;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Relic icon sprites (procedural pixel art in UI)
+// ---------------------------------------------------------------------------
+
+/// Spawn a multi-part procedural icon for a relic inside a UI parent node.
+fn spawn_relic_icon(parent: &mut ChildBuilder, relic: Relic) {
+    // Container node for the icon
+    parent.spawn(Node {
+        width: Val::Px(32.0),
+        height: Val::Px(32.0),
+        margin: UiRect::vertical(Val::Px(4.0)),
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+        ..default()
+    }).with_children(|icon| {
+        match relic {
+            Relic::BerserkersEdge => {
+                // Red blade with serrated edge
+                icon.spawn((Node { width: Val::Px(6.0), height: Val::Px(24.0), ..default() },
+                    BackgroundColor(Color::srgb(0.85, 0.25, 0.15))));
+                icon.spawn((Node { width: Val::Px(10.0), height: Val::Px(6.0),
+                    position_type: PositionType::Absolute, top: Val::Px(2.0), ..default() },
+                    BackgroundColor(Color::srgb(0.95, 0.35, 0.2))));
+                icon.spawn((Node { width: Val::Px(8.0), height: Val::Px(4.0),
+                    position_type: PositionType::Absolute, bottom: Val::Px(0.0), ..default() },
+                    BackgroundColor(Color::srgb(0.5, 0.2, 0.1))));
+            }
+            Relic::VampiricFang => {
+                // White fang dripping red
+                icon.spawn((Node { width: Val::Px(8.0), height: Val::Px(18.0), ..default() },
+                    BackgroundColor(Color::srgb(0.92, 0.90, 0.82))));
+                icon.spawn((Node { width: Val::Px(4.0), height: Val::Px(6.0),
+                    position_type: PositionType::Absolute, bottom: Val::Px(2.0), left: Val::Px(10.0), ..default() },
+                    BackgroundColor(Color::srgb(0.8, 0.1, 0.15))));
+                icon.spawn((Node { width: Val::Px(6.0), height: Val::Px(4.0),
+                    position_type: PositionType::Absolute, bottom: Val::Px(0.0), left: Val::Px(9.0), ..default() },
+                    BackgroundColor(Color::srgb(0.6, 0.05, 0.1))));
+            }
+            Relic::GoldenIdol => {
+                // Golden statuette
+                icon.spawn((Node { width: Val::Px(12.0), height: Val::Px(12.0), ..default() },
+                    BackgroundColor(Color::srgb(1.0, 0.85, 0.2))));
+                icon.spawn((Node { width: Val::Px(8.0), height: Val::Px(8.0),
+                    position_type: PositionType::Absolute, top: Val::Px(0.0), ..default() },
+                    BackgroundColor(Color::srgb(1.0, 0.90, 0.4))));
+                icon.spawn((Node { width: Val::Px(16.0), height: Val::Px(4.0),
+                    position_type: PositionType::Absolute, bottom: Val::Px(0.0), ..default() },
+                    BackgroundColor(Color::srgb(0.8, 0.65, 0.1))));
+            }
+            Relic::IronHeart => {
+                // Gray heart shape (two overlapping squares + triangle base)
+                icon.spawn((Node { width: Val::Px(14.0), height: Val::Px(14.0), ..default() },
+                    BackgroundColor(Color::srgb(0.55, 0.55, 0.6))));
+                icon.spawn((Node { width: Val::Px(10.0), height: Val::Px(10.0),
+                    position_type: PositionType::Absolute, top: Val::Px(2.0), left: Val::Px(7.0), ..default() },
+                    BackgroundColor(Color::srgb(0.65, 0.65, 0.7))));
+                icon.spawn((Node { width: Val::Px(8.0), height: Val::Px(8.0),
+                    position_type: PositionType::Absolute, bottom: Val::Px(2.0), ..default() },
+                    BackgroundColor(Color::srgb(0.45, 0.45, 0.5))));
+            }
+            Relic::SwiftBoots => {
+                // Green boot with wing accent
+                icon.spawn((Node { width: Val::Px(12.0), height: Val::Px(16.0), ..default() },
+                    BackgroundColor(Color::srgb(0.2, 0.7, 0.35))));
+                icon.spawn((Node { width: Val::Px(16.0), height: Val::Px(6.0),
+                    position_type: PositionType::Absolute, bottom: Val::Px(0.0), ..default() },
+                    BackgroundColor(Color::srgb(0.15, 0.55, 0.25))));
+                // Wing
+                icon.spawn((Node { width: Val::Px(6.0), height: Val::Px(8.0),
+                    position_type: PositionType::Absolute, top: Val::Px(4.0), right: Val::Px(2.0), ..default() },
+                    BackgroundColor(Color::srgb(0.9, 0.9, 0.85))));
+            }
+            Relic::ArcaneOrb => {
+                // Purple glowing orb
+                icon.spawn((Node { width: Val::Px(16.0), height: Val::Px(16.0), ..default() },
+                    BackgroundColor(Color::srgb(0.4, 0.2, 0.85))));
+                icon.spawn((Node { width: Val::Px(10.0), height: Val::Px(10.0),
+                    position_type: PositionType::Absolute, top: Val::Px(3.0), left: Val::Px(5.0), ..default() },
+                    BackgroundColor(Color::srgb(0.55, 0.35, 0.95))));
+                // Highlight sparkle
+                icon.spawn((Node { width: Val::Px(4.0), height: Val::Px(4.0),
+                    position_type: PositionType::Absolute, top: Val::Px(6.0), left: Val::Px(8.0), ..default() },
+                    BackgroundColor(Color::srgb(0.85, 0.75, 1.0))));
+            }
+            Relic::ChronoBracelet => {
+                // Cyan bracelet ring
+                icon.spawn((Node { width: Val::Px(18.0), height: Val::Px(18.0), ..default() },
+                    BackgroundColor(Color::srgb(0.3, 0.65, 0.85))));
+                // Hollow center
+                icon.spawn((Node { width: Val::Px(10.0), height: Val::Px(10.0),
+                    position_type: PositionType::Absolute, top: Val::Px(7.0), left: Val::Px(7.0), ..default() },
+                    BackgroundColor(Color::srgb(0.08, 0.06, 0.04))));
+                // Clock hand
+                icon.spawn((Node { width: Val::Px(2.0), height: Val::Px(6.0),
+                    position_type: PositionType::Absolute, top: Val::Px(8.0), left: Val::Px(11.0), ..default() },
+                    BackgroundColor(Color::srgb(0.9, 0.9, 0.95))));
+            }
+            Relic::WarriorsBand => {
+                // Orange ring with gem
+                icon.spawn((Node { width: Val::Px(16.0), height: Val::Px(8.0), ..default() },
+                    BackgroundColor(Color::srgb(0.75, 0.45, 0.15))));
+                icon.spawn((Node { width: Val::Px(16.0), height: Val::Px(4.0),
+                    position_type: PositionType::Absolute, bottom: Val::Px(8.0), ..default() },
+                    BackgroundColor(Color::srgb(0.85, 0.55, 0.2))));
+                // Center gem
+                icon.spawn((Node { width: Val::Px(6.0), height: Val::Px(6.0),
+                    position_type: PositionType::Absolute, top: Val::Px(5.0), ..default() },
+                    BackgroundColor(Color::srgb(0.95, 0.3, 0.15))));
+            }
+            Relic::StoneSkin => {
+                // Layered stone shield
+                icon.spawn((Node { width: Val::Px(16.0), height: Val::Px(20.0), ..default() },
+                    BackgroundColor(Color::srgb(0.5, 0.45, 0.4))));
+                icon.spawn((Node { width: Val::Px(12.0), height: Val::Px(16.0),
+                    position_type: PositionType::Absolute, top: Val::Px(2.0), ..default() },
+                    BackgroundColor(Color::srgb(0.6, 0.55, 0.5))));
+                // Crack detail
+                icon.spawn((Node { width: Val::Px(2.0), height: Val::Px(8.0),
+                    position_type: PositionType::Absolute, top: Val::Px(6.0), left: Val::Px(10.0), ..default() },
+                    BackgroundColor(Color::srgb(0.35, 0.3, 0.28))));
+            }
+            Relic::GuardianAmulet => {
+                // Blue shield amulet with chain
+                icon.spawn((Node { width: Val::Px(4.0), height: Val::Px(8.0),
+                    position_type: PositionType::Absolute, top: Val::Px(0.0), ..default() },
+                    BackgroundColor(Color::srgb(0.6, 0.6, 0.65))));
+                icon.spawn((Node { width: Val::Px(14.0), height: Val::Px(16.0), ..default() },
+                    BackgroundColor(Color::srgb(0.3, 0.55, 0.95))));
+                icon.spawn((Node { width: Val::Px(10.0), height: Val::Px(10.0),
+                    position_type: PositionType::Absolute, top: Val::Px(11.0), ..default() },
+                    BackgroundColor(Color::srgb(0.2, 0.45, 0.85))));
+                // Star/cross in center
+                icon.spawn((Node { width: Val::Px(6.0), height: Val::Px(2.0),
+                    position_type: PositionType::Absolute, top: Val::Px(15.0), ..default() },
+                    BackgroundColor(Color::srgb(0.9, 0.9, 1.0))));
+                icon.spawn((Node { width: Val::Px(2.0), height: Val::Px(6.0),
+                    position_type: PositionType::Absolute, top: Val::Px(13.0), ..default() },
+                    BackgroundColor(Color::srgb(0.9, 0.9, 1.0))));
+            }
+        }
+    });
 }

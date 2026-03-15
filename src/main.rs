@@ -19,6 +19,7 @@ mod audio;
 mod equipment;
 mod pause_menu;
 mod relic;
+mod altar;
 
 use bevy::prelude::*;
 use constants::*;
@@ -152,6 +153,7 @@ fn main() {
             equipment::EquipmentPlugin,
             pause_menu::PauseMenuPlugin,
             relic::RelicPlugin,
+            altar::AltarPlugin,
         ))
         .add_systems(OnEnter(GameState::Playing), (setup_run, apply_loaded_save).chain())
         .add_systems(OnExit(GameState::Playing), cleanup_run)
