@@ -29,6 +29,7 @@ impl Plugin for TitlePlugin {
                     update_falling_particles,
                     update_intro_afterimages,
                     update_intro_dust,
+                    intro_camera_shake,
                 )
                     .run_if(in_state(GameState::WellIntro)),
             );
@@ -909,6 +910,12 @@ struct FallingParticle {
     lifetime: f32,
 }
 
+#[derive(Component)]
+struct IntroScreenShake {
+    strength: f32,
+    timer: f32,
+}
+
 #[derive(Resource)]
 struct IntroState {
     phase: IntroPhase,
@@ -938,7 +945,7 @@ fn setup_well_intro(mut commands: Commands) {
         dust_spawned: false,
     });
 
-    commands.spawn((Camera2d, IntroEntity));
+    commands.spawn((Camera2d, IntroEntity, IntroScreenShake { strength: 0.0, timer: 0.0 }));
 
     // Sky
     commands.spawn((
@@ -1037,6 +1044,7 @@ fn update_well_intro(
     mut legl_q: Query<&mut Transform, (With<IntroLegL>, Without<IntroPlayer>, Without<IntroLegR>)>,
     mut legr_q: Query<&mut Transform, (With<IntroLegR>, Without<IntroPlayer>, Without<IntroLegL>)>,
     mut darkness_q: Query<&mut Sprite, (With<DarknessOverlay>, Without<IntroPlayerPart>)>,
+    mut shake_q: Query<&mut IntroScreenShake>,
     mut next_state: ResMut<NextState<GameState>>,
     time: Res<Time>,
 ) {
@@ -1088,21 +1096,31 @@ fn update_well_intro(
                 p_tf.translation.y = state.player_start_y + 10.0 - fall_frac * 90.0;
                 p_tf.scale = Vec3::new(0.8, 1.15, 1.0);
 
-                // Module 4: Spawn afterimages during fall
+                // Afterimage trail: spawn ghost every 0.04s during fall
                 state.afterimage_timer -= dt;
                 if state.afterimage_timer <= 0.0 {
-                    state.afterimage_timer = 0.06;
-                    let alpha = (1.0 - fall_frac).max(0.0) * 0.4;
-                    // Body afterimage
+                    state.afterimage_timer = 0.04;
+                    // Body silhouette ghost
                     commands.spawn((
                         Sprite {
-                            color: Color::srgba(0.50, 0.30, 0.12, alpha),
+                            color: Color::srgba(0.50, 0.30, 0.12, 0.5),
                             custom_size: Some(Vec2::new(14.0, 30.0)),
                             ..default()
                         },
                         Transform::from_xyz(p_tf.translation.x, p_tf.translation.y, Z_PLAYER - 0.5),
                         IntroEntity,
-                        IntroAfterimage { lifetime: 0.3, max_lifetime: 0.3 },
+                        IntroAfterimage { lifetime: 0.5, max_lifetime: 0.5 },
+                    ));
+                    // Head ghost
+                    commands.spawn((
+                        Sprite {
+                            color: Color::srgba(0.78, 0.62, 0.48, 0.4),
+                            custom_size: Some(Vec2::new(12.0, 11.0)),
+                            ..default()
+                        },
+                        Transform::from_xyz(p_tf.translation.x, p_tf.translation.y + 12.0, Z_PLAYER - 0.6),
+                        IntroEntity,
+                        IntroAfterimage { lifetime: 0.5, max_lifetime: 0.5 },
                     ));
                 }
 
@@ -1126,27 +1144,56 @@ fn update_well_intro(
                 ds.color = Color::srgba(0.0, 0.0, 0.0, alpha);
             }
 
-            // Module 4: Enhanced speed lines + wind particles during fall
-            if state.timer > 0.2 && state.timer < 1.8 {
+            // Speed lines: vertical semi-transparent lines rushing upward
+            if state.timer > 0.15 && state.timer < 2.0 {
                 use rand::Rng;
                 let mut rng = rand::thread_rng();
-                // More particles for more intensity
-                let count = if state.timer < 0.8 { 4 } else { 2 };
-                for _ in 0..count {
-                    let px = rng.gen_range(-120.0..120.0_f32);
-                    let speed = rng.gen_range(400.0..700.0_f32);
-                    let br = rng.gen_range(0.15..0.4_f32);
-                    let width = rng.gen_range(2.0..4.0_f32);
-                    let height = rng.gen_range(10.0..25.0_f32);
+                // Ramp up intensity early, sustain, then taper off
+                let intensity = if state.timer < 0.5 {
+                    6
+                } else if state.timer < 1.4 {
+                    4
+                } else {
+                    2
+                };
+                for _ in 0..intensity {
+                    let px = rng.gen_range(-200.0..200.0_f32);
+                    let speed = rng.gen_range(600.0..1100.0_f32);
+                    let br = rng.gen_range(0.2..0.5_f32);
+                    let width = rng.gen_range(1.5..4.5_f32);
+                    let height = rng.gen_range(18.0..45.0_f32);
                     commands.spawn((
                         Sprite {
-                            color: Color::srgba(br, br * 0.9, br * 0.7, 0.7),
+                            color: Color::srgba(br, br * 0.85, br * 0.6, 0.75),
                             custom_size: Some(Vec2::new(width, height)),
                             ..default()
                         },
-                        Transform::from_xyz(px, VIEWPORT_H / 2.0 + 10.0, Z_HUD - 0.5),
+                        Transform::from_xyz(px, -VIEWPORT_H / 2.0 - 20.0, Z_HUD - 0.5),
                         IntroEntity,
-                        FallingParticle { vy: -speed, lifetime: 1.0 },
+                        FallingParticle { vy: speed, lifetime: 1.2 },
+                    ));
+                }
+            }
+
+            // Afterimage ghosts during early darkness (still visible through fade)
+            if state.timer < 0.5 {
+                state.afterimage_timer -= dt;
+                if state.afterimage_timer <= 0.0 {
+                    state.afterimage_timer = 0.06;
+                    let alpha = (1.0 - state.timer / 0.5) * 0.35;
+                    commands.spawn((
+                        Sprite {
+                            color: Color::srgba(0.45, 0.28, 0.12, alpha),
+                            custom_size: Some(Vec2::new(14.0, 30.0)),
+                            ..default()
+                        },
+                        Transform::from_xyz(
+                            (rand::random::<f32>() - 0.5) * 6.0,
+                            (rand::random::<f32>() - 0.5) * 40.0,
+                            Z_PLAYER - 0.5,
+                        ),
+                        IntroEntity,
+                        IntroAfterimage { lifetime: 0.5, max_lifetime: 0.5 },
                     ));
                 }
             }
@@ -1161,45 +1208,58 @@ fn update_well_intro(
         IntroPhase::LandInCave => {
             if let Ok(mut ds) = darkness_q.get_single_mut() {
                 if state.timer < 0.1 {
-                    // Module 4: Brief bright flash on impact
-                    let flash = (1.0 - state.timer / 0.1) * 0.3;
-                    ds.color = Color::srgba(0.12 + flash, 0.08 + flash * 0.5, 0.05, 0.85);
+                    // Brief bright flash on impact
+                    let flash = (1.0 - state.timer / 0.1) * 0.35;
+                    ds.color = Color::srgba(0.15 + flash, 0.10 + flash * 0.5, 0.06, 0.8);
                 } else {
                     ds.color = Color::srgba(0.0, 0.0, 0.0, 1.0);
                 }
             }
 
-            // Module 4: Spawn dust puffs on landing (once)
+            // Camera shake + dust on landing (once)
             if !state.dust_spawned {
                 state.dust_spawned = true;
-                use rand::Rng;
-                let mut rng = rand::thread_rng();
-                for i in 0..12_u32 {
-                    let dir = if i % 2 == 0 { 1.0 } else { -1.0 };
-                    let speed = rng.gen_range(60.0..180.0_f32);
-                    let vy = rng.gen_range(30.0..80.0_f32);
-                    let size = rng.gen_range(3.0..8.0_f32);
-                    let lt = rng.gen_range(0.4..0.8_f32);
-                    commands.spawn((
-                        Sprite {
-                            color: Color::srgba(0.4, 0.35, 0.25, 0.6),
-                            custom_size: Some(Vec2::new(size, size * 0.7)),
-                            ..default()
-                        },
-                        Transform::from_xyz(
-                            rng.gen_range(-15.0..15.0),
-                            -VIEWPORT_H / 2.0 + 60.0,
-                            Z_HUD - 0.3,
-                        ),
-                        IntroEntity,
-                        IntroDustPuff {
-                            vx: dir * speed,
-                            vy,
-                            lifetime: lt,
-                            max_lifetime: lt,
-                        },
-                    ));
+
+                // Trigger camera shake
+                if let Ok(mut shake) = shake_q.get_single_mut() {
+                    shake.strength = 8.0;
+                    shake.timer = 0.35;
                 }
+
+                // Exactly 2 dust particles at player's feet: one left-down, one right-down
+                let foot_y = -VIEWPORT_H / 2.0 + 60.0;
+                // Left particle
+                commands.spawn((
+                    Sprite {
+                        color: Color::srgba(0.75, 0.7, 0.65, 0.85),
+                        custom_size: Some(Vec2::new(8.0, 8.0)),
+                        ..default()
+                    },
+                    Transform::from_xyz(-2.0, foot_y, Z_HUD - 0.3),
+                    IntroEntity,
+                    IntroDustPuff {
+                        vx: -140.0,
+                        vy: -40.0,
+                        lifetime: 0.5,
+                        max_lifetime: 0.5,
+                    },
+                ));
+                // Right particle
+                commands.spawn((
+                    Sprite {
+                        color: Color::srgba(0.7, 0.65, 0.6, 0.85),
+                        custom_size: Some(Vec2::new(8.0, 8.0)),
+                        ..default()
+                    },
+                    Transform::from_xyz(2.0, foot_y, Z_HUD - 0.3),
+                    IntroEntity,
+                    IntroDustPuff {
+                        vx: 140.0,
+                        vy: -40.0,
+                        lifetime: 0.5,
+                        max_lifetime: 0.5,
+                    },
+                ));
             }
 
             if state.timer >= 0.6 {
@@ -1225,10 +1285,11 @@ fn update_falling_particles(
     time: Res<Time>,
 ) {
     let dt = time.delta_secs();
+    let half_h = VIEWPORT_H / 2.0 + 60.0;
     for (entity, mut tf, mut p) in &mut query {
         tf.translation.y += p.vy * dt;
         p.lifetime -= dt;
-        if p.lifetime <= 0.0 || tf.translation.y < -VIEWPORT_H / 2.0 - 50.0 {
+        if p.lifetime <= 0.0 || tf.translation.y > half_h || tf.translation.y < -half_h {
             commands.entity(entity).despawn();
         }
     }
@@ -1268,10 +1329,33 @@ fn update_intro_dust(
         }
         tf.translation.x += dust.vx * dt;
         tf.translation.y += dust.vy * dt;
-        dust.vy -= 120.0 * dt; // gravity on dust
-        dust.vx *= 0.96;
-        let alpha = (dust.lifetime / dust.max_lifetime).clamp(0.0, 1.0) * 0.6;
+        dust.vy -= 200.0 * dt; // gravity pulls down
+        dust.vx *= 0.95;
+
+        let t = (dust.lifetime / dust.max_lifetime).clamp(0.0, 1.0);
+        // Shrink scale as particle fades
+        tf.scale = Vec3::splat(t);
         let c = sprite.color.to_srgba();
-        sprite.color = Color::srgba(c.red, c.green, c.blue, alpha);
+        sprite.color = Color::srgba(c.red, c.green, c.blue, t * 0.85);
+    }
+}
+
+fn intro_camera_shake(
+    mut query: Query<(&mut Transform, &mut IntroScreenShake)>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs();
+    for (mut tf, mut shake) in &mut query {
+        if shake.timer > 0.0 {
+            shake.timer = (shake.timer - dt).max(0.0);
+            shake.strength *= (-10.0 * dt).exp();
+            let sx = (rand::random::<f32>() * 2.0 - 1.0) * shake.strength;
+            let sy = (rand::random::<f32>() * 2.0 - 1.0) * shake.strength;
+            tf.translation.x = sx;
+            tf.translation.y = sy;
+        } else {
+            tf.translation.x = 0.0;
+            tf.translation.y = 0.0;
+        }
     }
 }
