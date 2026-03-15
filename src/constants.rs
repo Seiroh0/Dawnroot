@@ -83,6 +83,18 @@ pub const SHIELD_DURATION: f32 = 2.0;
 pub const SHIELD_MANA_COST: f32 = 30.0;
 pub const SHIELD_COOLDOWN: f32 = 5.0;
 
+// Enemy abilities
+pub const GOBLIN_LEAP_COOLDOWN: f32 = 3.0;
+pub const GOBLIN_LEAP_SPEED: f32 = 350.0;
+pub const GOBLIN_LEAP_RANGE: f32 = 120.0;
+pub const GOBLIN_LEAP_SPEED_MULT: f32 = 1.8;
+pub const BAT_DIVE_COOLDOWN: f32 = 4.0;
+pub const BAT_DIVE_SPEED: f32 = 300.0;
+pub const BAT_DIVE_RANGE: f32 = 100.0;
+pub const TURRET_BURST_INTERVAL: f32 = 0.12;
+pub const TURRET_BURST_COUNT: i32 = 2;
+pub const BOAR_SHOCKWAVE_SPEED: f32 = 200.0;
+
 // Collision layers (bitmask)
 pub const LAYER_WORLD: u32 = 1;
 pub const LAYER_PLAYER: u32 = 2;

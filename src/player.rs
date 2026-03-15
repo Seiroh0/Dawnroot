@@ -205,7 +205,7 @@ fn player_input(
     let dt = time.delta_secs();
     let gp = gamepads.iter().next();
 
-    player.anim_time += dt;
+    player.anim_time = (player.anim_time + dt) % 1000.0;
     player.melee_cooldown = (player.melee_cooldown - dt).max(0.0);
     player.ranged_cooldown = (player.ranged_cooldown - dt).max(0.0);
     player.dash_cooldown = (player.dash_cooldown - dt).max(0.0);
@@ -293,8 +293,8 @@ fn player_input(
         player.block_cooldown = BLOCK_COOLDOWN;
     }
 
-    // Melee: J/LMB + gamepad West(X)
-    let attack = keys.just_pressed(KeyCode::KeyJ) || mouse.just_pressed(MouseButton::Left) || gp.map_or(false, |g| g.just_pressed(GamepadButton::West));
+    // Melee: E/J/LMB + gamepad West(X)
+    let attack = keys.just_pressed(KeyCode::KeyE) || keys.just_pressed(KeyCode::KeyJ) || mouse.just_pressed(MouseButton::Left) || gp.map_or(false, |g| g.just_pressed(GamepadButton::West));
     if attack && player.melee_cooldown <= 0.0 {
         player.melee_cooldown = MELEE_COOLDOWN;
         ev_attack.send(PlayerAttack);

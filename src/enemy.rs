@@ -22,6 +22,10 @@ impl Plugin for EnemyPlugin {
                     animate_flying_enemies,
                     animate_charger_enemies,
                     animate_turret_eye,
+                    update_enemy_health_bars,
+                    apply_elite_to_new_enemies,
+                    apply_elite_buffs,
+                    animate_elite_aura,
                 )
                     .run_if(in_state(GameState::Playing)),
             );
@@ -100,6 +104,7 @@ pub struct EnemyProjectile {
     pub vx: f32,
     pub vy: f32,
     pub lifetime: f32,
+    pub damage: i32,
 }
 
 // ---------------------------------------------------------------------------
@@ -131,6 +136,44 @@ pub struct BoarHorn {
 /// Rotating eye/barrel of a TurretEnemy.
 #[derive(Component)]
 pub struct TurretEye;
+
+/// Marker component for boss entities (enables phase behavior).
+#[derive(Component)]
+pub struct BossEnemy;
+
+/// Elite enemy modifier — stronger, glowing variant of a normal enemy.
+#[derive(Component)]
+pub struct EliteEnemy {
+    pub modifier: EliteModifier,
+}
+
+#[derive(Clone, Copy)]
+pub enum EliteModifier {
+    /// Takes 50% less damage
+    Armored,
+    /// Moves 60% faster
+    Swift,
+    /// 2x contact damage
+    Brutal,
+}
+
+/// Marker: elite buffs have been applied to this enemy's stats
+#[derive(Component)]
+struct EliteBuffApplied;
+
+/// Pulsing glow aura child sprite on elite enemies
+#[derive(Component)]
+pub struct EliteAura;
+
+/// Health bar background (dark).
+#[derive(Component)]
+pub struct EnemyHealthBarBg;
+
+/// Health bar foreground (colored fill).
+#[derive(Component)]
+pub struct EnemyHealthBarFill {
+    pub owner: Entity,
+}
 
 // ---------------------------------------------------------------------------
 // Spawn state resource
@@ -195,6 +238,11 @@ fn spawn_room_enemies(
             2 => spawn_turret_enemy(&mut commands, x, y, floor),
             _ => spawn_charger_enemy(&mut commands, x, y, floor),
         }
+    }
+
+    // Apply elite status to enemies (15% chance per enemy on floor 2+)
+    if floor >= 2 {
+        // We'll mark elites in a separate pass using apply_elite_to_new_enemies
     }
 }
 
@@ -1067,6 +1115,7 @@ fn spawn_boss(commands: &mut Commands, floor: i32) {
             leap_cooldown: 1.5,
             is_leaping: false,
         },
+        BossEnemy,
         RoomEntity,
         PlayingEntity,
     )).with_children(|parent| {
@@ -1296,15 +1345,32 @@ fn spawn_boss(commands: &mut Commands, floor: i32) {
 // ---------------------------------------------------------------------------
 
 fn ground_enemy_ai(
-    mut query: Query<(&mut Transform, &mut GroundEnemy)>,
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Transform, &mut GroundEnemy, &Enemy, Option<&BossEnemy>, Option<&EliteEnemy>)>,
     player_q: Query<&Transform, (With<Player>, Without<GroundEnemy>)>,
     time: Res<Time>,
 ) {
     let player_pos = player_q.get_single().map(|t| t.translation).ok();
 
-    for (mut tf, mut ge) in &mut query {
+    for (_entity, mut tf, mut ge, enemy, is_boss, elite) in &mut query {
         let dt = time.delta_secs();
         ge.leap_cooldown = (ge.leap_cooldown - dt).max(0.0);
+
+        // Boss phase modifiers
+        let hp_ratio = enemy.health as f32 / enemy.max_health.max(1) as f32;
+        let (phase_speed_mult, phase_leap_cd_mult): (f32, f32) = if is_boss.is_some() {
+            if hp_ratio <= 0.25 {
+                // Phase 3: enraged — very fast, rapid leaps
+                (1.8, 0.4)
+            } else if hp_ratio <= 0.5 {
+                // Phase 2: aggressive — faster, shorter cooldowns
+                (1.4, 0.65)
+            } else {
+                (1.0, 1.0)
+            }
+        } else {
+            (1.0, 1.0)
+        };
 
         ge.vy -= GRAVITY * 0.5 * dt;
         ge.vy = ge.vy.max(-600.0);
@@ -1317,16 +1383,44 @@ fn ground_enemy_ai(
             }
             // Leap attack: when close and on ground, jump toward player
             let on_ground = tf.translation.y <= TILE_SIZE + 12.0;
-            if dx < 120.0 && dy < 80.0 && on_ground && ge.leap_cooldown <= 0.0 && !ge.is_leaping {
+            let leap_cd = GOBLIN_LEAP_COOLDOWN * phase_leap_cd_mult;
+            if dx < GOBLIN_LEAP_RANGE && dy < 80.0 && on_ground && ge.leap_cooldown <= 0.0 && !ge.is_leaping {
                 ge.is_leaping = true;
-                ge.leap_cooldown = 3.0;
-                ge.vy = 350.0; // jump up
+                ge.leap_cooldown = leap_cd;
+                ge.vy = GOBLIN_LEAP_SPEED * phase_speed_mult.min(1.3_f32);
                 ge.direction = if pp.x > tf.translation.x { 1.0 } else { -1.0 };
+            }
+
+            // Boss Phase 3: AoE slam when landing from leap
+            if is_boss.is_some() && hp_ratio <= 0.25 && ge.is_leaping && ge.vy < 0.0 {
+                let on_ground_now = tf.translation.y <= TILE_SIZE + 12.0;
+                if on_ground_now {
+                    // Spawn shockwaves in both directions
+                    for dir in [-1.0_f32, 1.0] {
+                        commands.spawn((
+                            Sprite {
+                                color: Color::srgba(0.9, 0.3, 0.1, 0.7),
+                                custom_size: Some(Vec2::new(24.0, 12.0)),
+                                ..default()
+                            },
+                            Transform::from_xyz(tf.translation.x, TILE_SIZE + 5.0, Z_PROJECTILES),
+                            EnemyProjectile {
+                                vx: dir * BOAR_SHOCKWAVE_SPEED * 1.5,
+                                vy: 0.0,
+                                lifetime: 1.0,
+                                damage: 2,
+                            },
+                            RoomEntity,
+                            PlayingEntity,
+                        ));
+                    }
+                }
             }
         }
 
-        let speed_mult = if ge.is_leaping { 1.8 } else { 1.0 };
-        tf.translation.x += ge.direction * ge.speed * speed_mult * dt;
+        let elite_speed = if elite.map_or(false, |e| matches!(e.modifier, EliteModifier::Swift)) { 1.6 } else { 1.0 };
+        let speed_mult = if ge.is_leaping { GOBLIN_LEAP_SPEED_MULT } else { 1.0 };
+        tf.translation.x += ge.direction * ge.speed * speed_mult * phase_speed_mult * elite_speed * dt;
         tf.translation.y += ge.vy * dt;
 
         let margin = TILE_SIZE + 12.0;
@@ -1344,23 +1438,23 @@ fn ground_enemy_ai(
 }
 
 fn flying_enemy_ai(
-    mut query: Query<(&mut Transform, &mut FlyingEnemy)>,
+    mut query: Query<(&mut Transform, &mut FlyingEnemy, Option<&EliteEnemy>)>,
     player_q: Query<&Transform, (With<Player>, Without<FlyingEnemy>)>,
     time: Res<Time>,
 ) {
     let player_pos = player_q.get_single().map(|t| t.translation).ok();
 
-    for (mut tf, mut fe) in &mut query {
+    for (mut tf, mut fe, elite) in &mut query {
         let dt = time.delta_secs();
         fe.dive_cooldown = (fe.dive_cooldown - dt).max(0.0);
 
         if fe.is_diving {
             // Swoop down toward target, then pull back up
             let target_y = fe.dive_target_y;
-            tf.translation.y += (target_y - tf.translation.y).signum() * 300.0 * dt;
+            tf.translation.y += (target_y - tf.translation.y).signum() * BAT_DIVE_SPEED * dt;
             if (tf.translation.y - target_y).abs() < 10.0 || tf.translation.y < TILE_SIZE + 20.0 {
                 fe.is_diving = false;
-                fe.dive_cooldown = 4.0;
+                fe.dive_cooldown = BAT_DIVE_COOLDOWN;
             }
         } else {
             fe.phase += fe.wave_speed * dt;
@@ -1369,23 +1463,58 @@ fn flying_enemy_ai(
             // Initiate dive when player is below and in range
             if let Some(pp) = player_pos {
                 let dx = (pp.x - tf.translation.x).abs();
-                if dx < 100.0 && pp.y < tf.translation.y - 40.0 && fe.dive_cooldown <= 0.0 {
+                if dx < BAT_DIVE_RANGE && pp.y < tf.translation.y - 40.0 && fe.dive_cooldown <= 0.0 {
                     fe.is_diving = true;
                     fe.dive_target_y = pp.y;
                 }
             }
         }
 
+        let elite_speed = if elite.map_or(false, |e| matches!(e.modifier, EliteModifier::Swift)) { 1.6 } else { 1.0 };
         if let Some(pp) = player_pos {
             let dir = if pp.x > tf.translation.x { 1.0 } else { -1.0 };
             let speed = if fe.is_diving { fe.speed_x * 2.0 } else { fe.speed_x };
-            tf.translation.x += dir * speed * dt;
+            tf.translation.x += dir * speed * elite_speed * dt;
         }
 
         let margin = TILE_SIZE + 14.0;
         tf.translation.x = tf.translation.x.clamp(margin, ROOM_W - margin);
         tf.translation.y = tf.translation.y.max(TILE_SIZE + 10.0);
     }
+}
+
+/// Helper: compute aimed projectile velocity toward a target (or left if no target).
+fn aim_at_target(origin: Vec3, target: Option<Vec3>, speed: f32) -> (f32, f32) {
+    if let Some(pp) = target {
+        let diff = pp - origin;
+        let len = diff.length().max(1.0);
+        (diff.x / len * speed, diff.y / len * speed)
+    } else {
+        (-speed, 0.0)
+    }
+}
+
+/// Helper: spawn a turret projectile.
+fn spawn_turret_projectile(
+    commands: &mut Commands,
+    pos: Vec3,
+    vx: f32, vy: f32,
+    color: Color,
+    size: f32,
+    lifetime: f32,
+    damage: i32,
+) {
+    commands.spawn((
+        Sprite {
+            color,
+            custom_size: Some(Vec2::new(size, size)),
+            ..default()
+        },
+        Transform::from_xyz(pos.x, pos.y, Z_PROJECTILES),
+        EnemyProjectile { vx, vy, lifetime, damage },
+        RoomEntity,
+        PlayingEntity,
+    ));
 }
 
 fn turret_enemy_ai(
@@ -1404,27 +1533,10 @@ fn turret_enemy_ai(
             turret.burst_timer -= dt;
             if turret.burst_timer <= 0.0 {
                 turret.burst_count -= 1;
-                turret.burst_timer = 0.12; // rapid fire interval
-
-                let (vx, vy) = if let Some(pp) = player_pos {
-                    let diff = pp - tf.translation;
-                    let len = diff.length().max(1.0);
-                    (diff.x / len * turret.projectile_speed, diff.y / len * turret.projectile_speed)
-                } else {
-                    (-turret.projectile_speed, 0.0)
-                };
-
-                commands.spawn((
-                    Sprite {
-                        color: Color::srgb(1.0, 0.3, 0.1),
-                        custom_size: Some(Vec2::new(6.0, 6.0)),
-                        ..default()
-                    },
-                    Transform::from_xyz(tf.translation.x, tf.translation.y, Z_PROJECTILES),
-                    EnemyProjectile { vx, vy, lifetime: 2.5 },
-                    RoomEntity,
-                    PlayingEntity,
-                ));
+                turret.burst_timer = TURRET_BURST_INTERVAL;
+                let (vx, vy) = aim_at_target(tf.translation, player_pos, turret.projectile_speed);
+                spawn_turret_projectile(&mut commands, tf.translation, vx, vy,
+                    Color::srgb(1.0, 0.3, 0.1), 6.0, 2.5, 1);
             }
             continue;
         }
@@ -1432,32 +1544,14 @@ fn turret_enemy_ai(
         turret.fire_timer -= dt;
         if turret.fire_timer <= 0.0 {
             turret.fire_timer = turret.fire_interval;
+            let (vx, vy) = aim_at_target(tf.translation, player_pos, turret.projectile_speed);
+            spawn_turret_projectile(&mut commands, tf.translation, vx, vy,
+                Color::srgb(1.0, 0.5, 0.2), 8.0, 3.0, 1);
 
-            let (vx, vy) = if let Some(pp) = player_pos {
-                let diff = pp - tf.translation;
-                let len = diff.length().max(1.0);
-                (diff.x / len * turret.projectile_speed, diff.y / len * turret.projectile_speed)
-            } else {
-                (-turret.projectile_speed, 0.0)
-            };
-
-            commands.spawn((
-                Sprite {
-                    color: Color::srgb(1.0, 0.5, 0.2),
-                    custom_size: Some(Vec2::new(8.0, 8.0)),
-                    ..default()
-                },
-                Transform::from_xyz(tf.translation.x, tf.translation.y, Z_PROJECTILES),
-                EnemyProjectile { vx, vy, lifetime: 3.0 },
-                RoomEntity,
-                PlayingEntity,
-            ));
-
-            // Every 3rd shot triggers a burst (2 extra rapid shots)
-            // Use fire_interval as a rough cycle: burst on shorter intervals
+            // Burst fire on higher-difficulty turrets (shorter fire interval = higher floors)
             if turret.fire_interval < 2.0 {
-                turret.burst_count = 2;
-                turret.burst_timer = 0.15;
+                turret.burst_count = TURRET_BURST_COUNT;
+                turret.burst_timer = TURRET_BURST_INTERVAL;
             }
         }
     }
@@ -1496,9 +1590,10 @@ fn charger_enemy_ai(
                             },
                             Transform::from_xyz(tf.translation.x, TILE_SIZE + 5.0, Z_PROJECTILES),
                             EnemyProjectile {
-                                vx: dir * 200.0,
+                                vx: dir * BOAR_SHOCKWAVE_SPEED,
                                 vy: 0.0,
                                 lifetime: 1.2,
+                                damage: 2,
                             },
                             RoomEntity,
                             PlayingEntity,
@@ -1540,6 +1635,165 @@ fn count_alive_enemies(
     mut run: ResMut<RunData>,
 ) {
     run.enemies_alive = enemy_q.iter().count() as i32;
+}
+
+// ---------------------------------------------------------------------------
+// Enemy health bars
+// ---------------------------------------------------------------------------
+
+fn update_enemy_health_bars(
+    mut commands: Commands,
+    enemy_q: Query<(Entity, &Enemy, &Transform, Option<&Children>)>,
+    mut fill_q: Query<(&EnemyHealthBarFill, &mut Transform, &mut Sprite), Without<Enemy>>,
+    bg_q: Query<&EnemyHealthBarBg>,
+) {
+    let bar_w = 24.0;
+    let bar_h = 3.0;
+
+    for (entity, _enemy, _e_tf, children) in &enemy_q {
+        // Check if this enemy already has a health bar
+        let has_bar = children.map_or(false, |ch| {
+            ch.iter().any(|c| bg_q.get(*c).is_ok())
+        });
+
+        if !has_bar {
+            // Spawn health bar as child of enemy
+            commands.entity(entity).with_children(|parent| {
+                // Background (dark)
+                parent.spawn((
+                    Sprite {
+                        color: Color::srgba(0.1, 0.1, 0.1, 0.8),
+                        custom_size: Some(Vec2::new(bar_w + 2.0, bar_h + 2.0)),
+                        ..default()
+                    },
+                    Transform::from_xyz(0.0, 18.0, 0.9),
+                    EnemyHealthBarBg,
+                ));
+                // Fill (green/yellow/red based on HP ratio)
+                parent.spawn((
+                    Sprite {
+                        color: Color::srgb(0.2, 0.8, 0.2),
+                        custom_size: Some(Vec2::new(bar_w, bar_h)),
+                        ..default()
+                    },
+                    Transform::from_xyz(0.0, 18.0, 0.95),
+                    EnemyHealthBarFill { owner: entity },
+                ));
+            });
+        }
+    }
+
+    // Update existing health bar fills
+    for (fill, mut tf, mut sprite) in &mut fill_q {
+        if let Ok((_, enemy, _, _)) = enemy_q.get(fill.owner) {
+            let ratio = (enemy.health as f32 / enemy.max_health as f32).clamp(0.0, 1.0);
+            let w = bar_w * ratio;
+            sprite.custom_size = Some(Vec2::new(w, bar_h));
+            // Offset so bar shrinks from right
+            tf.translation.x = -(bar_w - w) / 2.0;
+            // Color: green > yellow > red
+            sprite.color = if ratio > 0.5 {
+                Color::srgb(0.2, 0.8, 0.2)
+            } else if ratio > 0.25 {
+                Color::srgb(0.9, 0.8, 0.1)
+            } else {
+                Color::srgb(0.9, 0.2, 0.1)
+            };
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Elite enemy systems
+// ---------------------------------------------------------------------------
+
+/// Marks newly spawned enemies as elite (15% chance, floor 2+, not bosses).
+fn apply_elite_to_new_enemies(
+    mut commands: Commands,
+    query: Query<(Entity, &Enemy), (Without<EliteEnemy>, Without<BossEnemy>)>,
+    room_state: Res<RoomState>,
+    spawn_state: Res<EnemySpawnState>,
+) {
+    // Only run the frame enemies were spawned
+    if !spawn_state.spawned_for_room || room_state.floor < 2 {
+        return;
+    }
+
+    for (entity, _enemy) in &query {
+        // Use entity index as pseudo-random seed
+        let hash = entity.index().wrapping_mul(2654435761);
+        let roll = (hash % 100) as i32;
+        if roll < 15 {
+            let modifier = match hash % 3 {
+                0 => EliteModifier::Armored,
+                1 => EliteModifier::Swift,
+                _ => EliteModifier::Brutal,
+            };
+            let (aura_color, _label) = match modifier {
+                EliteModifier::Armored => (Color::srgba(0.3, 0.5, 0.9, 0.4), "Armored"),
+                EliteModifier::Swift   => (Color::srgba(0.2, 0.9, 0.3, 0.4), "Swift"),
+                EliteModifier::Brutal  => (Color::srgba(0.9, 0.2, 0.1, 0.4), "Brutal"),
+            };
+            // Buff the enemy: Armored gets 2x HP, Brutal gets 2x contact damage
+            // Swift modifier is applied in AI systems
+            commands.entity(entity).insert(EliteEnemy { modifier });
+            // Add pulsing aura child
+            commands.entity(entity).with_children(|parent| {
+                parent.spawn((
+                    Sprite {
+                        color: aura_color,
+                        custom_size: Some(Vec2::new(36.0, 36.0)),
+                        ..default()
+                    },
+                    Transform::from_xyz(0.0, 0.0, -0.1),
+                    EliteAura,
+                ));
+            });
+        }
+    }
+}
+
+/// Apply stat buffs to newly marked elite enemies.
+fn apply_elite_buffs(
+    mut commands: Commands,
+    mut query: Query<(Entity, &EliteEnemy, &mut Enemy), Without<EliteBuffApplied>>,
+) {
+    for (entity, elite, mut enemy) in &mut query {
+        match elite.modifier {
+            EliteModifier::Armored => {
+                enemy.health *= 2;
+                enemy.max_health *= 2;
+            }
+            EliteModifier::Brutal => {
+                enemy.contact_damage *= 2;
+                enemy.health = (enemy.health as f32 * 1.5) as i32;
+                enemy.max_health = (enemy.max_health as f32 * 1.5) as i32;
+            }
+            EliteModifier::Swift => {
+                enemy.health = (enemy.health as f32 * 1.3) as i32;
+                enemy.max_health = (enemy.max_health as f32 * 1.3) as i32;
+            }
+        }
+        // Elites drop more gold
+        enemy.gold_drop = (enemy.gold_drop as f32 * 1.5) as i32;
+        enemy.score_reward *= 2;
+        commands.entity(entity).insert(EliteBuffApplied);
+    }
+}
+
+/// Pulse elite aura size and apply elite modifiers to enemy stats.
+fn animate_elite_aura(
+    mut aura_q: Query<(&mut Transform, &mut Sprite), With<EliteAura>>,
+    time: Res<Time>,
+) {
+    let t = time.elapsed_secs();
+    for (mut tf, mut sprite) in &mut aura_q {
+        let pulse = 1.0 + (t * 3.0).sin() * 0.15;
+        tf.scale = Vec3::splat(pulse);
+        let c = sprite.color.to_srgba();
+        let alpha = 0.25 + (t * 2.0).sin().abs() * 0.2;
+        sprite.color = Color::srgba(c.red, c.green, c.blue, alpha);
+    }
 }
 
 // ---------------------------------------------------------------------------

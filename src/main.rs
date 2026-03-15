@@ -17,6 +17,7 @@ mod death_screen;
 mod floor_complete;
 mod audio;
 mod equipment;
+mod pause_menu;
 
 use bevy::prelude::*;
 use constants::*;
@@ -148,6 +149,7 @@ fn main() {
             floor_complete::FloorCompletePlugin,
             audio::GameAudioPlugin,
             equipment::EquipmentPlugin,
+            pause_menu::PauseMenuPlugin,
         ))
         .add_systems(OnEnter(GameState::Playing), (setup_run, apply_loaded_save).chain())
         .add_systems(OnExit(GameState::Playing), cleanup_run)
@@ -300,7 +302,7 @@ pub fn slot_path(slot: usize) -> std::path::PathBuf {
     std::path::PathBuf::from(format!("dawnroot_slot_{}.json", slot))
 }
 
-fn save_meta(meta: &MetaProgression) {
+pub fn save_meta(meta: &MetaProgression) {
     if let Ok(json) = serde_json::to_string_pretty(meta) {
         let _ = std::fs::write(meta_path(), json);
     }

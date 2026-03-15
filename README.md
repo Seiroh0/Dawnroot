@@ -47,6 +47,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 | Open Shop / Buy | `E` / `Enter` |
 | Navigate Shop | `Up` / `Down` |
 | Close Shop | `Escape` |
+| Pause Menu | `Escape` (in-game) |
 
 ---
 
@@ -72,7 +73,10 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - **Bat** -- wave movement with flapping wings, **dive bomb**
 - **Stone Turret** -- aims and shoots, rotating eye, **burst fire**
 - **Boar** -- detects and charges, horns tilt forward, **ground shockwave**
-- **Floor Boss** -- large multi-part sprite with crown and claws
+- **Floor Boss** -- large multi-part sprite with crown and claws, **3-phase AI** (normal / aggressive / enraged with AoE slam)
+- **Elite Enemies** -- rare glowing variants (Armored, Swift, Brutal) with 2x HP, bonus loot, pulsing aura
+- **Floating damage numbers** on all hits (white, yellow crit, red player damage, blue block)
+- **Enemy health bars** above each enemy (green / yellow / red)
 
 </td>
 </tr>
@@ -101,6 +105,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - **Meta-progression** -- persistent upgrades between runs
 - **Score system** with gold bonus from equipment
 - Room-cleared confetti celebration
+- **Pause menu** (ESC) -- Resume, Save & Quit, Quit without Saving
 
 </td>
 </tr>
@@ -130,10 +135,11 @@ src/
  |- title.rs          Title screen, save slots, WellIntro cutscene
  |- player.rs         Movement, melee, dash, gamepad input
  |- room.rs           Room generation, 16 templates, decorations
- |- enemy.rs          5 enemy types + boss with multi-part sprites
+ |- enemy.rs          5 enemy types + boss, elite variants, health bars
  |- combat.rs         Melee / spell / projectile collision & damage
  |- spell.rs          4 spells with trails, frost, bolts, shield ring
- |- effects.rs        Particles, afterimages, dust, confetti, flash
+ |- pause_menu.rs     ESC pause menu with save & quit
+ |- effects.rs        Particles, afterimages, dust, confetti, flash, damage numbers
  |- hud.rs            UI overlay (HP, mana, gold, floor, spells)
  |- camera.rs         Smooth follow camera + screen shake
  |- animation.rs      Generic frame-based animation support
@@ -200,6 +206,11 @@ cargo run
 - [x] Block mechanic (K/RMB, 70% damage reduction, 3s cooldown, shield flash VFX)
 - [x] Unique enemy abilities (Goblin leap, Bat dive bomb, Turret burst fire, Boar shockwave)
 - [x] Tunnel room layout fix (open overhangs replacing sealed ceiling)
+- [x] Pause menu (ESC -- Resume, Save & Quit, Quit without Saving)
+- [x] Floating damage numbers (white/yellow crit/red player/blue block)
+- [x] Enemy health bars (green/yellow/red based on HP ratio)
+- [x] Boss phases (50% aggressive, 25% enraged with AoE slam shockwave)
+- [x] Elite enemies (Armored, Swift, Brutal -- glowing aura, 2x HP, bonus loot)
 
 ---
 

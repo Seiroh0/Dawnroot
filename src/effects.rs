@@ -1,10 +1,11 @@
 use bevy::prelude::*;
 use crate::{
-    constants::{ROOM_W, ROOM_H, Z_HUD},
-    GameState, PlayingEntity,
+    constants::{ROOM_W, ROOM_H, Z_HUD, Z_EFFECTS},
+    GameState, GameFont, PlayingEntity,
     enemy::EnemyDefeated,
     player::{PlayerDamaged, PlayerLanded, PlayerDashed, PlayerBlocked},
     room::{RoomCleared, RoomTransition},
+    combat::DamageNumberEvent,
 };
 
 pub struct EffectsPlugin;
@@ -21,6 +22,8 @@ impl Plugin for EffectsPlugin {
                 on_player_dash,
                 on_player_blocked,
                 on_player_landed,
+                spawn_damage_numbers,
+                update_damage_numbers,
                 update_particles,
                 update_confetti,
                 update_flash_sprites,
@@ -56,6 +59,14 @@ struct Confetti {
 /// A sprite that simply fades its alpha to zero over its lifetime.
 #[derive(Component)]
 struct FlashSprite {
+    lifetime: f32,
+    max_lifetime: f32,
+}
+
+/// Floating damage number that rises and fades.
+#[derive(Component)]
+struct DamageNumber {
+    vy: f32,
     lifetime: f32,
     max_lifetime: f32,
 }
@@ -460,6 +471,74 @@ fn update_flash_sprites(
         let alpha = (flash.lifetime / flash.max_lifetime).clamp(0.0, 1.0);
         let c = sprite.color.to_srgba();
         sprite.color = Color::srgba(c.red, c.green, c.blue, alpha);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Floating damage numbers
+// ---------------------------------------------------------------------------
+
+fn spawn_damage_numbers(
+    mut commands: Commands,
+    mut ev: EventReader<DamageNumberEvent>,
+    font: Res<GameFont>,
+) {
+    for event in ev.read() {
+        let (color, size) = match event.kind {
+            DamageNumberKind::PlayerHit => (Color::srgb(1.0, 0.2, 0.2), 10.0),
+            DamageNumberKind::EnemyHit => (Color::srgb(1.0, 1.0, 1.0), 9.0),
+            DamageNumberKind::CritHit => (Color::srgb(1.0, 0.7, 0.1), 12.0),
+            DamageNumberKind::Blocked => (Color::srgb(0.4, 0.7, 1.0), 8.0),
+        };
+        let text = if event.kind == DamageNumberKind::Blocked {
+            "BLOCK".to_string()
+        } else {
+            format!("{}", event.amount)
+        };
+        // Slight horizontal jitter so numbers don't stack
+        let jitter_x = (event.position.x * 7.3).sin() * 8.0;
+        commands.spawn((
+            Text2d::new(text),
+            TextFont {
+                font: font.0.clone(),
+                font_size: size,
+                ..default()
+            },
+            TextColor(color),
+            Transform::from_xyz(
+                event.position.x + jitter_x,
+                event.position.y + 20.0,
+                Z_EFFECTS + 5.0,
+            ),
+            DamageNumber {
+                vy: 60.0,
+                lifetime: 0.8,
+                max_lifetime: 0.8,
+            },
+            PlayingEntity,
+        ));
+    }
+}
+
+pub use crate::combat::DamageNumberKind;
+
+fn update_damage_numbers(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Transform, &mut TextColor, &mut DamageNumber)>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut tf, mut color, mut dn) in &mut query {
+        dn.lifetime -= dt;
+        if dn.lifetime <= 0.0 {
+            commands.entity(entity).despawn();
+            continue;
+        }
+        tf.translation.y += dn.vy * dt;
+        dn.vy *= 0.95; // decelerate
+        let alpha = (dn.lifetime / dn.max_lifetime).clamp(0.0, 1.0);
+        let c = color.0.to_srgba();
+        color.0 = Color::srgba(c.red, c.green, c.blue, alpha);
     }
 }
 
