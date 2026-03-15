@@ -71,7 +71,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 
 ### Enemies & Bosses
 - **Goblin** -- patrols and chases, animated legs, **leap attack**
-- **Bat** -- wave movement with flapping wings, **dive bomb**
+- **Bat** -- wave movement with flapping wings, **dive bomb** with smooth ascending recovery
 - **Stone Turret** -- aims and shoots, rotating eye, **burst fire**
 - **Boar** -- detects and charges, horns tilt forward, **ground shockwave**
 - **Mage** -- teleports when player approaches, casts purple fireballs, goes invisible
@@ -80,8 +80,9 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - **4 Unique Floor Bosses** -- Warlord (floor 1), Mushroom King (floor 2), Lava Golem (floor 3), Root Guardian (floor 4) -- each with distinct AI and multi-part sprites
 - **Boss phases** -- 50% HP aggressive, 25% HP enraged with AoE slam shockwave
 - **Elite Enemies** -- rare glowing variants (Armored, Swift, Brutal) with 2x HP, bonus loot, pulsing aura
-- **Floating damage numbers** on all hits (white, yellow crit, red player damage, blue block)
+- **Floating damage numbers** on all hits (white, yellow crit, red player damage, blue block) with drop shadow, pop-scale animation, and ease-out movement
 - **Enemy health bars** above each enemy (green / yellow / red)
+- **Player health bar** -- dual-layer bar (instant fill + delayed trailing damage) with color shifts (green/yellow/red)
 
 </td>
 </tr>
@@ -89,7 +90,9 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 <td>
 
 ### World & Atmosphere
-- **Well intro cutscene** -- animated descent into the dungeon
+- **Title screen parallax** -- mouse-tracking depth layers on trees, hills, stars, moon, and well
+- **Well glow & particles** -- pulsing magical glow above the well with golden sparkle particles floating upward
+- **Well intro cutscene** -- animated descent with afterimage trail, speed lines, dust puffs on landing, and impact flash
 - **4 Biomes** -- Dark Dungeon (floor 1), Mushroom Cave (floor 2), Lava Caverns (floor 3), Root Depths (floor 4) -- each with unique tile colors, backgrounds, and ambient decorations
 - **16 combat room templates** -- staircase, arena, pit bridges, towers, zigzag, floating islands, walkways, tunnel, lava gauntlet, swamp marsh, elevator shaft, split path, pillared hall, crumbling ruins, the pit, alternating hazards
 - **Visual decorations** -- flickering torches, pulsing crystals, stalactites, mushrooms, glowing moss, embers, root tendrils
@@ -232,6 +235,12 @@ cargo run
 - [x] 4 unique floor bosses -- Warlord, Mushroom King, Lava Golem, Root Guardian
 - [x] Secret rooms with destructible walls (break with melee, reveal hidden loot)
 - [x] Minimap HUD (room progress indicator with color-coded room types)
+- [x] Title screen parallax (mouse-tracking depth layers on all scene elements)
+- [x] Well glow & golden particle emitter on title screen
+- [x] Well intro juice (afterimage trail, enhanced speed lines, dust puffs, impact flash)
+- [x] Bat smooth dive recovery (ascending state with lerp deceleration)
+- [x] Player health bar overhaul (dual-layer bar with delayed damage trailing effect)
+- [x] Damage numbers polish (larger font, drop shadow, pop-scale animation, ease-out)
 
 ---
 

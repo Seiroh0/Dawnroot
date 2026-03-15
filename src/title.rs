@@ -9,14 +9,27 @@ impl Plugin for TitlePlugin {
             .add_systems(OnExit(GameState::Title), cleanup_title)
             .add_systems(
                 Update,
-                (handle_title_input, handle_slot_input)
+                (
+                    handle_title_input,
+                    handle_slot_input,
+                    parallax_mouse_tracking,
+                    pulse_text_alpha,
+                    well_glow_animate,
+                    well_particle_emit,
+                    update_well_particles,
+                )
                     .run_if(in_state(GameState::Title)),
             )
             .add_systems(OnEnter(GameState::WellIntro), setup_well_intro)
             .add_systems(OnExit(GameState::WellIntro), cleanup_well_intro)
             .add_systems(
                 Update,
-                (update_well_intro, update_falling_particles)
+                (
+                    update_well_intro,
+                    update_falling_particles,
+                    update_intro_afterimages,
+                    update_intro_dust,
+                )
                     .run_if(in_state(GameState::WellIntro)),
             );
     }
@@ -34,6 +47,62 @@ struct SlotUI;
 #[derive(Resource)]
 struct SlotMenuState {
     open: bool,
+}
+
+// ── Module 1: Parallax ───────────────────────────────────────────
+
+/// Entities with this component shift based on mouse position for depth.
+#[derive(Component)]
+struct ParallaxLayer {
+    depth: f32,
+    base_x: f32,
+}
+
+// ── Module 2: Pulsing Alpha ──────────────────────────────────────
+
+#[derive(Component)]
+struct PulsingAlpha {
+    speed: f32,
+    min_alpha: f32,
+    max_alpha: f32,
+}
+
+// ── Module 3: Well Effects ───────────────────────────────────────
+
+#[derive(Component)]
+struct WellGlow {
+    timer: f32,
+}
+
+#[derive(Component)]
+struct WellParticle {
+    vx: f32,
+    vy: f32,
+    lifetime: f32,
+    max_lifetime: f32,
+}
+
+#[derive(Resource)]
+struct WellParticleTimer {
+    timer: f32,
+    well_x: f32,
+    well_y: f32,
+}
+
+// ── Module 4: Intro Juice ────────────────────────────────────────
+
+#[derive(Component)]
+struct IntroAfterimage {
+    lifetime: f32,
+    max_lifetime: f32,
+}
+
+#[derive(Component)]
+struct IntroDustPuff {
+    vx: f32,
+    vy: f32,
+    lifetime: f32,
+    max_lifetime: f32,
 }
 
 // ── Title screen ──────────────────────────────────────────────────
@@ -56,7 +125,7 @@ fn setup_title(mut commands: Commands, font: Res<GameFont>) {
         TitleEntity,
     ));
 
-    // Stars
+    // Stars (parallax: very far back)
     for _ in 0..60 {
         let x = rng.gen_range(-VIEWPORT_W / 2.0..VIEWPORT_W / 2.0);
         let y = rng.gen_range(20.0..VIEWPORT_H / 2.0);
@@ -70,18 +139,21 @@ fn setup_title(mut commands: Commands, font: Res<GameFont>) {
             },
             Transform::from_xyz(x, y, Z_BACKGROUND + 0.5),
             TitleEntity,
+            ParallaxLayer { depth: 0.1, base_x: x },
         ));
     }
 
-    // Moon
+    // Moon (parallax: far)
+    let moon_x = 280.0;
     commands.spawn((
         Sprite {
             color: Color::srgba(0.95, 0.75, 0.35, 0.9),
             custom_size: Some(Vec2::new(40.0, 40.0)),
             ..default()
         },
-        Transform::from_xyz(280.0, 180.0, Z_BACKGROUND + 0.8),
+        Transform::from_xyz(moon_x, 180.0, Z_BACKGROUND + 0.8),
         TitleEntity,
+        ParallaxLayer { depth: 0.15, base_x: moon_x },
     ));
     commands.spawn((
         Sprite {
@@ -89,11 +161,12 @@ fn setup_title(mut commands: Commands, font: Res<GameFont>) {
             custom_size: Some(Vec2::new(34.0, 34.0)),
             ..default()
         },
-        Transform::from_xyz(288.0, 184.0, Z_BACKGROUND + 0.9),
+        Transform::from_xyz(moon_x + 8.0, 184.0, Z_BACKGROUND + 0.9),
         TitleEntity,
+        ParallaxLayer { depth: 0.15, base_x: moon_x + 8.0 },
     ));
 
-    // Far hills
+    // Far hills (parallax: background)
     for &(x, w, h, g) in &[
         (-200.0, 300.0, 80.0, 0.04_f32),
         (100.0, 350.0, 100.0, 0.035),
@@ -107,6 +180,7 @@ fn setup_title(mut commands: Commands, font: Res<GameFont>) {
             },
             Transform::from_xyz(x, -VIEWPORT_H / 2.0 + 60.0 + h / 2.0 - 20.0, Z_BACKGROUND + 1.0),
             TitleEntity,
+            ParallaxLayer { depth: 0.25, base_x: x },
         ));
     }
 
@@ -131,50 +205,91 @@ fn setup_title(mut commands: Commands, font: Res<GameFont>) {
         TitleEntity,
     ));
 
-    // Well
+    // Well (parallax: foreground)
     let well_base_y = ground_y + 52.5;
     let well_x = 0.0;
     commands.spawn((
         Sprite { color: Color::srgb(0.35, 0.3, 0.25), custom_size: Some(Vec2::new(64.0, 28.0)), ..default() },
         Transform::from_xyz(well_x, well_base_y + 14.0, Z_BACKGROUND + 5.0), TitleEntity,
+        ParallaxLayer { depth: 0.7, base_x: well_x },
     ));
     commands.spawn((
         Sprite { color: Color::srgb(0.01, 0.01, 0.02), custom_size: Some(Vec2::new(48.0, 20.0)), ..default() },
         Transform::from_xyz(well_x, well_base_y + 14.0, Z_BACKGROUND + 5.5), TitleEntity,
+        ParallaxLayer { depth: 0.7, base_x: well_x },
     ));
     commands.spawn((
         Sprite { color: Color::srgb(0.4, 0.35, 0.28), custom_size: Some(Vec2::new(70.0, 8.0)), ..default() },
         Transform::from_xyz(well_x, well_base_y + 30.0, Z_BACKGROUND + 6.0), TitleEntity,
+        ParallaxLayer { depth: 0.7, base_x: well_x },
     ));
     // Pillars
     commands.spawn((
         Sprite { color: Color::srgb(0.32, 0.27, 0.2), custom_size: Some(Vec2::new(8.0, 60.0)), ..default() },
         Transform::from_xyz(well_x - 30.0, well_base_y + 60.0, Z_BACKGROUND + 6.0), TitleEntity,
+        ParallaxLayer { depth: 0.7, base_x: well_x - 30.0 },
     ));
     commands.spawn((
         Sprite { color: Color::srgb(0.32, 0.27, 0.2), custom_size: Some(Vec2::new(8.0, 60.0)), ..default() },
         Transform::from_xyz(well_x + 30.0, well_base_y + 60.0, Z_BACKGROUND + 6.0), TitleEntity,
+        ParallaxLayer { depth: 0.7, base_x: well_x + 30.0 },
     ));
     // Roof
     commands.spawn((
         Sprite { color: Color::srgb(0.28, 0.2, 0.14), custom_size: Some(Vec2::new(80.0, 10.0)), ..default() },
         Transform::from_xyz(well_x, well_base_y + 90.0, Z_BACKGROUND + 6.5), TitleEntity,
+        ParallaxLayer { depth: 0.7, base_x: well_x },
     ));
     commands.spawn((
         Sprite { color: Color::srgb(0.3, 0.22, 0.15), custom_size: Some(Vec2::new(50.0, 8.0)), ..default() },
         Transform::from_xyz(well_x, well_base_y + 98.0, Z_BACKGROUND + 6.5), TitleEntity,
+        ParallaxLayer { depth: 0.7, base_x: well_x },
     ));
     // Rope + bucket
     commands.spawn((
         Sprite { color: Color::srgb(0.5, 0.4, 0.25), custom_size: Some(Vec2::new(2.0, 40.0)), ..default() },
         Transform::from_xyz(well_x, well_base_y + 50.0, Z_BACKGROUND + 5.8), TitleEntity,
+        ParallaxLayer { depth: 0.7, base_x: well_x },
     ));
     commands.spawn((
         Sprite { color: Color::srgb(0.4, 0.3, 0.18), custom_size: Some(Vec2::new(10.0, 8.0)), ..default() },
         Transform::from_xyz(well_x, well_base_y + 32.0, Z_BACKGROUND + 5.8), TitleEntity,
+        ParallaxLayer { depth: 0.7, base_x: well_x },
     ));
 
-    // Trees
+    // ── Module 3: Well glow sprite (golden upward light) ─────────
+    commands.spawn((
+        Sprite {
+            color: Color::srgba(1.0, 0.8, 0.2, 0.06),
+            custom_size: Some(Vec2::new(60.0, 120.0)),
+            ..default()
+        },
+        Transform::from_xyz(well_x, well_base_y + 70.0, Z_BACKGROUND + 4.9),
+        TitleEntity,
+        WellGlow { timer: 0.0 },
+        ParallaxLayer { depth: 0.7, base_x: well_x },
+    ));
+    // Second narrower glow layer
+    commands.spawn((
+        Sprite {
+            color: Color::srgba(1.0, 0.9, 0.4, 0.04),
+            custom_size: Some(Vec2::new(30.0, 90.0)),
+            ..default()
+        },
+        Transform::from_xyz(well_x, well_base_y + 55.0, Z_BACKGROUND + 4.95),
+        TitleEntity,
+        WellGlow { timer: 1.5 },
+        ParallaxLayer { depth: 0.7, base_x: well_x },
+    ));
+
+    // Well particle emitter resource
+    commands.insert_resource(WellParticleTimer {
+        timer: 0.0,
+        well_x,
+        well_y: well_base_y + 25.0,
+    });
+
+    // Trees (parallax: mid-ground)
     for &(x_off, h_min, h_max) in &[
         (-320.0_f32, 100.0, 150.0),
         (-240.0, 80.0, 130.0),
@@ -185,6 +300,8 @@ fn setup_title(mut commands: Commands, font: Res<GameFont>) {
     ] {
         let h: f32 = rng.gen_range(h_min..h_max);
         let trunk_w: f32 = rng.gen_range(10.0..18.0);
+        // Trees further from center get less parallax depth (further back)
+        let depth = if x_off.abs() > 280.0 { 0.35 } else { 0.5 };
         commands.spawn((
             Sprite {
                 color: Color::srgb(0.12, 0.07, 0.03),
@@ -193,6 +310,7 @@ fn setup_title(mut commands: Commands, font: Res<GameFont>) {
             },
             Transform::from_xyz(x_off, well_base_y + h / 2.0, Z_BACKGROUND + 1.5),
             TitleEntity,
+            ParallaxLayer { depth, base_x: x_off },
         ));
         let canopy_w: f32 = rng.gen_range(40.0..65.0);
         let canopy_h: f32 = rng.gen_range(35.0..55.0);
@@ -204,10 +322,11 @@ fn setup_title(mut commands: Commands, font: Res<GameFont>) {
             },
             Transform::from_xyz(x_off, well_base_y + h - 5.0, Z_BACKGROUND + 1.6),
             TitleEntity,
+            ParallaxLayer { depth, base_x: x_off },
         ));
     }
 
-    // Fireflies
+    // Fireflies (parallax: mid-foreground)
     for _ in 0..8 {
         let x = rng.gen_range(-VIEWPORT_W / 3.0..VIEWPORT_W / 3.0);
         let y = rng.gen_range(well_base_y + 10.0..well_base_y + 120.0);
@@ -219,13 +338,14 @@ fn setup_title(mut commands: Commands, font: Res<GameFont>) {
             },
             Transform::from_xyz(x, y, Z_BACKGROUND + 7.0),
             TitleEntity,
+            ParallaxLayer { depth: 0.6, base_x: x },
         ));
     }
 
     // Title logo
     spawn_logo(&mut commands);
     let f = font.0.clone();
-    // Subtitle backdrop (so text is readable over sun rays)
+    // Subtitle backdrop
     commands.spawn((
         Sprite {
             color: Color::srgba(0.06, 0.03, 0.02, 0.75),
@@ -243,12 +363,13 @@ fn setup_title(mut commands: Commands, font: Res<GameFont>) {
         TitleEntity,
     ));
     commands.spawn((
-        Text2d::new("A/D Move  Space Jump  E Melee  F Ranged  Shift Dash  1-4 Spells  Gamepad OK"),
+        Text2d::new("A/D Move  Space Jump  J Melee  K Block  Shift Dash  1-4 Spells  Gamepad OK"),
         TextFont { font: f.clone(), font_size: 6.0, ..default() },
         TextColor(Color::srgb(0.45, 0.35, 0.25)),
         Transform::from_xyz(0.0, -200.0, Z_HUD),
         TitleEntity,
     ));
+    // "Press SPACE" with PulsingAlpha component (Module 2)
     commands.spawn((
         Text2d::new("- Press SPACE to descend -"),
         TextFont { font: f.clone(), font_size: 10.0, ..default() },
@@ -256,42 +377,29 @@ fn setup_title(mut commands: Commands, font: Res<GameFont>) {
         Transform::from_xyz(0.0, -230.0, Z_HUD),
         TitleEntity,
         PromptText,
+        PulsingAlpha { speed: 2.5, min_alpha: 0.3, max_alpha: 1.0 },
     ));
 }
 
 fn spawn_logo(commands: &mut Commands) {
-    // All child transforms are relative to the parent at (0.0, 160.0, Z_HUD).
-    // Positive Y = up, positive Z = in front.
-    //
-    // Layout sketch (relative coords):
-    //   Sun center:    (0,  58)  — half-circle built from horizontal bars
-    //   Sun rays:      radiating outward from sun center
-    //   Backdrop:      (-130, 0) to (130, 0) — dark plaque behind text
-    //   Text "DAWNROOT": (0, 0)
-    //   Root tendrils: below the backdrop, Y ~ -25 downward
-    //   Leaf accents:  scattered around the roots
-
     let parent = commands.spawn((
         Transform::from_xyz(0.0, 160.0, Z_HUD),
         Visibility::Visible,
         TitleEntity,
     )).id();
 
-    // ── Sun half-circle (layered horizontal bars, bottom to top) ──────────
-    // Each bar row is slightly narrower and one step brighter gold going upward.
-    // Rows are stacked starting at y_base (the flat bottom of the sun).
+    // ── Sun half-circle ──────────────────────────────────────────────
     let sun_cx: f32 = 0.0;
-    let sun_base_y: f32 = 38.0;   // flat bottom of half-circle
+    let sun_base_y: f32 = 38.0;
     let bar_h: f32 = 7.0;
     let sun_rows: &[(f32, f32, f32, f32, f32)] = &[
-        // (half_width, r, g, b, y_offset_from_base)
-        (48.0, 0.55, 0.22, 0.04, 0.0),   // deep amber base
+        (48.0, 0.55, 0.22, 0.04, 0.0),
         (46.0, 0.62, 0.28, 0.06, 7.0),
         (43.0, 0.70, 0.35, 0.07, 14.0),
         (38.0, 0.78, 0.44, 0.08, 21.0),
         (32.0, 0.86, 0.55, 0.10, 28.0),
         (24.0, 0.92, 0.65, 0.14, 35.0),
-        (15.0, 0.96, 0.76, 0.20, 42.0),  // bright gold tip
+        (15.0, 0.96, 0.76, 0.20, 42.0),
         ( 6.0, 1.00, 0.88, 0.35, 49.0),
     ];
     for &(hw, r, g, b, dy) in sun_rows {
@@ -307,7 +415,7 @@ fn spawn_logo(commands: &mut Commands) {
         commands.entity(parent).add_child(child);
     }
 
-    // ── Sun glow halo — a wide, very dim amber rectangle behind the sun ──
+    // Sun glow halo
     {
         let child = commands.spawn((
             Sprite {
@@ -321,25 +429,22 @@ fn spawn_logo(commands: &mut Commands) {
         commands.entity(parent).add_child(child);
     }
 
-    // ── Sun rays — thin rectangles rotated around sun center ─────────────
-    let ray_origin_y: f32 = sun_base_y + 20.0; // approximate visual center of half-sun
-    // Angles in radians from vertical. Only upward-facing rays (above the horizon).
+    // Sun rays
+    let ray_origin_y: f32 = sun_base_y + 20.0;
     let ray_angles: &[(f32, f32, f32)] = &[
-        // (angle from +Y axis,  ray_length, ray_width)
-        (-0.90, 52.0, 3.0),  // far left
+        (-0.90, 52.0, 3.0),
         (-0.62, 58.0, 2.5),
         (-0.34, 62.0, 3.5),
         (-0.12, 55.0, 2.0),
         ( 0.12, 55.0, 2.0),
         ( 0.34, 62.0, 3.5),
         ( 0.62, 58.0, 2.5),
-        ( 0.90, 52.0, 3.0),  // far right
+        ( 0.90, 52.0, 3.0),
     ];
     for &(angle, length, width) in ray_angles {
-        // The ray rectangle is drawn with its center at (length/2) distance from origin.
-        let dir_x = angle.sin();  // angle measured from +Y, so sin = x component
-        let dir_y = angle.cos();  // cos = y component
-        let cx = sun_cx + dir_x * (length / 2.0 + 28.0); // 28 = approx sun radius
+        let dir_x = angle.sin();
+        let dir_y = angle.cos();
+        let cx = sun_cx + dir_x * (length / 2.0 + 28.0);
         let cy = ray_origin_y + dir_y * (length / 2.0 + 28.0);
         let child = commands.spawn((
             Sprite {
@@ -357,8 +462,7 @@ fn spawn_logo(commands: &mut Commands) {
         commands.entity(parent).add_child(child);
     }
 
-    // ── Title backdrop — dark sienna plaque behind the text ───────────────
-    // Outer border (slightly larger, slightly lighter)
+    // Title backdrop
     {
         let child = commands.spawn((
             Sprite {
@@ -371,7 +475,6 @@ fn spawn_logo(commands: &mut Commands) {
         )).id();
         commands.entity(parent).add_child(child);
     }
-    // Inner fill (darker)
     {
         let child = commands.spawn((
             Sprite {
@@ -385,7 +488,7 @@ fn spawn_logo(commands: &mut Commands) {
         commands.entity(parent).add_child(child);
     }
 
-    // ── "DAWNROOT" text — child of parent so it renders on top ───────────
+    // "DAWNROOT" text
     {
         let child = commands.spawn((
             Text2d::new("DAWNROOT"),
@@ -397,8 +500,7 @@ fn spawn_logo(commands: &mut Commands) {
         commands.entity(parent).add_child(child);
     }
 
-    // ── Root tendrils — organic pixel shapes below the backdrop ──────────
-    // Central downward trunk
+    // Root tendrils
     {
         let child = commands.spawn((
             Sprite {
@@ -411,23 +513,19 @@ fn spawn_logo(commands: &mut Commands) {
         )).id();
         commands.entity(parent).add_child(child);
     }
-    // Root segments: (x, y, w, h, angle)
     let root_segments: &[(f32, f32, f32, f32, f32)] = &[
-        // left side branches
         (-18.0, -30.0,  4.0, 20.0, -0.32),
         (-34.0, -38.0,  3.0, 16.0, -0.55),
         (-50.0, -42.0,  3.0, 12.0, -0.75),
         (-64.0, -44.0,  2.5, 10.0, -0.90),
         (-28.0, -46.0,  2.5, 14.0, -0.20),
         (-80.0, -42.0,  2.0,  8.0, -1.05),
-        // right side branches
         ( 18.0, -30.0,  4.0, 20.0,  0.32),
         ( 34.0, -38.0,  3.0, 16.0,  0.55),
         ( 50.0, -42.0,  3.0, 12.0,  0.75),
         ( 64.0, -44.0,  2.5, 10.0,  0.90),
         ( 28.0, -46.0,  2.5, 14.0,  0.20),
         ( 80.0, -42.0,  2.0,  8.0,  1.05),
-        // additional inner cross roots
         (-10.0, -40.0,  2.5, 10.0, -0.15),
         ( 10.0, -40.0,  2.5, 10.0,  0.15),
     ];
@@ -447,7 +545,6 @@ fn spawn_logo(commands: &mut Commands) {
         )).id();
         commands.entity(parent).add_child(child);
     }
-    // Root tip dots (small square nubs at the ends of roots)
     let root_tips: &[(f32, f32)] = &[
         (-82.0, -47.0), (-66.0, -51.0), (-52.0, -51.0),
         ( 82.0, -47.0), ( 66.0, -51.0), ( 52.0, -51.0),
@@ -466,25 +563,20 @@ fn spawn_logo(commands: &mut Commands) {
         commands.entity(parent).add_child(child);
     }
 
-    // ── Leaf accents — small autumn rectangles scattered near roots/text ──
-    // Each entry: (x, y, w, h, angle, r, g, b)
+    // Leaf accents
     let leaves: &[(f32, f32, f32, f32, f32, f32, f32, f32)] = &[
-        // warm orange leaves left
         (-110.0,  10.0, 7.0, 5.0,  0.50, 0.80, 0.32, 0.05),
         (-120.0,  -8.0, 6.0, 4.0,  0.80, 0.72, 0.25, 0.04),
         (-100.0, -18.0, 5.0, 4.0,  0.30, 0.85, 0.38, 0.06),
         (-130.0,   2.0, 5.0, 3.5,  1.10, 0.65, 0.20, 0.03),
-        // warm orange-red leaves right
         ( 110.0,  10.0, 7.0, 5.0, -0.50, 0.80, 0.32, 0.05),
         ( 120.0,  -8.0, 6.0, 4.0, -0.80, 0.72, 0.25, 0.04),
         ( 100.0, -18.0, 5.0, 4.0, -0.30, 0.85, 0.38, 0.06),
         ( 130.0,   2.0, 5.0, 3.5, -1.10, 0.65, 0.20, 0.03),
-        // gold leaves near sun / top
         ( -55.0,  42.0, 6.0, 4.0,  0.60, 0.90, 0.68, 0.10),
         (  55.0,  42.0, 6.0, 4.0, -0.60, 0.90, 0.68, 0.10),
         ( -35.0,  50.0, 5.0, 3.5,  0.30, 0.95, 0.75, 0.15),
         (  35.0,  50.0, 5.0, 3.5, -0.30, 0.95, 0.75, 0.15),
-        // rust-red near root base
         ( -45.0, -48.0, 5.0, 3.5,  0.70, 0.68, 0.18, 0.04),
         (  45.0, -48.0, 5.0, 3.5, -0.70, 0.68, 0.18, 0.04),
         ( -22.0, -54.0, 4.0, 3.0,  0.20, 0.72, 0.22, 0.04),
@@ -505,7 +597,6 @@ fn spawn_logo(commands: &mut Commands) {
             TitleEntity,
         )).id();
         commands.entity(parent).add_child(child);
-        // Small stem pixel for each leaf
         let stem = commands.spawn((
             Sprite {
                 color: Color::srgb(0.22, 0.12, 0.05),
@@ -522,7 +613,7 @@ fn spawn_logo(commands: &mut Commands) {
         commands.entity(parent).add_child(stem);
     }
 
-    // ── Horizontal ground line at base of logo — anchors it to the scene ─
+    // Horizontal ground line at base of logo
     {
         let child = commands.spawn((
             Sprite {
@@ -542,23 +633,122 @@ fn cleanup_title(mut commands: Commands, q: Query<Entity, With<TitleEntity>>) {
         commands.entity(e).try_despawn_recursive();
     }
     commands.remove_resource::<SlotMenuState>();
+    commands.remove_resource::<WellParticleTimer>();
 }
+
+// ── Module 1: Parallax mouse tracking ────────────────────────────
+
+fn parallax_mouse_tracking(
+    window_q: Query<&Window>,
+    mut parallax_q: Query<(&mut Transform, &ParallaxLayer)>,
+) {
+    let Ok(window) = window_q.get_single() else { return };
+    let Some(cursor) = window.cursor_position() else { return };
+
+    // Normalize cursor to -1..1 range (center = 0)
+    let norm_x = (cursor.x / window.width() - 0.5) * 2.0;
+    let max_offset = 18.0;
+
+    for (mut tf, layer) in &mut parallax_q {
+        let offset = -norm_x * max_offset * layer.depth;
+        tf.translation.x = layer.base_x + offset;
+    }
+}
+
+// ── Module 2: Pulsing alpha system ───────────────────────────────
+
+fn pulse_text_alpha(
+    time: Res<Time>,
+    mut query: Query<(&PulsingAlpha, &mut TextColor)>,
+) {
+    let t = time.elapsed_secs();
+    for (pulse, mut color) in &mut query {
+        let wave = (t * pulse.speed).sin() * 0.5 + 0.5; // 0..1
+        let alpha = pulse.min_alpha + wave * (pulse.max_alpha - pulse.min_alpha);
+        let c = color.0.to_srgba();
+        color.0 = Color::srgba(c.red, c.green, c.blue, alpha);
+    }
+}
+
+// ── Module 3: Well glow + particles ──────────────────────────────
+
+fn well_glow_animate(
+    time: Res<Time>,
+    mut query: Query<(&mut WellGlow, &mut Sprite)>,
+) {
+    let dt = time.delta_secs();
+    for (mut glow, mut sprite) in &mut query {
+        glow.timer += dt;
+        let pulse = (glow.timer * 1.8).sin() * 0.03 + 0.06;
+        let c = sprite.color.to_srgba();
+        sprite.color = Color::srgba(c.red, c.green, c.blue, pulse.max(0.02));
+    }
+}
+
+fn well_particle_emit(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut timer: ResMut<WellParticleTimer>,
+) {
+    use rand::Rng;
+    let dt = time.delta_secs();
+    timer.timer -= dt;
+    if timer.timer <= 0.0 {
+        timer.timer = 0.15; // spawn every 150ms
+        let mut rng = rand::thread_rng();
+        let px = timer.well_x + rng.gen_range(-18.0..18.0_f32);
+        let py = timer.well_y;
+        let brightness = rng.gen_range(0.6..1.0_f32);
+        let size = rng.gen_range(1.5..3.5_f32);
+        let lt = rng.gen_range(1.5..3.0_f32);
+        commands.spawn((
+            Sprite {
+                color: Color::srgba(1.0 * brightness, 0.8 * brightness, 0.2 * brightness, 0.5),
+                custom_size: Some(Vec2::new(size, size)),
+                ..default()
+            },
+            Transform::from_xyz(px, py, Z_BACKGROUND + 5.7),
+            TitleEntity,
+            WellParticle {
+                vx: rng.gen_range(-8.0..8.0),
+                vy: rng.gen_range(20.0..45.0),
+                lifetime: lt,
+                max_lifetime: lt,
+            },
+        ));
+    }
+}
+
+fn update_well_particles(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Transform, &mut Sprite, &mut WellParticle)>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut tf, mut sprite, mut p) in &mut query {
+        p.lifetime -= dt;
+        if p.lifetime <= 0.0 {
+            commands.entity(entity).despawn();
+            continue;
+        }
+        tf.translation.x += p.vx * dt;
+        tf.translation.y += p.vy * dt;
+        p.vx *= 0.98; // gentle lateral friction
+        let alpha = (p.lifetime / p.max_lifetime).clamp(0.0, 1.0) * 0.5;
+        let c = sprite.color.to_srgba();
+        sprite.color = Color::srgba(c.red, c.green, c.blue, alpha);
+    }
+}
+
+// ── Title input (Module 2: pulse extracted to separate system) ───
 
 fn handle_title_input(
     keys: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut commands: Commands,
     mut slot_state: ResMut<SlotMenuState>,
-    mut prompt_q: Query<&mut TextColor, With<PromptText>>,
-    time: Res<Time>,
     font: Res<GameFont>,
 ) {
-    // Animate prompt pulse
-    if let Ok(mut color) = prompt_q.get_single_mut() {
-        let alpha = 0.4 + 0.6 * (time.elapsed_secs() * 2.5).sin().max(0.0);
-        color.0 = Color::srgba(0.95, 0.7, 0.25, alpha);
-    }
-
     if slot_state.open { return; }
 
     let gp = gamepads.iter().next();
@@ -593,7 +783,6 @@ fn spawn_slot_menu(commands: &mut Commands, font: &Handle<Font>) {
         ))
         .with_children(|parent| {
             let f = font.clone();
-            // Header
             parent.spawn((
                 Text::new("Choose Your Path"),
                 TextFont { font: f.clone(), font_size: 16.0, ..default() },
@@ -602,7 +791,6 @@ fn spawn_slot_menu(commands: &mut Commands, font: &Handle<Font>) {
 
             parent.spawn(Node { height: Val::Px(16.0), ..default() });
 
-            // 3 save slots
             for i in 0..3 {
                 let (label, detail_color) = if let Some(ref save) = slots[i] {
                     let mins = (save.time_played / 60.0) as i32;
@@ -652,7 +840,6 @@ fn handle_slot_input(
     if !state.open { return };
     let gp = gamepads.iter().next();
 
-    // ESC / gamepad East(B) closes the slot menu
     let back = keys.just_pressed(KeyCode::Escape) || gp.map_or(false, |g| g.just_pressed(GamepadButton::East));
     if back {
         for e in &ui_q {
@@ -662,7 +849,6 @@ fn handle_slot_input(
         return;
     }
 
-    // DEL + digit to erase a slot (keyboard only — gamepad: Select + face button)
     let digit_keys = [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3];
     let gp_slot_buttons = [GamepadButton::West, GamepadButton::North, GamepadButton::South];
     let deleting = keys.pressed(KeyCode::Delete) || gp.map_or(false, |g| g.pressed(GamepadButton::Select));
@@ -681,18 +867,15 @@ fn handle_slot_input(
         }
     }
 
-    // Select slot: keyboard 1/2/3 or gamepad X/Y/A (West/North/South)
     for (i, &key) in digit_keys.iter().enumerate() {
         let gp_pressed = !deleting && gp.map_or(false, |g| g.just_pressed(gp_slot_buttons[i]));
         if keys.just_pressed(key) || gp_pressed {
             active_slot.0 = i;
 
             if let Some(save) = load_slot(i) {
-                // Continue: load save and go straight to Playing (skip WellIntro)
                 commands.insert_resource(LoadedSave(save));
                 next_state.set(GameState::Playing);
             } else {
-                // New game: go through WellIntro
                 next_state.set(GameState::WellIntro);
             }
             return;
@@ -731,6 +914,8 @@ struct IntroState {
     phase: IntroPhase,
     timer: f32,
     player_start_y: f32,
+    afterimage_timer: f32,
+    dust_spawned: bool,
 }
 
 #[derive(PartialEq)]
@@ -749,6 +934,8 @@ fn setup_well_intro(mut commands: Commands) {
         phase: IntroPhase::WalkToWell,
         timer: 0.0,
         player_start_y: well_base_y + 16.0,
+        afterimage_timer: 0.0,
+        dust_spawned: false,
     });
 
     commands.spawn((Camera2d, IntroEntity));
@@ -790,17 +977,14 @@ fn setup_well_intro(mut commands: Commands) {
         IntroEntity,
         IntroPlayer,
     )).with_children(|p| {
-        // Body
         p.spawn((
             Sprite { color: Color::srgb(0.50, 0.30, 0.12), custom_size: Some(Vec2::new(14.0, 14.0)), ..default() },
             Transform::from_xyz(0.0, 0.0, 0.1), IntroEntity, IntroPlayerPart,
         ));
-        // Belt
         p.spawn((
             Sprite { color: Color::srgb(0.45, 0.30, 0.15), custom_size: Some(Vec2::new(14.0, 3.0)), ..default() },
             Transform::from_xyz(0.0, -5.0, 0.15), IntroEntity, IntroPlayerPart,
         ));
-        // Head
         p.spawn((
             Sprite { color: Color::srgb(0.78, 0.62, 0.48), custom_size: Some(Vec2::new(12.0, 11.0)), ..default() },
             Transform::from_xyz(0.0, 12.0, 0.2), IntroEntity, IntroPlayerPart,
@@ -818,7 +1002,6 @@ fn setup_well_intro(mut commands: Commands) {
                 Transform::from_xyz(0.0, 4.5, 0.15), IntroEntity, IntroPlayerPart,
             ));
         });
-        // Legs
         p.spawn((
             Sprite { color: Color::srgb(0.28, 0.22, 0.16), custom_size: Some(Vec2::new(5.0, 10.0)), ..default() },
             Transform::from_xyz(-3.5, -12.0, 0.0), IntroEntity, IntroPlayerPart, IntroLegL,
@@ -827,7 +1010,6 @@ fn setup_well_intro(mut commands: Commands) {
             Sprite { color: Color::srgb(0.26, 0.20, 0.14), custom_size: Some(Vec2::new(5.0, 10.0)), ..default() },
             Transform::from_xyz(3.5, -12.0, 0.0), IntroEntity, IntroPlayerPart, IntroLegR,
         ));
-        // Sword
         p.spawn((
             Sprite { color: Color::srgb(0.68, 0.70, 0.74), custom_size: Some(Vec2::new(3.0, 16.0)), ..default() },
             Transform::from_xyz(10.0, 3.0, 0.35), IntroEntity, IntroPlayerPart,
@@ -889,6 +1071,7 @@ fn update_well_intro(
                 }
                 state.phase = IntroPhase::JumpIn;
                 state.timer = 0.0;
+                state.afterimage_timer = 0.0;
             }
         }
 
@@ -904,6 +1087,24 @@ fn update_well_intro(
                 let fall_frac = (t - 0.35) / 0.55;
                 p_tf.translation.y = state.player_start_y + 10.0 - fall_frac * 90.0;
                 p_tf.scale = Vec3::new(0.8, 1.15, 1.0);
+
+                // Module 4: Spawn afterimages during fall
+                state.afterimage_timer -= dt;
+                if state.afterimage_timer <= 0.0 {
+                    state.afterimage_timer = 0.06;
+                    let alpha = (1.0 - fall_frac).max(0.0) * 0.4;
+                    // Body afterimage
+                    commands.spawn((
+                        Sprite {
+                            color: Color::srgba(0.50, 0.30, 0.12, alpha),
+                            custom_size: Some(Vec2::new(14.0, 30.0)),
+                            ..default()
+                        },
+                        Transform::from_xyz(p_tf.translation.x, p_tf.translation.y, Z_PLAYER - 0.5),
+                        IntroEntity,
+                        IntroAfterimage { lifetime: 0.3, max_lifetime: 0.3 },
+                    ));
+                }
 
                 let alpha = (1.0 - fall_frac).max(0.0);
                 for mut sprite in parts_q.iter_mut() {
@@ -925,22 +1126,27 @@ fn update_well_intro(
                 ds.color = Color::srgba(0.0, 0.0, 0.0, alpha);
             }
 
-            if state.timer > 0.3 && state.timer < 1.8 {
+            // Module 4: Enhanced speed lines + wind particles during fall
+            if state.timer > 0.2 && state.timer < 1.8 {
                 use rand::Rng;
                 let mut rng = rand::thread_rng();
-                for _ in 0..2 {
-                    let px = rng.gen_range(-80.0..80.0_f32);
-                    let speed = rng.gen_range(300.0..500.0_f32);
-                    let br = rng.gen_range(0.15..0.35_f32);
+                // More particles for more intensity
+                let count = if state.timer < 0.8 { 4 } else { 2 };
+                for _ in 0..count {
+                    let px = rng.gen_range(-120.0..120.0_f32);
+                    let speed = rng.gen_range(400.0..700.0_f32);
+                    let br = rng.gen_range(0.15..0.4_f32);
+                    let width = rng.gen_range(2.0..4.0_f32);
+                    let height = rng.gen_range(10.0..25.0_f32);
                     commands.spawn((
                         Sprite {
                             color: Color::srgba(br, br * 0.9, br * 0.7, 0.7),
-                            custom_size: Some(Vec2::new(3.0, rng.gen_range(6.0..14.0))),
+                            custom_size: Some(Vec2::new(width, height)),
                             ..default()
                         },
                         Transform::from_xyz(px, VIEWPORT_H / 2.0 + 10.0, Z_HUD - 0.5),
                         IntroEntity,
-                        FallingParticle { vy: -speed, lifetime: 1.2 },
+                        FallingParticle { vy: -speed, lifetime: 1.0 },
                     ));
                 }
             }
@@ -948,15 +1154,51 @@ fn update_well_intro(
             if state.timer >= 2.2 {
                 state.phase = IntroPhase::LandInCave;
                 state.timer = 0.0;
+                state.dust_spawned = false;
             }
         }
 
         IntroPhase::LandInCave => {
             if let Ok(mut ds) = darkness_q.get_single_mut() {
                 if state.timer < 0.1 {
-                    ds.color = Color::srgba(0.12, 0.08, 0.05, 0.85);
+                    // Module 4: Brief bright flash on impact
+                    let flash = (1.0 - state.timer / 0.1) * 0.3;
+                    ds.color = Color::srgba(0.12 + flash, 0.08 + flash * 0.5, 0.05, 0.85);
                 } else {
                     ds.color = Color::srgba(0.0, 0.0, 0.0, 1.0);
+                }
+            }
+
+            // Module 4: Spawn dust puffs on landing (once)
+            if !state.dust_spawned {
+                state.dust_spawned = true;
+                use rand::Rng;
+                let mut rng = rand::thread_rng();
+                for i in 0..12_u32 {
+                    let dir = if i % 2 == 0 { 1.0 } else { -1.0 };
+                    let speed = rng.gen_range(60.0..180.0_f32);
+                    let vy = rng.gen_range(30.0..80.0_f32);
+                    let size = rng.gen_range(3.0..8.0_f32);
+                    let lt = rng.gen_range(0.4..0.8_f32);
+                    commands.spawn((
+                        Sprite {
+                            color: Color::srgba(0.4, 0.35, 0.25, 0.6),
+                            custom_size: Some(Vec2::new(size, size * 0.7)),
+                            ..default()
+                        },
+                        Transform::from_xyz(
+                            rng.gen_range(-15.0..15.0),
+                            -VIEWPORT_H / 2.0 + 60.0,
+                            Z_HUD - 0.3,
+                        ),
+                        IntroEntity,
+                        IntroDustPuff {
+                            vx: dir * speed,
+                            vy,
+                            lifetime: lt,
+                            max_lifetime: lt,
+                        },
+                    ));
                 }
             }
 
@@ -989,5 +1231,47 @@ fn update_falling_particles(
         if p.lifetime <= 0.0 || tf.translation.y < -VIEWPORT_H / 2.0 - 50.0 {
             commands.entity(entity).despawn();
         }
+    }
+}
+
+// ── Module 4: Intro afterimage + dust systems ────────────────────
+
+fn update_intro_afterimages(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Sprite, &mut IntroAfterimage)>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut sprite, mut ai) in &mut query {
+        ai.lifetime -= dt;
+        if ai.lifetime <= 0.0 {
+            commands.entity(entity).despawn();
+            continue;
+        }
+        let alpha = (ai.lifetime / ai.max_lifetime).clamp(0.0, 1.0) * 0.4;
+        let c = sprite.color.to_srgba();
+        sprite.color = Color::srgba(c.red, c.green, c.blue, alpha);
+    }
+}
+
+fn update_intro_dust(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Transform, &mut Sprite, &mut IntroDustPuff)>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut tf, mut sprite, mut dust) in &mut query {
+        dust.lifetime -= dt;
+        if dust.lifetime <= 0.0 {
+            commands.entity(entity).despawn();
+            continue;
+        }
+        tf.translation.x += dust.vx * dt;
+        tf.translation.y += dust.vy * dt;
+        dust.vy -= 120.0 * dt; // gravity on dust
+        dust.vx *= 0.96;
+        let alpha = (dust.lifetime / dust.max_lifetime).clamp(0.0, 1.0) * 0.6;
+        let c = sprite.color.to_srgba();
+        sprite.color = Color::srgba(c.red, c.green, c.blue, alpha);
     }
 }

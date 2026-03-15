@@ -63,7 +63,7 @@ struct FlashSprite {
     max_lifetime: f32,
 }
 
-/// Floating damage number that rises and fades.
+/// Floating damage number that rises and fades with pop-scale animation.
 #[derive(Component)]
 struct DamageNumber {
     vy: f32,
@@ -485,10 +485,10 @@ fn spawn_damage_numbers(
 ) {
     for event in ev.read() {
         let (color, size) = match event.kind {
-            DamageNumberKind::PlayerHit => (Color::srgb(1.0, 0.2, 0.2), 10.0),
-            DamageNumberKind::EnemyHit => (Color::srgb(1.0, 1.0, 1.0), 9.0),
-            DamageNumberKind::CritHit => (Color::srgb(1.0, 0.7, 0.1), 12.0),
-            DamageNumberKind::Blocked => (Color::srgb(0.4, 0.7, 1.0), 8.0),
+            DamageNumberKind::PlayerHit => (Color::srgb(1.0, 0.2, 0.2), 18.0),
+            DamageNumberKind::EnemyHit  => (Color::srgb(1.0, 1.0, 1.0), 16.0),
+            DamageNumberKind::CritHit   => (Color::srgb(1.0, 0.7, 0.1), 22.0),
+            DamageNumberKind::Blocked   => (Color::srgb(0.4, 0.7, 1.0), 14.0),
         };
         let text = if event.kind == DamageNumberKind::Blocked {
             "BLOCK".to_string()
@@ -497,6 +497,29 @@ fn spawn_damage_numbers(
         };
         // Slight horizontal jitter so numbers don't stack
         let jitter_x = (event.position.x * 7.3).sin() * 8.0;
+        let x = event.position.x + jitter_x;
+        let y = event.position.y + 20.0;
+
+        // Drop shadow (black text offset +1, -1 behind the main number)
+        commands.spawn((
+            Text2d::new(text.clone()),
+            TextFont {
+                font: font.0.clone(),
+                font_size: size,
+                ..default()
+            },
+            TextColor(Color::srgba(0.0, 0.0, 0.0, 0.85)),
+            Transform::from_xyz(x + 1.0, y - 1.0, Z_EFFECTS + 4.9)
+                .with_scale(Vec3::splat(1.5)),
+            DamageNumber {
+                vy: 60.0,
+                lifetime: 0.8,
+                max_lifetime: 0.8,
+            },
+            PlayingEntity,
+        ));
+
+        // Main damage number (spawns at 1.5x scale for pop effect)
         commands.spawn((
             Text2d::new(text),
             TextFont {
@@ -505,11 +528,8 @@ fn spawn_damage_numbers(
                 ..default()
             },
             TextColor(color),
-            Transform::from_xyz(
-                event.position.x + jitter_x,
-                event.position.y + 20.0,
-                Z_EFFECTS + 5.0,
-            ),
+            Transform::from_xyz(x, y, Z_EFFECTS + 5.0)
+                .with_scale(Vec3::splat(1.5)),
             DamageNumber {
                 vy: 60.0,
                 lifetime: 0.8,
@@ -534,9 +554,29 @@ fn update_damage_numbers(
             commands.entity(entity).despawn();
             continue;
         }
+
+        let t = 1.0 - (dn.lifetime / dn.max_lifetime); // 0..1 progress
+
+        // Pop-scale: 1.5x → 1.0x in the first 15% of lifetime, then hold 1.0
+        let scale = if t < 0.15 {
+            let pop_t = t / 0.15; // 0..1 within pop phase
+            1.5 - 0.5 * pop_t * pop_t // ease-out shrink
+        } else {
+            1.0
+        };
+        tf.scale = Vec3::splat(scale);
+
+        // Ease-out Y movement: velocity decays faster for natural deceleration
         tf.translation.y += dn.vy * dt;
-        dn.vy *= 0.95; // decelerate
-        let alpha = (dn.lifetime / dn.max_lifetime).clamp(0.0, 1.0);
+        dn.vy *= 0.92_f32.powf(dt * 60.0);
+
+        // Alpha: hold full opacity for first 50%, then fade out smoothly
+        let alpha = if t < 0.5 {
+            1.0
+        } else {
+            let fade_t = (t - 0.5) / 0.5; // 0..1 in fade phase
+            1.0 - fade_t * fade_t // ease-in fade
+        };
         let c = color.0.to_srgba();
         color.0 = Color::srgba(c.red, c.green, c.blue, alpha);
     }

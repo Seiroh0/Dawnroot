@@ -88,6 +88,8 @@ pub struct FlyingEnemy {
     pub dive_cooldown: f32,
     pub is_diving: bool,
     pub dive_target_y: f32,
+    /// Smooth ascent back to base_y after dive
+    pub is_ascending: bool,
 }
 
 #[derive(Component)]
@@ -614,6 +616,7 @@ fn spawn_flying_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32) {
             dive_cooldown: 3.5,
             is_diving: false,
             dive_target_y: 0.0,
+            is_ascending: false,
         },
         RoomEntity,
         PlayingEntity,
@@ -1957,12 +1960,26 @@ fn flying_enemy_ai(
         fe.dive_cooldown = (fe.dive_cooldown - dt).max(0.0);
 
         if fe.is_diving {
-            // Swoop down toward target, then pull back up
+            // Swoop down toward target
             let target_y = fe.dive_target_y;
             tf.translation.y += (target_y - tf.translation.y).signum() * BAT_DIVE_SPEED * dt;
             if (tf.translation.y - target_y).abs() < 10.0 || tf.translation.y < TILE_SIZE + 20.0 {
                 fe.is_diving = false;
+                fe.is_ascending = true;
                 fe.dive_cooldown = BAT_DIVE_COOLDOWN;
+            }
+        } else if fe.is_ascending {
+            // Smooth ascent back to base_y with lerp deceleration
+            let ascend_speed = 120.0;
+            let diff = fe.base_y - tf.translation.y;
+            if diff.abs() < 3.0 {
+                tf.translation.y = fe.base_y;
+                fe.is_ascending = false;
+                fe.phase = 0.0;
+            } else {
+                // Lerp: faster when far, slower when near target
+                let speed = ascend_speed * (diff.abs() / 100.0).clamp(0.3, 1.0);
+                tf.translation.y += diff.signum() * speed * dt;
             }
         } else {
             fe.phase += fe.wave_speed * dt;

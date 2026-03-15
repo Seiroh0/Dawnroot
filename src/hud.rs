@@ -8,16 +8,13 @@ impl Plugin for HudPlugin {
         app.add_systems(OnEnter(GameState::Playing), setup_hud)
             .add_systems(
                 Update,
-                (update_hud, update_minimap).run_if(in_state(GameState::Playing)),
+                (update_hud, update_minimap, health_bar_update).run_if(in_state(GameState::Playing)),
             );
     }
 }
 
 #[derive(Component)]
 struct HudRoot;
-
-#[derive(Component)]
-struct HealthText;
 
 #[derive(Component)]
 struct ManaText;
@@ -45,6 +42,25 @@ struct MinimapCell {
     room_index: usize,
 }
 
+// ── Module 6: Health bar components ──────────────────────────────
+
+/// Red foreground bar (jumps instantly to current HP).
+#[derive(Component)]
+struct HealthBarFill;
+
+/// Yellow/white trailing bar (catches up slowly for delayed damage effect).
+#[derive(Component)]
+struct HealthBarDelayed {
+    displayed_ratio: f32,
+}
+
+/// HP text label on top of the bar.
+#[derive(Component)]
+struct HealthBarLabel;
+
+const HEALTH_BAR_W: f32 = 120.0;
+const HEALTH_BAR_H: f32 = 14.0;
+
 fn setup_hud(mut commands: Commands, font: Res<GameFont>) {
     commands
         .spawn((
@@ -67,7 +83,7 @@ fn setup_hud(mut commands: Commands, font: Res<GameFont>) {
                     ..default()
                 })
                 .with_children(|row| {
-                    // Left: Health + Mana
+                    // Left: Health bar + Mana + Enemy count
                     row.spawn(Node {
                         flex_direction: FlexDirection::Column,
                         row_gap: Val::Px(4.0),
@@ -75,12 +91,64 @@ fn setup_hud(mut commands: Commands, font: Res<GameFont>) {
                     })
                     .with_children(|col| {
                         let f = font.0.clone();
-                        col.spawn((
-                            Text::new("HP: 10/10"),
-                            TextFont { font: f.clone(), font_size: 9.0, ..default() },
-                            TextColor(Color::srgb(0.9, 0.35, 0.15)),
-                            HealthText,
-                        ));
+
+                        // ── Health bar container (border + bars + label) ──
+                        col.spawn(Node {
+                            width: Val::Px(HEALTH_BAR_W + 4.0),
+                            height: Val::Px(HEALTH_BAR_H + 4.0),
+                            ..default()
+                        })
+                        .with_children(|bar_container| {
+                            // Dark border/background
+                            bar_container.spawn((
+                                Node {
+                                    width: Val::Px(HEALTH_BAR_W + 4.0),
+                                    height: Val::Px(HEALTH_BAR_H + 4.0),
+                                    position_type: PositionType::Absolute,
+                                    left: Val::Px(0.0),
+                                    top: Val::Px(0.0),
+                                    ..default()
+                                },
+                                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
+                            ));
+                            // Delayed damage bar (yellow, behind red)
+                            bar_container.spawn((
+                                Node {
+                                    width: Val::Px(HEALTH_BAR_W),
+                                    height: Val::Px(HEALTH_BAR_H),
+                                    position_type: PositionType::Absolute,
+                                    left: Val::Px(2.0),
+                                    top: Val::Px(2.0),
+                                    ..default()
+                                },
+                                BackgroundColor(Color::srgb(0.9, 0.75, 0.1)),
+                                HealthBarDelayed { displayed_ratio: 1.0 },
+                            ));
+                            // Current HP bar (red, in front)
+                            bar_container.spawn((
+                                Node {
+                                    width: Val::Px(HEALTH_BAR_W),
+                                    height: Val::Px(HEALTH_BAR_H),
+                                    position_type: PositionType::Absolute,
+                                    left: Val::Px(2.0),
+                                    top: Val::Px(2.0),
+                                    justify_content: JustifyContent::Center,
+                                    align_items: AlignItems::Center,
+                                    ..default()
+                                },
+                                BackgroundColor(Color::srgb(0.85, 0.2, 0.15)),
+                                HealthBarFill,
+                            )).with_children(|fill| {
+                                // HP text on top of bar
+                                fill.spawn((
+                                    Text::new("10/10"),
+                                    TextFont { font: f.clone(), font_size: 7.0, ..default() },
+                                    TextColor(Color::WHITE),
+                                    HealthBarLabel,
+                                ));
+                            });
+                        });
+
                         col.spawn((
                             Text::new("MANA: 100/100"),
                             TextFont { font: f.clone(), font_size: 7.0, ..default() },
@@ -162,24 +230,17 @@ fn update_hud(
     room_state: Res<RoomState>,
     player_q: Query<&Player>,
     slots_q: Query<&SpellSlots>,
-    mut score_q:  Query<&mut Text, (With<ScoreText>,  Without<HealthText>, Without<ManaText>, Without<GoldText>, Without<FloorText>, Without<SpellText>, Without<EnemyText>)>,
-    mut health_q: Query<&mut Text, (With<HealthText>, Without<ScoreText>,  Without<ManaText>, Without<GoldText>, Without<FloorText>, Without<SpellText>, Without<EnemyText>)>,
-    mut mana_q:   Query<&mut Text, (With<ManaText>,   Without<ScoreText>,  Without<HealthText>, Without<GoldText>, Without<FloorText>, Without<SpellText>, Without<EnemyText>)>,
-    mut gold_q:   Query<&mut Text, (With<GoldText>,   Without<ScoreText>,  Without<HealthText>, Without<ManaText>, Without<FloorText>, Without<SpellText>, Without<EnemyText>)>,
-    mut floor_q:  Query<&mut Text, (With<FloorText>,  Without<ScoreText>,  Without<HealthText>, Without<ManaText>, Without<GoldText>,  Without<SpellText>, Without<EnemyText>)>,
-    mut spell_q:  Query<&mut Text, (With<SpellText>,  Without<ScoreText>,  Without<HealthText>, Without<ManaText>, Without<GoldText>,  Without<FloorText>, Without<EnemyText>)>,
-    mut enemy_q:  Query<&mut Text, (With<EnemyText>,  Without<ScoreText>,  Without<HealthText>, Without<ManaText>, Without<GoldText>,  Without<FloorText>, Without<SpellText>)>,
+    mut score_q:  Query<&mut Text, (With<ScoreText>,  Without<ManaText>, Without<GoldText>, Without<FloorText>, Without<SpellText>, Without<EnemyText>, Without<HealthBarLabel>)>,
+    mut mana_q:   Query<&mut Text, (With<ManaText>,   Without<ScoreText>, Without<GoldText>, Without<FloorText>, Without<SpellText>, Without<EnemyText>, Without<HealthBarLabel>)>,
+    mut gold_q:   Query<&mut Text, (With<GoldText>,   Without<ScoreText>, Without<ManaText>, Without<FloorText>, Without<SpellText>, Without<EnemyText>, Without<HealthBarLabel>)>,
+    mut floor_q:  Query<&mut Text, (With<FloorText>,  Without<ScoreText>, Without<ManaText>, Without<GoldText>,  Without<SpellText>, Without<EnemyText>, Without<HealthBarLabel>)>,
+    mut spell_q:  Query<&mut Text, (With<SpellText>,  Without<ScoreText>, Without<ManaText>, Without<GoldText>,  Without<FloorText>, Without<EnemyText>, Without<HealthBarLabel>)>,
+    mut enemy_q:  Query<&mut Text, (With<EnemyText>,  Without<ScoreText>, Without<ManaText>, Without<GoldText>,  Without<FloorText>, Without<SpellText>, Without<HealthBarLabel>)>,
 ) {
     let player = player_q.get_single().ok();
 
     if let Ok(mut text) = score_q.get_single_mut() {
         **text = format!("{:06}", run.score);
-    }
-
-    if let Ok(mut text) = health_q.get_single_mut() {
-        if let Some(p) = player {
-            **text = format!("HP: {}/{}", p.health, p.max_health);
-        }
     }
 
     if let Ok(mut text) = mana_q.get_single_mut() {
@@ -224,19 +285,65 @@ fn update_hud(
     }
 }
 
-/// Color for a minimap cell based on room type.
-fn minimap_room_color(room_type: RoomType) -> Color {
-    match room_type {
-        RoomType::Start    => Color::srgb(0.4, 0.6, 0.4),   // green
-        RoomType::Combat   => Color::srgb(0.7, 0.3, 0.25),  // red
-        RoomType::Treasure => Color::srgb(0.9, 0.75, 0.2),  // gold
-        RoomType::Shop     => Color::srgb(0.3, 0.5, 0.8),   // blue
-        RoomType::Boss     => Color::srgb(0.8, 0.15, 0.15), // bright red
-        RoomType::Altar    => Color::srgb(0.6, 0.3, 0.7),   // purple
+// ── Module 6: Health bar update system ───────────────────────────
+
+fn health_bar_update(
+    player_q: Query<&Player>,
+    mut fill_q: Query<(&mut Node, &mut BackgroundColor), (With<HealthBarFill>, Without<HealthBarDelayed>)>,
+    mut delayed_q: Query<(&mut Node, &mut HealthBarDelayed), Without<HealthBarFill>>,
+    mut label_q: Query<&mut Text, With<HealthBarLabel>>,
+    time: Res<Time>,
+) {
+    let Ok(player) = player_q.get_single() else { return };
+    let ratio = (player.health as f32 / player.max_health as f32).clamp(0.0, 1.0);
+
+    // Update red fill bar (instant)
+    if let Ok((mut node, mut bg)) = fill_q.get_single_mut() {
+        node.width = Val::Px(HEALTH_BAR_W * ratio);
+        // Color shifts: green > yellow > red
+        let color = if ratio > 0.6 {
+            Color::srgb(0.2, 0.75, 0.25)
+        } else if ratio > 0.3 {
+            Color::srgb(0.9, 0.75, 0.1)
+        } else {
+            Color::srgb(0.85, 0.2, 0.15)
+        };
+        *bg = BackgroundColor(color);
+    }
+
+    // Update delayed bar (catches up slowly)
+    let dt = time.delta_secs();
+    if let Ok((mut node, mut delayed)) = delayed_q.get_single_mut() {
+        if delayed.displayed_ratio > ratio {
+            // Slowly shrink toward actual ratio
+            delayed.displayed_ratio -= dt * 0.8;
+            delayed.displayed_ratio = delayed.displayed_ratio.max(ratio);
+        } else {
+            // Snap up if healed
+            delayed.displayed_ratio = ratio;
+        }
+        node.width = Val::Px(HEALTH_BAR_W * delayed.displayed_ratio);
+    }
+
+    // Update text label
+    if let Ok(mut text) = label_q.get_single_mut() {
+        **text = format!("{}/{}", player.health, player.max_health);
     }
 }
 
-/// Minimap system: rebuilds cells when floor layout changes, updates current room highlight.
+// ── Minimap ──────────────────────────────────────────────────────
+
+fn minimap_room_color(room_type: RoomType) -> Color {
+    match room_type {
+        RoomType::Start    => Color::srgb(0.4, 0.6, 0.4),
+        RoomType::Combat   => Color::srgb(0.7, 0.3, 0.25),
+        RoomType::Treasure => Color::srgb(0.9, 0.75, 0.2),
+        RoomType::Shop     => Color::srgb(0.3, 0.5, 0.8),
+        RoomType::Boss     => Color::srgb(0.8, 0.15, 0.15),
+        RoomType::Altar    => Color::srgb(0.6, 0.3, 0.7),
+    }
+}
+
 fn update_minimap(
     mut commands: Commands,
     room_state: Res<RoomState>,
@@ -248,15 +355,12 @@ fn update_minimap(
     let Ok(root_entity) = minimap_root_q.get_single() else { return };
     let layout = &room_state.floor_layout;
 
-    // Rebuild minimap cells if the floor changed or layout size changed
     if *last_floor != room_state.floor || *last_room_count != layout.len() {
         *last_floor = room_state.floor;
         *last_room_count = layout.len();
 
-        // Despawn old children
         commands.entity(root_entity).despawn_descendants();
 
-        // Spawn new cells
         commands.entity(root_entity).with_children(|parent| {
             for (i, &room_type) in layout.iter().enumerate() {
                 let color = minimap_room_color(room_type);
@@ -283,27 +387,23 @@ fn update_minimap(
         return;
     }
 
-    // Update existing cells (highlight current room)
     for (cell, mut bg, mut node) in &mut cell_q {
         let is_current = cell.room_index == room_state.room_index;
         let room_type = layout.get(cell.room_index).copied().unwrap_or(RoomType::Combat);
 
         let base_color = minimap_room_color(room_type);
         if is_current {
-            // Brighten current room
             *bg = BackgroundColor(Color::WHITE);
             node.width = Val::Px(12.0);
             node.height = Val::Px(12.0);
             node.border = UiRect::all(Val::Px(1.0));
         } else if cell.room_index < room_state.room_index {
-            // Visited rooms: dimmed
             let Color::Srgba(c) = base_color else { *bg = BackgroundColor(base_color); continue; };
             *bg = BackgroundColor(Color::srgba(c.red * 0.5, c.green * 0.5, c.blue * 0.5, 0.6));
             node.width = Val::Px(8.0);
             node.height = Val::Px(8.0);
             node.border = UiRect::ZERO;
         } else {
-            // Future rooms: normal color
             *bg = BackgroundColor(base_color);
             node.width = Val::Px(8.0);
             node.height = Val::Px(8.0);
