@@ -18,6 +18,7 @@ mod floor_complete;
 mod audio;
 mod equipment;
 mod pause_menu;
+mod relic;
 
 use bevy::prelude::*;
 use constants::*;
@@ -150,6 +151,7 @@ fn main() {
             audio::GameAudioPlugin,
             equipment::EquipmentPlugin,
             pause_menu::PauseMenuPlugin,
+            relic::RelicPlugin,
         ))
         .add_systems(OnEnter(GameState::Playing), (setup_run, apply_loaded_save).chain())
         .add_systems(OnExit(GameState::Playing), cleanup_run)

@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, floor_complete::FloorCompleteState,
-    hazards::{spawn_lava_strip, spawn_water_strip, spawn_moving_platform}};
+    hazards::{spawn_lava_strip, spawn_water_strip, spawn_moving_platform, spawn_arrow_trap, spawn_spike_floor, spawn_poison_cloud},
+    relic::{RelicChoiceState, RelicInventory, start_relic_choice}};
 
 pub struct RoomPlugin;
 
@@ -925,6 +926,11 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 5.0);
             spawn_crystal(commands, TILE_SIZE * 9.0, TILE_SIZE * 6.0, 0.3);
             spawn_mushroom(commands, TILE_SIZE * 8.5, TILE_SIZE * 5.0 + TILE_SIZE);
+            // Arrow traps on walls (floor 2+)
+            if floor >= 2 {
+                spawn_arrow_trap(commands, 1, 4, 1.0);  // left wall, shoots right
+                spawn_arrow_trap(commands, 22, 3, -1.0); // right wall, shoots left
+            }
         }
 
         // ── 6: Low walkways with swampy water gap ─────────────────────────────
@@ -980,6 +986,12 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
+            // Spike floors on island edges (floor 2+)
+            if floor >= 2 {
+                spawn_spike_floor(commands, 5, 2);
+                spawn_spike_floor(commands, 10, 2);
+                spawn_spike_floor(commands, 16, 3);
+            }
         }
 
         // ── 9: Swamp marsh – water-filled lower area ────────────────────────
@@ -999,6 +1011,11 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
             spawn_mushroom(commands, TILE_SIZE * 3.5, TILE_SIZE * 3.0 + TILE_SIZE);
             spawn_mushroom(commands, TILE_SIZE * 15.5, TILE_SIZE * 3.0 + TILE_SIZE);
+            // Poison clouds in the swamp (floor 2+)
+            if floor >= 2 {
+                spawn_poison_cloud(commands, TILE_SIZE * 7.0, TILE_SIZE * 2.0);
+                spawn_poison_cloud(commands, TILE_SIZE * 16.0, TILE_SIZE * 2.0);
+            }
         }
 
         // ── 10: Vertical elevator shaft – multiple moving platforms ─────────
@@ -1701,9 +1718,12 @@ fn check_room_exit(
     mut start_timer: ResMut<StartRoomUnlockTimer>,
     mut ev_transition: EventWriter<RoomTransition>,
     mut floor_complete: ResMut<FloorCompleteState>,
+    mut relic_state: ResMut<RelicChoiceState>,
+    relic_inventory: Res<RelicInventory>,
 ) {
-    // Block room transitions while floor complete overlay is active
+    // Block room transitions while overlays are active
     if floor_complete.active { return; }
+    if relic_state.active { return; }
 
     let Ok((mut player, mut player_tf)) = player_q.get_single_mut() else { return };
 
@@ -1716,10 +1736,20 @@ fn check_room_exit(
             let is_floor_end = room_state.room_index + 1 >= room_state.floor_layout.len();
 
             if is_floor_end {
-                // Show floor complete overlay (keep room visible behind it)
-                floor_complete.active = true;
-                floor_complete.floor_completed = room_state.floor;
-                floor_complete.ui_spawned = false;
+                // Show relic choice first, then floor complete
+                if !relic_state.active && relic_state.choices[0].is_none() {
+                    let seed = room_state.seed.wrapping_add(room_state.floor as u64 * 31);
+                    start_relic_choice(&mut relic_state, &relic_inventory, seed);
+                    break;
+                }
+                // After relic is chosen (state not active and choices were set), show floor complete
+                if !relic_state.active {
+                    floor_complete.active = true;
+                    floor_complete.floor_completed = room_state.floor;
+                    floor_complete.ui_spawned = false;
+                    // Reset relic choice state for next floor
+                    relic_state.choices = [None; 3];
+                }
                 break;
             }
 

@@ -62,6 +62,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - Melee sword with animated swing arc
 - **Dash** with invincibility frames and afterimage trail
 - **Block** -- 70% damage reduction with 3s cooldown, shield flash effect
+- **Traps** -- Arrow traps (wall-mounted, periodic fire), spike floors (retractable), poison clouds (DOT area)
 - **4 Spells** -- Fireball (flame trail), Ice Shards (spread shot), Lightning (AoE bolts), Shield (rotating barrier)
 - Squash & stretch on jump/land, landing dust puffs
 
@@ -105,6 +106,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - **Meta-progression** -- persistent upgrades between runs
 - **Score system** with gold bonus from equipment
 - Room-cleared confetti celebration
+- **Relic choice after boss** -- pick 1 of 3 random relics (10 relics with passive effects like crit, lifesteal, speed, defense)
 - **Pause menu** (ESC) -- Resume, Save & Quit, Quit without Saving
 
 </td>
@@ -147,7 +149,8 @@ src/
  |- shop.rs           Cuphead-style shop UI, stone merchant NPC, overlay panel
  |- equipment.rs      20 items, 4 slots, 3 sets, stat calculation
  |- dialogue.rs       NPC dialogue with typewriter effect
- |- hazards.rs        Lava, water, moving platforms
+ |- relic.rs          10 relics with passive run effects, post-boss choice UI
+ |- hazards.rs        Lava, water, moving platforms, arrow traps, spikes, poison
  |- death_screen.rs   Game over screen with run stats
  |- floor_complete.rs Floor victory screen + confetti
  |- audio.rs          Audio system (stub, pending valid assets)
@@ -211,6 +214,8 @@ cargo run
 - [x] Enemy health bars (green/yellow/red based on HP ratio)
 - [x] Boss phases (50% aggressive, 25% enraged with AoE slam shockwave)
 - [x] Elite enemies (Armored, Swift, Brutal -- glowing aura, 2x HP, bonus loot)
+- [x] Traps -- arrow traps (wall-mounted, periodic fire), spike floors (retractable), poison clouds (DOT area)
+- [x] Relic choice after boss -- pick 1 of 3 random relics (10 relics with passive effects like crit, lifesteal, speed, defense)
 
 ---
 
