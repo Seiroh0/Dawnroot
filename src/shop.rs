@@ -555,6 +555,9 @@ fn merchant_interaction(
                 commands.entity(e).try_despawn_recursive();
             }
 
+            // Spawn the UI overlay with items and gold populated immediately
+            spawn_shop_overlay(&mut commands, &font, &selected, run.gold);
+
             commands.insert_resource(ShopUiState {
                 active: true,
                 selected: 0,
@@ -562,9 +565,6 @@ fn merchant_interaction(
                 items: selected,
                 input_cooldown: 0.2,
             });
-
-            // Spawn the UI overlay
-            spawn_shop_overlay(&mut commands, &font);
         }
     }
 
@@ -581,8 +581,8 @@ fn merchant_interaction(
     }
 }
 
-/// Spawn the shop overlay UI (centered panel with item list).
-fn spawn_shop_overlay(commands: &mut Commands, font: &GameFont) {
+/// Spawn the shop overlay UI (centered panel with item list populated immediately).
+fn spawn_shop_overlay(commands: &mut Commands, font: &GameFont, items: &[ShopEntry], gold: i32) {
     let f = font.0.clone();
 
     commands.spawn((
@@ -616,7 +616,7 @@ fn spawn_shop_overlay(commands: &mut Commands, font: &GameFont) {
                 TextColor(Color::srgb(0.9, 0.65, 0.2)),
             ));
             row.spawn((
-                Text::new("Gold: ---"),
+                Text::new(format!("Gold: {}", gold)),
                 TextFont { font: f.clone(), font_size: 10.0, ..default() },
                 TextColor(Color::srgb(0.95, 0.85, 0.4)),
                 ShopGoldText,
@@ -641,7 +641,7 @@ fn spawn_shop_overlay(commands: &mut Commands, font: &GameFont) {
             BackgroundColor(Color::srgb(0.35, 0.25, 0.12)),
         ));
 
-        // ── Item list container ──
+        // ── Item list container (populated immediately) ──
         root.spawn((
             Node {
                 flex_direction: FlexDirection::Column,
@@ -651,7 +651,52 @@ fn spawn_shop_overlay(commands: &mut Commands, font: &GameFont) {
                 ..default()
             },
             ShopItemList,
-        ));
+        )).with_children(|list| {
+            for (i, entry) in items.iter().enumerate() {
+                let selected = i == 0; // first item selected by default
+
+                let bg = if selected {
+                    Color::srgba(0.3, 0.22, 0.10, 0.6)
+                } else {
+                    Color::srgba(0.0, 0.0, 0.0, 0.0)
+                };
+
+                list.spawn((
+                    Node {
+                        flex_direction: FlexDirection::Row,
+                        justify_content: JustifyContent::SpaceBetween,
+                        padding: UiRect::axes(Val::Px(8.0), Val::Px(4.0)),
+                        ..default()
+                    },
+                    BackgroundColor(bg),
+                    ShopItemRow(i),
+                )).with_children(|row| {
+                    let prefix = if selected { "> " } else { "  " };
+                    let tier_label = entry.tier.label();
+                    let name_str = format!("{}{}{}", prefix, tier_label, entry.name);
+
+                    row.spawn((
+                        Text::new(name_str),
+                        TextFont { font: f.clone(), font_size: 9.0, ..default() },
+                        TextColor(entry.tier.color()),
+                        ShopItemName(i),
+                    ));
+
+                    let cost_color = if gold >= entry.cost {
+                        Color::srgb(0.9, 0.85, 0.4)
+                    } else {
+                        Color::srgb(0.7, 0.3, 0.2)
+                    };
+
+                    row.spawn((
+                        Text::new(format!("{}g", entry.cost)),
+                        TextFont { font: f.clone(), font_size: 9.0, ..default() },
+                        TextColor(cost_color),
+                        ShopItemCost(i),
+                    ));
+                });
+            }
+        });
 
         // ── Controls hint ──
         root.spawn((
@@ -860,13 +905,9 @@ fn shop_ui_update_visuals(
     shop_state: Option<Res<ShopUiState>>,
     run: Res<RunData>,
     mut gold_text_q: Query<&mut Text, (With<ShopGoldText>, Without<ShopMerchantText>, Without<ShopItemName>, Without<ShopItemCost>)>,
-    item_list_q: Query<Entity, With<ShopItemList>>,
-    item_row_q: Query<&ShopItemRow>,
-    mut bg_q: Query<&mut BackgroundColor, With<ShopItemRow>>,
+    mut bg_q: Query<(&ShopItemRow, &mut BackgroundColor)>,
     mut name_q: Query<(&mut Text, &mut TextColor, &ShopItemName), (Without<ShopGoldText>, Without<ShopMerchantText>, Without<ShopItemCost>)>,
     mut cost_q: Query<(&mut Text, &mut TextColor, &ShopItemCost), (Without<ShopGoldText>, Without<ShopMerchantText>, Without<ShopItemName>)>,
-    mut commands: Commands,
-    font: Res<GameFont>,
 ) {
     let Some(ref state) = shop_state else { return };
     if !state.active { return; }
@@ -876,82 +917,8 @@ fn shop_ui_update_visuals(
         **text = format!("Gold: {}", run.gold);
     }
 
-    // Check if item rows exist; if not, spawn them
-    let Ok(list_entity) = item_list_q.get_single() else { return };
-
-    let has_rows = item_row_q.iter().next().is_some();
-
-    if !has_rows {
-        // Spawn item rows as children of the list container
-        let f = font.0.clone();
-        commands.entity(list_entity).with_children(|list| {
-            for (i, entry) in state.items.iter().enumerate() {
-                let purchased = state.purchased[i];
-                let selected = i == state.selected;
-
-                let bg = if selected {
-                    Color::srgba(0.3, 0.22, 0.10, 0.6)
-                } else {
-                    Color::srgba(0.0, 0.0, 0.0, 0.0)
-                };
-
-                list.spawn((
-                    Node {
-                        flex_direction: FlexDirection::Row,
-                        justify_content: JustifyContent::SpaceBetween,
-                        padding: UiRect::axes(Val::Px(8.0), Val::Px(4.0)),
-                        ..default()
-                    },
-                    BackgroundColor(bg),
-                    ShopItemRow(i),
-                )).with_children(|row| {
-                    let tier_label = entry.tier.label();
-                    let name_str = if purchased {
-                        format!("{}{} [SOLD]", tier_label, entry.name)
-                    } else {
-                        format!("{}{}", tier_label, entry.name)
-                    };
-
-                    let name_color = if purchased {
-                        Color::srgb(0.4, 0.35, 0.28)
-                    } else {
-                        entry.tier.color()
-                    };
-
-                    row.spawn((
-                        Text::new(name_str),
-                        TextFont { font: f.clone(), font_size: 9.0, ..default() },
-                        TextColor(name_color),
-                        ShopItemName(i),
-                    ));
-
-                    let cost_str = if purchased {
-                        "---".to_string()
-                    } else {
-                        format!("{}g", entry.cost)
-                    };
-                    let cost_color = if purchased {
-                        Color::srgb(0.4, 0.35, 0.28)
-                    } else if run.gold >= entry.cost {
-                        Color::srgb(0.9, 0.85, 0.4)
-                    } else {
-                        Color::srgb(0.7, 0.3, 0.2)
-                    };
-
-                    row.spawn((
-                        Text::new(cost_str),
-                        TextFont { font: f.clone(), font_size: 9.0, ..default() },
-                        TextColor(cost_color),
-                        ShopItemCost(i),
-                    ));
-                });
-            }
-        });
-        return;
-    }
-
     // Update row backgrounds based on selection
-    for (row, mut bg) in std::iter::zip(item_row_q.iter(), bg_q.iter_mut()) {
+    for (row, mut bg) in &mut bg_q {
         if row.0 == state.selected {
             bg.0 = Color::srgba(0.3, 0.22, 0.10, 0.6);
         } else {
@@ -959,22 +926,25 @@ fn shop_ui_update_visuals(
         }
     }
 
-    // Update name texts
+    // Update name texts with ">" selection cursor
     for (mut text, mut color, name) in &mut name_q {
         let i = name.0;
         if i >= state.items.len() { continue; }
         let entry = &state.items[i];
         let purchased = state.purchased[i];
         let tier_label = entry.tier.label();
+        let prefix = if i == state.selected { "> " } else { "  " };
 
         **text = if purchased {
-            format!("{}{} [SOLD]", tier_label, entry.name)
+            format!("{}{}{} [SOLD]", prefix, tier_label, entry.name)
         } else {
-            format!("{}{}", tier_label, entry.name)
+            format!("{}{}{}", prefix, tier_label, entry.name)
         };
 
         color.0 = if purchased {
             Color::srgb(0.4, 0.35, 0.28)
+        } else if i == state.selected {
+            Color::srgb(1.0, 0.9, 0.5) // bright highlight for selected
         } else {
             entry.tier.color()
         };

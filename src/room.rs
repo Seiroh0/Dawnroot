@@ -306,7 +306,7 @@ fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize) {
         RoomType::Combat   => spawn_combat_room(commands, seed, state.floor),
         RoomType::Treasure => spawn_treasure_room(commands, seed),
         RoomType::Boss     => spawn_boss_room(commands, state.floor),
-        RoomType::Shop     => {}
+        RoomType::Shop     => spawn_shop_room(commands, seed),
         RoomType::Altar    => spawn_altar_room(commands, seed),
     }
 }
@@ -329,6 +329,7 @@ fn biome_bg_color(room_type: RoomType, floor: i32) -> Color {
             3 => Color::srgb(0.03, 0.05, 0.06),
             _ => Color::srgb(0.06, 0.04, 0.08),
         },
+        RoomType::Shop => Color::srgb(0.10, 0.06, 0.03), // warm campfire amber
         _ => match biome {
             1 => Color::srgb(0.05, 0.07, 0.04), // mushroom cave: earthy green
             2 => Color::srgb(0.09, 0.04, 0.02), // lava depths: dark red
@@ -387,7 +388,7 @@ fn room_tile_colors(room_type: RoomType, floor: i32) -> (Color, Color, Color) {
             RoomType::Start    => (Color::srgb(0.28, 0.22, 0.15), Color::srgb(0.22, 0.17, 0.12), Color::srgb(0.24, 0.19, 0.14)),
             RoomType::Combat   => (Color::srgb(0.26, 0.20, 0.14), Color::srgb(0.20, 0.15, 0.10), Color::srgb(0.23, 0.18, 0.12)),
             RoomType::Treasure => (Color::srgb(0.28, 0.24, 0.16), Color::srgb(0.22, 0.19, 0.13), Color::srgb(0.26, 0.22, 0.15)),
-            RoomType::Shop     => (Color::srgb(0.24, 0.20, 0.14), Color::srgb(0.20, 0.16, 0.10), Color::srgb(0.22, 0.18, 0.12)),
+            RoomType::Shop     => (Color::srgb(0.30, 0.18, 0.12), Color::srgb(0.22, 0.13, 0.08), Color::srgb(0.26, 0.15, 0.10)),
             _ => (Color::srgb(0.26, 0.20, 0.14), Color::srgb(0.20, 0.15, 0.10), Color::srgb(0.23, 0.18, 0.12)),
         },
     }
@@ -1484,6 +1485,139 @@ fn spawn_altar_room(commands: &mut Commands, seed: u64) {
             PlayingEntity,
         ));
     }
+}
+
+/// Shop room: warm safe haven with carpet, crates, shelves, and glowing lanterns.
+fn spawn_shop_room(commands: &mut Commands, _seed: u64) {
+    let plat_color = Color::srgb(0.32, 0.22, 0.14);
+
+    // Raised platform in center for merchant to stand on
+    spawn_platform(commands, 9, 14, 2, plat_color);
+    // Side ledges
+    spawn_platform(commands, 3, 6, 3, plat_color);
+    spawn_platform(commands, 17, 20, 3, plat_color);
+
+    // ── Carpet/rug on the floor (under merchant area) ──
+    let carpet_color = Color::srgba(0.55, 0.18, 0.12, 0.35);
+    let carpet_border = Color::srgba(0.65, 0.30, 0.10, 0.3);
+    let carpet_y = TILE_SIZE + TILE_SIZE * 0.3;
+    // Border
+    commands.spawn((
+        Sprite { color: carpet_border, custom_size: Some(Vec2::new(TILE_SIZE * 10.0, TILE_SIZE * 0.25)), ..default() },
+        Transform::from_xyz(ROOM_W / 2.0, carpet_y, Z_TILES + 0.05),
+        RoomEntity, PlayingEntity,
+    ));
+    // Main rug
+    commands.spawn((
+        Sprite { color: carpet_color, custom_size: Some(Vec2::new(TILE_SIZE * 9.0, TILE_SIZE * 0.18)), ..default() },
+        Transform::from_xyz(ROOM_W / 2.0, carpet_y, Z_TILES + 0.06),
+        RoomEntity, PlayingEntity,
+    ));
+
+    // ── Crates / shelves flanking the merchant ──
+    let crate_color = Color::srgb(0.38, 0.26, 0.14);
+    let crate_dark = Color::srgb(0.28, 0.18, 0.08);
+    let crate_positions: [(f32, f32); 4] = [
+        (TILE_SIZE * 4.0, 3.0 * TILE_SIZE + TILE_SIZE),
+        (TILE_SIZE * 5.5, 3.0 * TILE_SIZE + TILE_SIZE),
+        (TILE_SIZE * 18.5, 3.0 * TILE_SIZE + TILE_SIZE),
+        (TILE_SIZE * 19.5, 3.0 * TILE_SIZE + TILE_SIZE),
+    ];
+    for (cx, cy) in crate_positions {
+        // Crate body
+        commands.spawn((
+            Sprite { color: crate_color, custom_size: Some(Vec2::new(16.0, 14.0)), ..default() },
+            Transform::from_xyz(cx, cy + 7.0, Z_PICKUPS - 0.2),
+            RoomEntity, PlayingEntity,
+        ));
+        // Cross brace
+        commands.spawn((
+            Sprite { color: crate_dark, custom_size: Some(Vec2::new(14.0, 2.0)), ..default() },
+            Transform::from_xyz(cx, cy + 7.0, Z_PICKUPS - 0.15),
+            RoomEntity, PlayingEntity,
+        ));
+        commands.spawn((
+            Sprite { color: crate_dark, custom_size: Some(Vec2::new(2.0, 12.0)), ..default() },
+            Transform::from_xyz(cx, cy + 7.0, Z_PICKUPS - 0.15),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // ── Shelves behind merchant (on walls) ──
+    let shelf_color = Color::srgb(0.35, 0.24, 0.12);
+    for sx in [TILE_SIZE * 7.0, TILE_SIZE * 16.5] {
+        // Shelf plank
+        commands.spawn((
+            Sprite { color: shelf_color, custom_size: Some(Vec2::new(TILE_SIZE * 1.5, 4.0)), ..default() },
+            Transform::from_xyz(sx, TILE_SIZE * 5.5, Z_TILES + 0.1),
+            RoomEntity, PlayingEntity,
+        ));
+        // Item on shelf (potion bottle)
+        commands.spawn((
+            Sprite { color: Color::srgb(0.3, 0.7, 0.4), custom_size: Some(Vec2::new(5.0, 8.0)), ..default() },
+            Transform::from_xyz(sx - 6.0, TILE_SIZE * 5.5 + 6.0, Z_TILES + 0.12),
+            RoomEntity, PlayingEntity,
+        ));
+        // Item on shelf (scroll)
+        commands.spawn((
+            Sprite { color: Color::srgb(0.85, 0.75, 0.5), custom_size: Some(Vec2::new(8.0, 5.0)), ..default() },
+            Transform::from_xyz(sx + 8.0, TILE_SIZE * 5.5 + 5.0, Z_TILES + 0.12),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // ── Glowing lanterns on the ground (warm, pulsing glow) ──
+    let lantern_positions: [(f32, f32); 4] = [
+        (TILE_SIZE * 3.0, TILE_SIZE + TILE_SIZE * 0.5),
+        (TILE_SIZE * 8.0, TILE_SIZE + TILE_SIZE * 0.5),
+        (TILE_SIZE * 15.5, TILE_SIZE + TILE_SIZE * 0.5),
+        (TILE_SIZE * 20.5, TILE_SIZE + TILE_SIZE * 0.5),
+    ];
+    for (lx, ly) in lantern_positions {
+        // Lantern base
+        commands.spawn((
+            Sprite { color: Color::srgb(0.4, 0.3, 0.2), custom_size: Some(Vec2::new(6.0, 10.0)), ..default() },
+            Transform::from_xyz(lx, ly + 5.0, Z_TILES + 0.15),
+            RoomEntity, PlayingEntity,
+        ));
+        // Lantern top
+        commands.spawn((
+            Sprite { color: Color::srgb(0.5, 0.35, 0.2), custom_size: Some(Vec2::new(8.0, 3.0)), ..default() },
+            Transform::from_xyz(lx, ly + 11.0, Z_TILES + 0.16),
+            RoomEntity, PlayingEntity,
+        ));
+        // Warm glow (large soft radial light)
+        commands.spawn((
+            Sprite {
+                color: Color::srgba(0.95, 0.65, 0.2, 0.08),
+                custom_size: Some(Vec2::new(50.0, 50.0)),
+                ..default()
+            },
+            Transform::from_xyz(lx, ly + 15.0, Z_TILES + 0.02),
+            RoomEntity, PlayingEntity,
+        ));
+        // Bright flame center
+        commands.spawn((
+            Sprite {
+                color: Color::srgba(1.0, 0.85, 0.3, 0.25),
+                custom_size: Some(Vec2::new(4.0, 6.0)),
+                ..default()
+            },
+            Transform::from_xyz(lx, ly + 13.0, Z_TILES + 0.18),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // ── Warm ambient tint overlay (subtle) ──
+    commands.spawn((
+        Sprite {
+            color: Color::srgba(0.6, 0.3, 0.1, 0.04),
+            custom_size: Some(Vec2::new(ROOM_W, ROOM_H)),
+            ..default()
+        },
+        Transform::from_xyz(ROOM_W / 2.0, ROOM_H / 2.0, Z_TILES + 0.01),
+        RoomEntity, PlayingEntity,
+    ));
 }
 
 fn spawn_treasure_room(commands: &mut Commands, seed: u64) {
