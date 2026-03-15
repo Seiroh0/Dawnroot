@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, player::Player};
+use crate::{constants::*, GameState, player::Player};
 
 pub struct CameraPlugin;
 
@@ -25,7 +25,10 @@ pub struct ScreenShake {
     pub timer: f32,
 }
 
-fn spawn_camera(mut commands: Commands) {
+fn spawn_camera(mut commands: Commands, existing: Query<&GameCamera>) {
+    // Don't spawn a second camera when resuming from pause
+    if existing.iter().next().is_some() { return; }
+
     commands.spawn((
         Camera2d,
         GameCamera {
@@ -36,7 +39,8 @@ fn spawn_camera(mut commands: Commands) {
             strength: 0.0,
             timer: 0.0,
         },
-        PlayingEntity,
+        // NOTE: No PlayingEntity — camera persists across Playing/Paused cycle.
+        // Cleaned up explicitly when leaving gameplay (OnEnter Title/GameOver).
     ));
 }
 

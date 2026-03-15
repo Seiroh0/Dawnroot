@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use crate::{
-    GameState, GameFont, RunData, PlayingEntity,
+    GameState, GameFont, RunData,
     player::Player, spell::SpellSlots,
     ActiveSaveSlot, SaveSlotData, MetaProgression,
 };
@@ -174,8 +174,6 @@ fn pause_menu_input(
     run: Res<RunData>,
     slot: Res<ActiveSaveSlot>,
     meta: Res<MetaProgression>,
-    // Cleanup all playing entities on quit
-    playing_q: Query<Entity, With<PlayingEntity>>,
 ) {
     let dt = time.delta_secs();
     state.input_cooldown = (state.input_cooldown - dt).max(0.0);
@@ -293,10 +291,7 @@ fn pause_menu_input(
                 crate::save_slot(slot.0, &save_data);
                 crate::save_meta(&meta);
             }
-            // Despawn all playing entities before going to title
-            for e in &playing_q {
-                commands.entity(e).try_despawn_recursive();
-            }
+            // OnEnter(Title) cleanup_gameplay handles entity despawn
             next_state.set(GameState::Title);
         }
         _ => {}

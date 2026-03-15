@@ -156,8 +156,8 @@ fn main() {
             altar::AltarPlugin,
         ))
         .add_systems(OnEnter(GameState::Playing), (setup_run, apply_loaded_save).chain())
-        .add_systems(OnExit(GameState::Playing), cleanup_run)
-        .add_systems(OnEnter(GameState::GameOver), on_game_over)
+        .add_systems(OnEnter(GameState::GameOver), (cleanup_gameplay, on_game_over).chain())
+        .add_systems(OnEnter(GameState::Title), cleanup_gameplay)
         .add_systems(
             Update,
             (
@@ -178,7 +178,11 @@ fn setup_run(
     mut run: ResMut<RunData>,
     meta: Res<MetaProgression>,
     loaded: Option<Res<LoadedSave>>,
+    cam_q: Query<&camera::GameCamera>,
 ) {
+    // If camera already exists, we're resuming from Paused — don't reset run data
+    if cam_q.iter().next().is_some() { return; }
+
     if let Some(save) = loaded {
         *run = RunData {
             gold: save.0.gold,
@@ -202,7 +206,11 @@ fn setup_run(
 fn apply_loaded_save(
     mut commands: Commands,
     loaded: Option<Res<LoadedSave>>,
+    cam_q: Query<&camera::GameCamera>,
 ) {
+    // Resuming from pause — skip
+    if cam_q.iter().next().is_some() { return; }
+
     if loaded.is_some() {
         // Remove the resource so it doesn't apply again.
         // Player and spell restoration is handled by spawn_player/init_spell_slots
@@ -216,11 +224,17 @@ fn apply_loaded_save(
 #[derive(Resource)]
 struct DeferredSaveCleanup(u8);
 
-fn cleanup_run(
+/// Clean up all gameplay entities (including camera) when truly leaving gameplay.
+/// Runs on OnEnter(Title) and OnEnter(GameOver) — NOT on Playing→Paused transitions.
+fn cleanup_gameplay(
     mut commands: Commands,
-    q: Query<Entity, With<PlayingEntity>>,
+    playing_q: Query<Entity, With<PlayingEntity>>,
+    cam_q: Query<Entity, With<camera::GameCamera>>,
 ) {
-    for e in &q {
+    for e in &playing_q {
+        commands.entity(e).try_despawn_recursive();
+    }
+    for e in &cam_q {
         commands.entity(e).try_despawn_recursive();
     }
     commands.remove_resource::<LoadedSave>();
