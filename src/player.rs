@@ -121,7 +121,8 @@ pub struct PlayerProjectile {
 #[derive(Component)] struct PlayerLegR;
 #[derive(Component)] struct PlayerWeapon;
 
-fn spawn_player(mut commands: Commands, meta: Res<MetaProgression>, loaded: Option<Res<LoadedSave>>) {
+fn spawn_player(mut commands: Commands, meta: Res<MetaProgression>, loaded: Option<Res<LoadedSave>>, existing: Query<&Player>) {
+    if existing.iter().next().is_some() { return; }
     let max_hp = if let Some(ref save) = loaded {
         save.0.max_health
     } else {
@@ -201,7 +202,10 @@ fn player_input(
 ) {
     let Ok((mut player, tf)) = query.get_single_mut() else { return };
     // Block player movement/actions while shop overlay is open
-    if shop_state.map_or(false, |s| s.active) { return; }
+    if shop_state.map_or(false, |s| s.active) {
+        player.vx = 0.0;
+        return;
+    }
     let dt = time.delta_secs();
     let gp = gamepads.iter().next();
 
@@ -307,8 +311,8 @@ fn player_input(
         ));
     }
 
-    // Ranged attack (F key or right-click or gamepad North/Y)
-    let ranged = keys.just_pressed(KeyCode::KeyF) || mouse.just_pressed(MouseButton::Right) || gp.map_or(false, |g| g.just_pressed(GamepadButton::North));
+    // Ranged attack (F key only — RMB/North reserved for Block)
+    let ranged = keys.just_pressed(KeyCode::KeyF);
     if ranged && player.ranged_cooldown <= 0.0 {
         player.ranged_cooldown = RANGED_COOLDOWN;
         let origin = Vec3::new(

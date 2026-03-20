@@ -151,7 +151,8 @@ struct RelicCard(usize);
 // Systems
 // ---------------------------------------------------------------------------
 
-fn reset_relics(mut inventory: ResMut<RelicInventory>) {
+fn reset_relics(mut inventory: ResMut<RelicInventory>, resuming: Option<Res<crate::ResumingFromPause>>) {
+    if resuming.is_some() { return; }
     *inventory = RelicInventory::default();
 }
 

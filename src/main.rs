@@ -174,14 +174,22 @@ fn main() {
 #[derive(Component)]
 pub struct PlayingEntity;
 
+/// Inserted before transitioning Paused → Playing so that OnEnter(Playing)
+/// systems know to skip re-initialization.
+#[derive(Resource)]
+pub struct ResumingFromPause;
+
 fn setup_run(
+    mut commands: Commands,
     mut run: ResMut<RunData>,
     meta: Res<MetaProgression>,
     loaded: Option<Res<LoadedSave>>,
-    cam_q: Query<&camera::GameCamera>,
+    resuming: Option<Res<ResumingFromPause>>,
 ) {
-    // If camera already exists, we're resuming from Paused — don't reset run data
-    if cam_q.iter().next().is_some() { return; }
+    if resuming.is_some() {
+        commands.remove_resource::<ResumingFromPause>();
+        return;
+    }
 
     if let Some(save) = loaded {
         *run = RunData {
@@ -206,10 +214,10 @@ fn setup_run(
 fn apply_loaded_save(
     mut commands: Commands,
     loaded: Option<Res<LoadedSave>>,
-    cam_q: Query<&camera::GameCamera>,
+    resuming: Option<Res<ResumingFromPause>>,
 ) {
     // Resuming from pause — skip
-    if cam_q.iter().next().is_some() { return; }
+    if resuming.is_some() { return; }
 
     if loaded.is_some() {
         // Remove the resource so it doesn't apply again.

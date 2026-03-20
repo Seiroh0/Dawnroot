@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, LoadedSave, player::Player};
+use crate::{constants::*, GameState, PlayingEntity, LoadedSave, player::Player, shop::ShopUiState};
 
 pub struct SpellPlugin;
 
@@ -152,7 +152,8 @@ struct TrailParticle {
 // Initialise spell slots
 // ---------------------------------------------------------------------------
 
-fn init_spell_slots(mut commands: Commands, loaded: Option<Res<LoadedSave>>) {
+fn init_spell_slots(mut commands: Commands, loaded: Option<Res<LoadedSave>>, existing: Query<&SpellSlots>) {
+    if existing.iter().next().is_some() { return; }
     let spell_ids = [SpellId::Fireball, SpellId::IceShards, SpellId::Lightning, SpellId::Shield];
     let slots = if let Some(ref save) = loaded {
         let mut s: [Option<SpellId>; SPELL_SLOT_COUNT] = [None; SPELL_SLOT_COUNT];
@@ -184,7 +185,10 @@ fn spell_input(
     mut slots_q: Query<&mut SpellSlots>,
     mut commands: Commands,
     mut ev_cast: EventWriter<SpellCast>,
+    shop_state: Option<Res<ShopUiState>>,
 ) {
+    // Block spell casting while shop overlay is open
+    if shop_state.map_or(false, |s| s.active) { return; }
     let Ok((mut player, tf)) = player_q.get_single_mut() else { return };
     let Ok(mut slots) = slots_q.get_single_mut() else { return };
     let gp = gamepads.iter().next();

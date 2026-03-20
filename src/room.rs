@@ -163,7 +163,9 @@ fn spawn_first_room(
     mut start_timer: ResMut<StartRoomUnlockTimer>,
     loaded: Option<Res<crate::LoadedSave>>,
     mut floor_complete: ResMut<FloorCompleteState>,
+    resuming: Option<Res<crate::ResumingFromPause>>,
 ) {
+    if resuming.is_some() { return; }
     // Reset floor complete overlay
     *floor_complete = FloorCompleteState::default();
 

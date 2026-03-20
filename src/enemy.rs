@@ -245,7 +245,8 @@ struct EnemySpawnState {
     spawned_for_room: bool,
 }
 
-fn reset_enemy_state(mut commands: Commands) {
+fn reset_enemy_state(mut commands: Commands, resuming: Option<Res<crate::ResumingFromPause>>) {
+    if resuming.is_some() { return; }
     commands.insert_resource(EnemySpawnState { spawned_for_room: false });
 }
 

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use crate::{
-    GameState, GameFont, RunData,
+    GameState, GameFont, RunData, ResumingFromPause,
     player::Player, spell::SpellSlots,
     ActiveSaveSlot, SaveSlotData, MetaProgression,
 };
@@ -151,9 +151,13 @@ fn spawn_pause_menu(mut commands: Commands, font: Res<GameFont>) {
 fn despawn_pause_menu(
     mut commands: Commands,
     q: Query<Entity, With<PauseMenuRoot>>,
+    settings_q: Query<Entity, With<SettingsPanel>>,
 ) {
     for e in &q {
-        commands.entity(e).despawn_recursive();
+        commands.entity(e).try_despawn_recursive();
+    }
+    for e in &settings_q {
+        commands.entity(e).try_despawn_recursive();
     }
     commands.remove_resource::<PauseMenuState>();
 }
@@ -220,6 +224,7 @@ fn pause_menu_input(
             }
             return;
         }
+        commands.insert_resource(ResumingFromPause);
         next_state.set(GameState::Playing);
         return;
     }
@@ -235,6 +240,7 @@ fn pause_menu_input(
     match state.selected {
         0 => {
             // Resume
+            commands.insert_resource(ResumingFromPause);
             next_state.set(GameState::Playing);
         }
         1 => {

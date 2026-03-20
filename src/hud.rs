@@ -61,7 +61,8 @@ struct HealthBarLabel;
 const HEALTH_BAR_W: f32 = 120.0;
 const HEALTH_BAR_H: f32 = 14.0;
 
-fn setup_hud(mut commands: Commands, font: Res<GameFont>) {
+fn setup_hud(mut commands: Commands, font: Res<GameFont>, existing: Query<&HudRoot>) {
+    if existing.iter().next().is_some() { return; }
     commands
         .spawn((
             Node {

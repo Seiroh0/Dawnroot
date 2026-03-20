@@ -38,6 +38,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 | Move | `A` / `D` or `Arrow Keys` |
 | Jump | `Space` / `W` / `Up` |
 | Melee Attack | `J` / `Left Click` |
+| Ranged Attack | `F` |
 | Block (70% dmg reduction) | `K` / `Right Click` |
 | Dash (i-frames) | `Left Shift` |
 | Fireball | `1` |
@@ -61,6 +62,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - Tight platforming with **coyote time**, **jump buffering**, and **variable jump height**
 - Melee sword with animated swing arc
 - **Dash** with invincibility frames and afterimage trail
+- **Ranged Attack** -- golden energy bolt projectile (F key)
 - **Block** -- 70% damage reduction with 3s cooldown, shield flash effect
 - **Traps** -- Arrow traps (wall-mounted, periodic fire), spike floors (retractable), poison clouds (DOT area)
 - **4 Spells** -- Fireball (flame trail), Ice Shards (spread shot), Lightning (AoE bolts), Shield (rotating barrier)
@@ -119,7 +121,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - **Relic choice after boss** -- pick 1 of 3 random relics (10 relics with procedural pixel art icons and passive effects like crit, lifesteal, speed, defense)
 - **Curse/Blessing Altars** (floor 2+) -- risk/reward choice: pick a blessing (HP, mana, heal, crit, gold) or accept a curse for a powerful tradeoff (e.g. +3 ATK / -2 HP)
 - **Minimap** -- bottom-right HUD indicator showing room progress with color-coded room types and current room highlight
-- **Pause menu** (ESC) -- Resume, Save & Quit, Quit without Saving
+- **Pause menu** (ESC) -- Resume, Settings, Save & Quit with dedicated `ResumingFromPause` state guard
 
 </td>
 </tr>
@@ -134,7 +136,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 | **Engine** | [Bevy 0.15](https://bevyengine.org/) |
 | **Language** | Rust (Edition 2024) |
 | **Rendering** | Procedural pixel sprites from layered colored rectangles |
-| **Architecture** | ECS with state machine (Title, WellIntro, Playing, Paused, Shop, GameOver) |
+| **Architecture** | ECS with state machine (Title, WellIntro, Playing, Paused, GameOver) |
 | **Physics** | Custom AABB tile collision |
 | **Dependencies** | `bevy 0.15`, `rand 0.8`, `serde 1` |
 
@@ -222,7 +224,7 @@ cargo run
 - [x] Block mechanic (K/RMB, 70% damage reduction, 3s cooldown, shield flash VFX)
 - [x] Unique enemy abilities (Goblin leap, Bat dive bomb, Turret burst fire, Boar shockwave)
 - [x] Tunnel room layout fix (open overhangs replacing sealed ceiling)
-- [x] Pause menu (ESC -- Resume, Save & Quit, Quit without Saving)
+- [x] Pause menu (ESC -- Resume, Settings, Save & Quit)
 - [x] Floating damage numbers (white/yellow crit/red player/blue block)
 - [x] Enemy health bars (green/yellow/red based on HP ratio)
 - [x] Boss phases (50% aggressive, 25% enraged with AoE slam shockwave)
@@ -241,6 +243,10 @@ cargo run
 - [x] Bat smooth dive recovery (ascending state with lerp deceleration)
 - [x] Player health bar overhaul (dual-layer bar with delayed damage trailing effect)
 - [x] Damage numbers polish (larger font, drop shadow, pop-scale animation, ease-out)
+- [x] Shop room visual upgrade (warm palette, carpet, crates, shelves, lanterns)
+- [x] Pause/resume state safety (ResumingFromPause resource guards all OnEnter systems)
+- [x] Block mechanic fix (resolved input conflict with ranged attack)
+- [x] Shop overlay input blocking (movement + spells disabled during shop UI)
 
 ---
 

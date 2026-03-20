@@ -334,7 +334,9 @@ pub struct RecalcStats;
 fn init_equipment(
     mut commands: Commands,
     player_q: Query<Entity, With<crate::player::Player>>,
+    resuming: Option<Res<crate::ResumingFromPause>>,
 ) {
+    if resuming.is_some() { return; }
     for entity in &player_q {
         commands.entity(entity).insert(Equipment::default());
     }
