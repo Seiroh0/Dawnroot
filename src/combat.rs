@@ -3,12 +3,13 @@ use crate::{
     constants::*,
     GameState, RunData, PlayingEntity,
     player::{Player, MeleeHitbox, PlayerProjectile, PlayerDamaged, PlayerDied, PlayerBlocked},
-    enemy::{Enemy, EnemyDefeated, EnemyProjectile, Intangible, SlimeEnemy},
+    enemy::{Enemy, EnemyDefeated, EnemyProjectile, EnemySpriteAssets, Intangible, SlimeEnemy},
     spell::{SpellProjectile, LightningStrike},
     camera::{ScreenShake, trigger_shake},
     equipment::PlayerStats,
     room::{RoomState, DestructibleWall},
     loot::{Pickup, PickupKind},
+    audio::{PlaySfxEvent, SfxType},
 };
 
 #[derive(Event)]
@@ -92,11 +93,13 @@ fn melee_vs_enemy(
     mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite, Option<&Intangible>, Option<&SlimeEnemy>)>,
     mut ev_defeated: EventWriter<EnemyDefeated>,
     mut ev_dmg: EventWriter<DamageNumberEvent>,
+    mut ev_sfx: EventWriter<PlaySfxEvent>,
     mut run: ResMut<RunData>,
     mut shake_q: Query<&mut ScreenShake>,
     stats: Res<PlayerStats>,
     room_state: Res<RoomState>,
     mut player_q: Query<&mut Player>,
+    assets: Res<EnemySpriteAssets>,
 ) {
     for (h_tf, hitbox) in &hitbox_q {
         for (e_entity, e_tf, mut enemy, sprite, intangible, slime) in &mut enemy_q {
@@ -109,6 +112,7 @@ fn melee_vs_enemy(
             {
                 let (total_dmg, is_crit) = calc_damage(hitbox.damage, &stats);
                 enemy.health -= total_dmg;
+                ev_sfx.send(PlaySfxEvent(SfxType::MeleeHit));
                 let kind = if is_crit { DamageNumberKind::CritHit } else { DamageNumberKind::EnemyHit };
                 ev_dmg.send(DamageNumberEvent { position: e_tf.translation, amount: total_dmg, kind });
 
@@ -120,7 +124,7 @@ fn melee_vs_enemy(
                 if enemy.health <= 0 {
                     // Slime split on death
                     if let Some(se) = slime {
-                        crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run);
+                        crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run, &assets);
                     }
                     kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy);
                     if let Ok(mut shake) = shake_q.get_single_mut() {
@@ -143,6 +147,7 @@ fn ranged_vs_enemy(
     stats: Res<PlayerStats>,
     room_state: Res<RoomState>,
     mut player_q: Query<&mut Player>,
+    assets: Res<EnemySpriteAssets>,
 ) {
     for (p_entity, p_tf, proj) in &proj_q {
         for (e_entity, e_tf, mut enemy, sprite, intangible, slime) in &mut enemy_q {
@@ -163,7 +168,7 @@ fn ranged_vs_enemy(
 
                 if enemy.health <= 0 {
                     if let Some(se) = slime {
-                        crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run);
+                        crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run, &assets);
                     }
                     kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy);
                     if let Ok(mut shake) = shake_q.get_single_mut() {
@@ -187,6 +192,7 @@ fn spell_vs_enemy(
     stats: Res<PlayerStats>,
     room_state: Res<RoomState>,
     mut player_q: Query<&mut Player>,
+    assets: Res<EnemySpriteAssets>,
 ) {
     for (p_entity, p_tf, proj) in &proj_q {
         for (e_entity, e_tf, mut enemy, sprite, intangible, slime) in &mut enemy_q {
@@ -207,7 +213,7 @@ fn spell_vs_enemy(
 
                 if enemy.health <= 0 {
                     if let Some(se) = slime {
-                        crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run);
+                        crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run, &assets);
                     }
                     kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy);
                     if let Ok(mut shake) = shake_q.get_single_mut() {
@@ -231,6 +237,7 @@ fn lightning_vs_enemy(
     stats: Res<PlayerStats>,
     room_state: Res<RoomState>,
     mut player_q: Query<&mut Player>,
+    assets: Res<EnemySpriteAssets>,
 ) {
     for (s_tf, strike) in &strike_q {
         if strike.lifetime < 0.12 { continue; }
@@ -251,7 +258,7 @@ fn lightning_vs_enemy(
 
                 if enemy.health <= 0 {
                     if let Some(se) = slime {
-                        crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run);
+                        crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run, &assets);
                     }
                     kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy);
                 }

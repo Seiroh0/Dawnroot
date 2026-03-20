@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, enemy::EnemyDefeated, room::TreasureChest, equipment::PlayerStats};
+use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, enemy::EnemyDefeated, room::TreasureChest, equipment::PlayerStats, audio::{PlaySfxEvent, SfxType}};
 
 pub struct LootPlugin;
 
@@ -124,6 +124,7 @@ fn collect_pickups(
     mut run: ResMut<RunData>,
     time: Res<Time>,
     stats: Res<PlayerStats>,
+    mut ev_sfx: EventWriter<PlaySfxEvent>,
 ) {
     let Ok(p_tf) = player_q.get_single() else { return };
 
@@ -136,6 +137,7 @@ fn collect_pickups(
                     let bonus = (amount as f32 * stats.gold_bonus) as i32;
                     run.gold += amount + bonus;
                     run.score += (amount + bonus) * 10;
+                    ev_sfx.send(PlaySfxEvent(SfxType::CoinPickup));
                 }
                 PickupKind::Health => {
                     if let Ok(mut player) = player_mut.get_single_mut() {

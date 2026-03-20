@@ -1,10 +1,39 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, LoadedSave, player::Player, shop::ShopUiState};
+use crate::{constants::*, GameState, PlayingEntity, LoadedSave, player::Player, shop::ShopUiState, audio::{PlaySfxEvent, SfxType}};
+
+// ---------------------------------------------------------------------------
+// Pre-loaded spell effect sprite-sheet handles
+// ---------------------------------------------------------------------------
+
+/// Pre-loaded spell effect frame handles.
+#[derive(Resource)]
+pub struct SpellEffectAssets {
+    pub fireball: Vec<Handle<Image>>,         // 18 frames
+    pub fireball_impact: Vec<Handle<Image>>,  // 13 frames
+    pub ice: Vec<Handle<Image>>,              // 17 frames
+    pub lightning: Vec<Handle<Image>>,        // 7 frames
+    pub shield: Vec<Handle<Image>>,           // 18 frames
+}
 
 pub struct SpellPlugin;
 
 impl Plugin for SpellPlugin {
     fn build(&self, app: &mut App) {
+        let asset_server = app.world().resource::<AssetServer>();
+        let load_frames = |dir: &str, count: usize| -> Vec<Handle<Image>> {
+            (0..count)
+                .map(|i| asset_server.load(format!("effects/spfx/{dir}/frame{i:04}.png")))
+                .collect()
+        };
+        let spell_assets = SpellEffectAssets {
+            fireball:        load_frames("fireball_cast",    18),
+            fireball_impact: load_frames("fireball_impact",  13),
+            ice:             load_frames("ice_cast",         17),
+            lightning:       load_frames("lightning_strike",  7),
+            shield:          load_frames("shield_cast",      18),
+        };
+        app.insert_resource(spell_assets);
+
         app.add_event::<SpellCast>()
             .add_systems(OnEnter(GameState::Playing), init_spell_slots)
             .add_systems(
@@ -14,6 +43,7 @@ impl Plugin for SpellPlugin {
                     spell_cooldown_tick,
                     spell_projectile_movement,
                     spell_lifetime_system,
+                    animate_spell_effects,
                     update_fire_trails,
                     update_shield_visual,
                 )
@@ -135,6 +165,20 @@ pub struct ShieldRing {
     pub angle: f32,
 }
 
+/// Tracks frame animation for spell effect sprites.
+#[derive(Component)]
+pub struct SpellAnimState {
+    pub frames: Vec<Handle<Image>>,
+    pub frame: usize,
+    pub timer: f32,
+    pub fps: f32,
+    pub looping: bool,
+}
+
+/// One-shot impact effect that despawns after playing through its frames.
+#[derive(Component)]
+pub struct SpellImpact;
+
 // ---------------------------------------------------------------------------
 // Short-lived visual-only components (no gameplay role)
 // ---------------------------------------------------------------------------
@@ -185,7 +229,9 @@ fn spell_input(
     mut slots_q: Query<&mut SpellSlots>,
     mut commands: Commands,
     mut ev_cast: EventWriter<SpellCast>,
+    mut ev_sfx: EventWriter<PlaySfxEvent>,
     shop_state: Option<Res<ShopUiState>>,
+    spell_assets: Res<SpellEffectAssets>,
 ) {
     // Block spell casting while shop overlay is open
     if shop_state.map_or(false, |s| s.active) { return; }
@@ -223,9 +269,18 @@ fn spell_input(
             position: tf.translation,
         });
 
+        // Play spell cast SFX
+        let sfx = match spell_id {
+            SpellId::Fireball => SfxType::FireballCast,
+            SpellId::IceShards => SfxType::IceCast,
+            SpellId::Lightning => SfxType::LightningCast,
+            SpellId::Shield => SfxType::ShieldCast,
+        };
+        ev_sfx.send(PlaySfxEvent(sfx));
+
         match spell_id {
             // ----------------------------------------------------------------
-            // Fireball: orange core, red outer ring, yellow highlight children
+            // Fireball: animated sprite projectile
             // ----------------------------------------------------------------
             SpellId::Fireball => {
                 let origin = Vec3::new(
@@ -234,11 +289,14 @@ fn spell_input(
                     Z_PROJECTILES,
                 );
 
+                // Flip the sprite when travelling left
+                let flip_x = player.facing < 0.0;
+
                 commands.spawn((
                     Sprite {
-                        // Orange core
-                        color: Color::srgb(1.0, 0.45, 0.05),
-                        custom_size: Some(Vec2::new(16.0, 12.0)),
+                        image: spell_assets.fireball[0].clone(),
+                        custom_size: Some(Vec2::new(40.0, 40.0)),
+                        flip_x,
                         ..default()
                     },
                     Transform::from_translation(origin),
@@ -250,40 +308,19 @@ fn spell_input(
                         spell: SpellId::Fireball,
                     },
                     FireTrail { timer: 0.0 },
+                    SpellAnimState {
+                        frames: spell_assets.fireball.clone(),
+                        frame: 0,
+                        timer: 0.0,
+                        fps: 12.0,
+                        looping: true,
+                    },
                     PlayingEntity,
-                )).with_children(|fb| {
-                    // Red outer glow (larger, slightly transparent)
-                    fb.spawn((
-                        Sprite {
-                            color: Color::srgba(0.85, 0.15, 0.0, 0.7),
-                            custom_size: Some(Vec2::new(22.0, 18.0)),
-                            ..default()
-                        },
-                        Transform::from_xyz(0.0, 0.0, -0.1),
-                    ));
-                    // Yellow hot-spot highlight
-                    fb.spawn((
-                        Sprite {
-                            color: Color::srgba(1.0, 0.95, 0.4, 0.9),
-                            custom_size: Some(Vec2::new(8.0, 6.0)),
-                            ..default()
-                        },
-                        Transform::from_xyz(-3.0, 1.0, 0.1),
-                    ));
-                    // Small bright core flicker
-                    fb.spawn((
-                        Sprite {
-                            color: Color::srgb(1.0, 1.0, 0.8),
-                            custom_size: Some(Vec2::new(4.0, 3.0)),
-                            ..default()
-                        },
-                        Transform::from_xyz(-5.0, 0.0, 0.2),
-                    ));
-                });
+                ));
             }
 
             // ----------------------------------------------------------------
-            // Ice Shards: elongated diamonds, white highlight child
+            // Ice Shards: animated sprite projectiles
             // ----------------------------------------------------------------
             SpellId::IceShards => {
                 let spread = 0.3;
@@ -299,10 +336,8 @@ fn spell_input(
 
                     commands.spawn((
                         Sprite {
-                            // Icy light-blue body
-                            color: Color::srgb(0.45, 0.82, 1.0),
-                            // Elongated diamond: tall and narrow
-                            custom_size: Some(Vec2::new(5.0, 14.0)),
+                            image: spell_assets.ice[0].clone(),
+                            custom_size: Some(Vec2::new(24.0, 24.0)),
                             ..default()
                         },
                         Transform {
@@ -322,32 +357,20 @@ fn spell_input(
                             spell: SpellId::IceShards,
                         },
                         FrostTrail { timer: 0.0 },
+                        SpellAnimState {
+                            frames: spell_assets.ice.clone(),
+                            frame: 0,
+                            timer: 0.0,
+                            fps: 12.0,
+                            looping: true,
+                        },
                         PlayingEntity,
-                    )).with_children(|shard| {
-                        // White specular highlight stripe
-                        shard.spawn((
-                            Sprite {
-                                color: Color::srgba(0.95, 0.98, 1.0, 0.85),
-                                custom_size: Some(Vec2::new(2.0, 7.0)),
-                                ..default()
-                            },
-                            Transform::from_xyz(-1.0, 2.0, 0.1),
-                        ));
-                        // Pale-blue tip glow
-                        shard.spawn((
-                            Sprite {
-                                color: Color::srgba(0.7, 0.95, 1.0, 0.6),
-                                custom_size: Some(Vec2::new(4.0, 4.0)),
-                                ..default()
-                            },
-                            Transform::from_xyz(0.0, 5.0, 0.05),
-                        ));
-                    });
+                    ));
                 }
             }
 
             // ----------------------------------------------------------------
-            // Lightning: AoE circle + radiating bolt lines
+            // Lightning: animated AoE sprite
             // ----------------------------------------------------------------
             SpellId::Lightning => {
                 let strike_pos = Vec3::new(
@@ -357,9 +380,8 @@ fn spell_input(
                 );
 
                 commands.spawn((
-                    // Bright yellow-white flash disc
                     Sprite {
-                        color: Color::srgba(0.95, 0.98, 0.5, 0.9),
+                        image: spell_assets.lightning[0].clone(),
                         custom_size: Some(Vec2::new(LIGHTNING_RADIUS * 2.0, LIGHTNING_RADIUS * 2.0)),
                         ..default()
                     },
@@ -369,44 +391,15 @@ fn spell_input(
                         radius: LIGHTNING_RADIUS,
                         lifetime: 0.15,
                     },
+                    SpellAnimState {
+                        frames: spell_assets.lightning.clone(),
+                        frame: 0,
+                        timer: 0.0,
+                        fps: 14.0,
+                        looping: false,
+                    },
                     PlayingEntity,
-                )).with_children(|strike| {
-                    // Eight radiating bolt lines (thin white/yellow rectangles)
-                    let bolt_count = 8_u32;
-                    for k in 0..bolt_count {
-                        let bolt_angle = (k as f32 / bolt_count as f32) * std::f32::consts::TAU;
-                        // Vary bolt length for jagged look
-                        let bolt_len = 60.0 + (k as f32 * 17.3 % 50.0);
-                        let bolt_color = if k % 2 == 0 {
-                            Color::srgba(1.0, 1.0, 0.7, 1.0)
-                        } else {
-                            Color::srgba(0.8, 0.9, 1.0, 0.9)
-                        };
-                        let offset_x = bolt_angle.cos() * bolt_len * 0.5;
-                        let offset_y = bolt_angle.sin() * bolt_len * 0.5;
-                        strike.spawn((
-                            Sprite {
-                                color: bolt_color,
-                                custom_size: Some(Vec2::new(2.5, bolt_len)),
-                                ..default()
-                            },
-                            Transform {
-                                translation: Vec3::new(offset_x, offset_y, 0.2),
-                                rotation: Quat::from_rotation_z(bolt_angle + std::f32::consts::FRAC_PI_2),
-                                ..default()
-                            },
-                        ));
-                    }
-                    // Inner bright-white core burst
-                    strike.spawn((
-                        Sprite {
-                            color: Color::srgba(1.0, 1.0, 1.0, 1.0),
-                            custom_size: Some(Vec2::new(LIGHTNING_RADIUS * 0.6, LIGHTNING_RADIUS * 0.6)),
-                            ..default()
-                        },
-                        Transform::from_xyz(0.0, 0.0, 0.3),
-                    ));
-                });
+                ));
             }
 
             // ----------------------------------------------------------------
@@ -493,33 +486,43 @@ fn spell_projectile_movement(
 
 fn spell_lifetime_system(
     mut commands: Commands,
-    mut proj_q: Query<(Entity, &mut SpellProjectile)>,
-    mut lightning_q: Query<(Entity, &mut LightningStrike, &mut Sprite, &Children)>,
-    mut child_sprites: Query<&mut Sprite, Without<LightningStrike>>,
+    mut proj_q: Query<(Entity, &mut SpellProjectile, &Transform)>,
+    mut lightning_q: Query<(Entity, &mut LightningStrike)>,
     mut shield_q: Query<(Entity, &mut ShieldBuff)>,
+    spell_assets: Res<SpellEffectAssets>,
     time: Res<Time>,
 ) {
     let dt = time.delta_secs();
 
-    for (entity, mut proj) in &mut proj_q {
+    for (entity, mut proj, tf) in &mut proj_q {
         proj.lifetime -= dt;
         if proj.lifetime <= 0.0 {
+            // Spawn a fireball impact effect at the projectile's last position
+            if proj.spell == SpellId::Fireball {
+                commands.spawn((
+                    Sprite {
+                        image: spell_assets.fireball_impact[0].clone(),
+                        custom_size: Some(Vec2::new(48.0, 48.0)),
+                        ..default()
+                    },
+                    Transform::from_translation(tf.translation),
+                    SpellAnimState {
+                        frames: spell_assets.fireball_impact.clone(),
+                        frame: 0,
+                        timer: 0.0,
+                        fps: 15.0,
+                        looping: false,
+                    },
+                    SpellImpact,
+                    PlayingEntity,
+                ));
+            }
             commands.entity(entity).try_despawn_recursive();
         }
     }
 
-    for (entity, mut strike, mut sprite, children) in &mut lightning_q {
+    for (entity, mut strike) in &mut lightning_q {
         strike.lifetime -= dt;
-        let t = (strike.lifetime / 0.15).clamp(0.0, 1.0);
-        // Root disc: fade from bright opaque to transparent
-        sprite.color = Color::srgba(0.95, 0.98, 0.5, t * 0.9);
-        // Also fade every child bolt line and the inner core
-        for &child in children.iter() {
-            if let Ok(mut cs) = child_sprites.get_mut(child) {
-                let c = cs.color.to_srgba();
-                cs.color = Color::srgba(c.red, c.green, c.blue, t * c.alpha.max(0.0));
-            }
-        }
         if strike.lifetime <= 0.0 {
             commands.entity(entity).try_despawn_recursive();
         }
@@ -529,6 +532,41 @@ fn spell_lifetime_system(
         buff.remaining -= dt;
         if buff.remaining <= 0.0 {
             commands.entity(entity).try_despawn_recursive();
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Animate spell effect sprites frame-by-frame
+// ---------------------------------------------------------------------------
+
+fn animate_spell_effects(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut SpellAnimState, &mut Sprite, Option<&SpellImpact>)>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut anim, mut sprite, impact) in &mut query {
+        anim.timer += dt;
+        let frame_dur = 1.0 / anim.fps;
+        while anim.timer >= frame_dur {
+            anim.timer -= frame_dur;
+            anim.frame += 1;
+            if anim.frame >= anim.frames.len() {
+                if anim.looping {
+                    anim.frame = 0;
+                } else {
+                    // Non-looping (impact effects and one-shot strikes): despawn
+                    commands.entity(entity).try_despawn_recursive();
+                    break;
+                }
+            }
+        }
+        // impact is used to suppress the unused variable warning; the Option
+        // presence is enough — SpellImpact has no fields we need to read.
+        let _ = impact;
+        if anim.frame < anim.frames.len() {
+            sprite.image = anim.frames[anim.frame].clone();
         }
     }
 }
