@@ -54,6 +54,7 @@ pub struct AudioAssets {
     pub shield_cast: Handle<AudioSource>,
     pub lightning_cast: Handle<AudioSource>,
     pub player_death: Handle<AudioSource>,
+    pub bgm_menu: Handle<AudioSource>,
     pub bgm_dungeon: Handle<AudioSource>,
     pub bgm_shop: Handle<AudioSource>,
     pub bgm_boss: Handle<AudioSource>,
@@ -88,6 +89,7 @@ pub struct PlaySfxEvent(pub SfxType);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BgmTrack {
+    Menu,
     Dungeon,
     Shop,
     Boss,
@@ -188,6 +190,7 @@ fn determine_bgm_track(
 
 fn bgm_track_handle(track: BgmTrack, assets: &AudioAssets) -> Option<Handle<AudioSource>> {
     match track {
+        BgmTrack::Menu => Some(assets.bgm_menu.clone()),
         BgmTrack::Dungeon => Some(assets.bgm_dungeon.clone()),
         BgmTrack::Shop => Some(assets.bgm_shop.clone()),
         BgmTrack::Boss => Some(assets.bgm_boss.clone()),
@@ -235,6 +238,38 @@ fn stop_bgm(mut commands: Commands, bgm_q: Query<Entity, With<BgmMarker>>) {
         commands.entity(entity).try_despawn_recursive();
     }
     commands.insert_resource(CurrentBgm { track: BgmTrack::None });
+}
+
+fn start_menu_bgm(
+    mut commands: Commands,
+    audio_assets: Res<AudioAssets>,
+    asset_server: Res<AssetServer>,
+    settings: Res<AudioSettings>,
+    bgm_q: Query<Entity, With<BgmMarker>>,
+) {
+    // Stop any existing BGM first
+    for entity in &bgm_q {
+        commands.entity(entity).try_despawn_recursive();
+    }
+
+    let handle = audio_assets.bgm_menu.clone();
+    let load_state = asset_server.get_load_state(&handle);
+    if !matches!(load_state, Some(bevy::asset::LoadState::Loaded)) {
+        commands.insert_resource(CurrentBgm { track: BgmTrack::None });
+        return;
+    }
+
+    let vol = settings.music_volume * settings.master_volume;
+    commands.spawn((
+        AudioPlayer::<AudioSource>(handle),
+        PlaybackSettings {
+            mode: bevy::audio::PlaybackMode::Loop,
+            volume: bevy::audio::Volume::new(vol),
+            ..default()
+        },
+        BgmMarker { track: BgmTrack::Menu },
+    ));
+    commands.insert_resource(CurrentBgm { track: BgmTrack::Menu });
 }
 
 /// Switch BGM tracks when room type or shop state changes during gameplay.
@@ -317,6 +352,7 @@ impl Plugin for GameAudioPlugin {
                 .load("audio/sfx/652690__ayadrevis__thunder-strike.ogg"),
             player_death: asset_server
                 .load("audio/sfx/791967__zy7__player-death-via-endless-pit.ogg"),
+            bgm_menu: asset_server.load("audio/music/833636__nomagician__butterflow-menu-music-theme.ogg"),
             bgm_dungeon: asset_server.load("audio/music/DungeonOfFate.ogg"),
             bgm_shop: asset_server.load("audio/music/629170__holizna__chill-lofi-epiano-loop-80-bpm.ogg"),
             bgm_boss: asset_server.load("audio/music/346200__levelclearer__battle.ogg"),
@@ -328,8 +364,9 @@ impl Plugin for GameAudioPlugin {
 
         app.add_event::<PlaySfxEvent>()
             .add_systems(Update, (sfx_system, update_bgm_volume, switch_bgm_on_context).run_if(in_state(crate::GameState::Playing)))
+            .add_systems(Update, update_bgm_volume.run_if(in_state(crate::GameState::Title)))
             .add_systems(OnEnter(crate::GameState::Playing), start_bgm)
-            .add_systems(OnEnter(crate::GameState::Title), stop_bgm)
+            .add_systems(OnEnter(crate::GameState::Title), start_menu_bgm)
             .add_systems(OnEnter(crate::GameState::GameOver), stop_bgm);
     }
 }
