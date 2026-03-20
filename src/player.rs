@@ -81,6 +81,8 @@ pub struct Player {
     pub bonus_defense: i32,
     /// Permanent speed bonus from shop upgrades (0.1 = +10%).
     pub bonus_speed: f32,
+    /// Tracks how much max_health comes from equipment (for recalc delta).
+    pub equipment_health_bonus: i32,
 }
 
 impl Default for Player {
@@ -99,6 +101,7 @@ impl Default for Player {
             is_blocking: false, block_timer: 0.0, block_cooldown: 0.0,
             anim_time: 0.0, land_squash: 0.0,
             bonus_attack: 0, bonus_defense: 0, bonus_speed: 0.0,
+            equipment_health_bonus: 0,
         }
     }
 }
@@ -356,7 +359,7 @@ fn player_input(
         });
     }
 
-    player.mana = (player.mana + MANA_REGEN_RATE * dt).min(player.max_mana);
+    player.mana = (player.mana + MANA_REGEN_RATE * stats.mana_regen_mult * dt).min(player.max_mana);
 }
 
 fn player_physics(

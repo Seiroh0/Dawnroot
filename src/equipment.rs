@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::GameState;
+use crate::{GameState, constants::MANA_MAX};
 
 pub struct EquipmentPlugin;
 
@@ -344,17 +344,13 @@ fn init_equipment(
 
 fn recalculate_stats(
     mut ev: EventReader<RecalcStats>,
-    player_equip_q: Query<(&Equipment, &crate::player::Player)>,
+    mut player_equip_q: Query<(&Equipment, &mut crate::player::Player)>,
     mut stats: ResMut<PlayerStats>,
+    relic_inv: Option<Res<crate::relic::RelicInventory>>,
 ) {
-    // Recalc on event, or on first frame if stats are default
-    let should_recalc = ev.read().next().is_some();
-    // Drain remaining events
-    for _ in ev.read() {}
+    if ev.read().count() == 0 { return; }
 
-    if !should_recalc { return; }
-
-    let Ok((equip, player)) = player_equip_q.get_single() else { return };
+    let Ok((equip, mut player)) = player_equip_q.get_single_mut() else { return };
 
     // Start from base
     let mut total = StatModifiers::default();
@@ -387,9 +383,11 @@ fn recalculate_stats(
     }
 
     // Write computed stats (equipment + player shop bonuses)
+    let base_attack = total.attack_flat + player.bonus_attack;
+    let base_defense = total.defense_flat + player.bonus_defense;
     *stats = PlayerStats {
-        attack: total.attack_flat + player.bonus_attack,
-        defense: total.defense_flat + player.bonus_defense,
+        attack: (base_attack as f32 * (1.0 + total.attack_percent)).round() as i32,
+        defense: (base_defense as f32 * (1.0 + total.defense_percent)).round() as i32,
         max_health_bonus: total.max_health_flat,
         max_mana_bonus: total.max_mana_flat,
         mana_regen_mult: 1.0 + total.mana_regen_percent,
@@ -399,6 +397,25 @@ fn recalculate_stats(
         lifesteal: total.lifesteal,
         active_set_bonuses: active_sets,
     };
+
+    // Layer relic passive bonuses on top (no ordering issues)
+    if let Some(inv) = relic_inv {
+        use crate::relic::Relic;
+        if inv.has(Relic::BerserkersEdge) { stats.crit_chance += 0.15; }
+        if inv.has(Relic::GoldenIdol)     { stats.gold_bonus += 0.25; }
+        if inv.has(Relic::ArcaneOrb)      { stats.mana_regen_mult += 0.5; }
+        if inv.has(Relic::StoneSkin)      { stats.defense += 1; }
+    }
+
+    // Apply HP/MP bonuses to the Player component
+    let base_hp = player.max_health - player.equipment_health_bonus;
+    player.equipment_health_bonus = stats.max_health_bonus;
+    player.max_health = base_hp + stats.max_health_bonus;
+    // Clamp current health if max decreased
+    if player.health > player.max_health {
+        player.health = player.max_health;
+    }
+    player.max_mana = MANA_MAX + stats.max_mana_bonus;
 }
 
 fn add_modifiers(target: &mut StatModifiers, source: &StatModifiers) {

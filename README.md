@@ -66,6 +66,8 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - **Block** -- 70% damage reduction with 3s cooldown, shield flash effect
 - **Traps** -- Arrow traps (wall-mounted, periodic fire), spike floors (retractable), poison clouds (DOT area)
 - **4 Spells** -- Fireball (flame trail), Ice Shards (spread shot), Lightning (AoE bolts), Shield (rotating barrier)
+- **Crit system** -- all damage types (melee, ranged, spells, lightning) can crit for 1.5x damage
+- **Lifesteal** -- equipment/set bonus heals player on dealing damage
 - Squash & stretch on jump/land, landing dust puffs
 
 </td>
@@ -112,13 +114,13 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - **Gold, Health, Mana** drops with magnet pickup
 - **Cuphead-style shop UI** -- stone merchant NPC, overlay panel with item list, keyboard/gamepad navigation
 - **Tiered shop** -- 30+ items across 3 tiers, milestone-gated unlocks
-- **Equipment system** -- 20 items across 4 slots (Weapon, Armor, Relic, Charm)
-- **3 item sets** (Fire, Ice, Storm) with 2-piece and 3-piece bonuses
+- **Equipment system** -- 20 items across 4 slots (Weapon, Armor, Relic, Charm) with active stat application (attack%, defense%, max HP/MP, lifesteal, crit, speed)
+- **3 item sets** (Fire, Ice, Storm) with 2-piece and 3-piece bonuses -- actively calculated and applied
 - **Stat upgrades** -- Attack, Defense, Speed purchasable in shop
 - **Meta-progression** -- persistent upgrades between runs
 - **Score system** with gold bonus from equipment
 - Room-cleared confetti celebration
-- **Relic choice after boss** -- pick 1 of 3 random relics (10 relics with procedural pixel art icons and passive effects like crit, lifesteal, speed, defense)
+- **Relic choice after boss** -- pick 1 of 3 random relics (10 relics with procedural pixel art icons and active passive effects: crit, lifesteal per 5 kills, spell cooldown reduction, auto-block on room enter)
 - **Curse/Blessing Altars** (floor 2+) -- risk/reward choice: pick a blessing (HP, mana, heal, crit, gold) or accept a curse for a powerful tradeoff (e.g. +3 ATK / -2 HP)
 - **Minimap** -- bottom-right HUD indicator showing room progress with color-coded room types and current room highlight
 - **Pause menu** (ESC) -- Resume, Settings, Save & Quit with dedicated `ResumingFromPause` state guard

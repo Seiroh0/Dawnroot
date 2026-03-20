@@ -2,6 +2,9 @@ use bevy::prelude::*;
 use crate::{
     GameState, GameFont, PlayingEntity,
     player::Player,
+    enemy::EnemyDefeated,
+    spell::SpellSlots,
+    room::RoomTransition,
 };
 
 pub struct RelicPlugin;
@@ -13,8 +16,13 @@ impl Plugin for RelicPlugin {
             .add_systems(OnEnter(GameState::Playing), reset_relics)
             .add_systems(
                 Update,
-                (spawn_relic_choice_ui, relic_choice_input, apply_relic_effects)
-                    .chain()
+                (
+                    spawn_relic_choice_ui,
+                    relic_choice_input,
+                    vampiric_fang_system,
+                    chrono_bracelet_system,
+                    guardian_amulet_system,
+                )
                     .run_if(in_state(GameState::Playing)),
             );
     }
@@ -301,6 +309,7 @@ fn relic_choice_input(
     ui_q: Query<Entity, With<RelicChoiceUI>>,
     mut card_q: Query<(&RelicCard, &mut BorderColor)>,
     mut player_q: Query<&mut Player>,
+    mut recalc_ev: EventWriter<crate::equipment::RecalcStats>,
 ) {
     if !state.active { return; }
 
@@ -363,9 +372,11 @@ fn relic_choice_input(
                 Relic::WarriorsBand => {
                     player.bonus_attack += 1;
                 }
-                _ => {} // Other relics are passive effects applied in apply_relic_effects
+                _ => {}
             }
         }
+        // Trigger stat recalc so relic bonuses are applied immediately
+        recalc_ev.send(crate::equipment::RecalcStats);
     }
 
     // Close UI
@@ -376,25 +387,60 @@ fn relic_choice_input(
     }
 }
 
-/// Passive relic effects applied each frame.
-fn apply_relic_effects(
-    inventory: Res<RelicInventory>,
-    mut stats: ResMut<crate::equipment::PlayerStats>,
+/// VampiricFang: heal 1 HP every 5 kills.
+fn vampiric_fang_system(
+    mut inventory: ResMut<RelicInventory>,
+    mut ev_defeated: EventReader<EnemyDefeated>,
+    mut player_q: Query<&mut Player>,
 ) {
-    if !inventory.is_changed() && !stats.is_changed() { return; }
+    if !inventory.has(Relic::VampiricFang) {
+        for _ in ev_defeated.read() {} // drain
+        return;
+    }
+    let kill_count = ev_defeated.read().count() as i32;
+    if kill_count == 0 { return; }
+    inventory.kill_counter += kill_count;
+    while inventory.kill_counter >= 5 {
+        inventory.kill_counter -= 5;
+        if let Ok(mut player) = player_q.get_single_mut() {
+            player.health = (player.health + 1).min(player.max_health);
+        }
+    }
+}
 
-    // These are additive on top of equipment stats
-    if inventory.has(Relic::BerserkersEdge) {
-        stats.crit_chance += 0.15;
+/// ChronoBracelet: reduce spell cooldowns by 25%.
+fn chrono_bracelet_system(
+    inventory: Res<RelicInventory>,
+    mut slots_q: Query<&mut SpellSlots>,
+    time: Res<Time>,
+) {
+    if !inventory.has(Relic::ChronoBracelet) { return; }
+    let Ok(mut slots) = slots_q.get_single_mut() else { return };
+    // Apply extra cooldown reduction (25% faster = subtract extra 25% per frame)
+    let bonus_tick = time.delta_secs() * 0.25;
+    for cd in slots.cooldowns.iter_mut() {
+        if *cd > 0.0 {
+            *cd = (*cd - bonus_tick).max(0.0);
+        }
     }
-    if inventory.has(Relic::GoldenIdol) {
-        stats.gold_bonus += 0.25;
+}
+
+/// GuardianAmulet: activate block at the start of each room.
+fn guardian_amulet_system(
+    inventory: Res<RelicInventory>,
+    mut ev_room: EventReader<RoomTransition>,
+    mut player_q: Query<&mut Player>,
+) {
+    if !inventory.has(Relic::GuardianAmulet) {
+        for _ in ev_room.read() {} // drain
+        return;
     }
-    if inventory.has(Relic::ArcaneOrb) {
-        stats.mana_regen_mult += 0.5;
-    }
-    if inventory.has(Relic::StoneSkin) {
-        stats.defense += 1;
+    for _ in ev_room.read() {
+        if let Ok(mut player) = player_q.get_single_mut() {
+            player.is_blocking = true;
+            player.block_timer = crate::constants::BLOCK_DURATION;
+            player.block_cooldown = crate::constants::BLOCK_COOLDOWN;
+        }
     }
 }
 

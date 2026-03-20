@@ -67,6 +67,25 @@ fn kill_enemy(
     commands.entity(entity).try_despawn_recursive();
 }
 
+/// Roll crit and compute total damage = (base + attack) * crit multiplier.
+/// Returns (total_damage, is_crit).
+fn calc_damage(base: i32, stats: &PlayerStats) -> (i32, bool) {
+    let is_crit = stats.crit_chance > 0.0 && (rand::random::<f32>() < stats.crit_chance);
+    let raw = base + stats.attack;
+    let total = if is_crit { (raw as f32 * 1.5).round() as i32 } else { raw };
+    (total.max(1), is_crit)
+}
+
+/// Apply lifesteal: heal the player for a fraction of damage dealt.
+fn apply_lifesteal(player: &mut Player, damage: i32, lifesteal: f32) {
+    if lifesteal > 0.0 {
+        let heal = (damage as f32 * lifesteal).ceil() as i32;
+        if heal > 0 {
+            player.health = (player.health + heal).min(player.max_health);
+        }
+    }
+}
+
 fn melee_vs_enemy(
     mut commands: Commands,
     hitbox_q: Query<(&Transform, &MeleeHitbox)>,
@@ -77,6 +96,7 @@ fn melee_vs_enemy(
     mut shake_q: Query<&mut ScreenShake>,
     stats: Res<PlayerStats>,
     room_state: Res<RoomState>,
+    mut player_q: Query<&mut Player>,
 ) {
     for (h_tf, hitbox) in &hitbox_q {
         for (e_entity, e_tf, mut enemy, sprite, intangible, slime) in &mut enemy_q {
@@ -87,11 +107,15 @@ fn melee_vs_enemy(
             if dist.x < MELEE_RANGE / 2.0 + e_size.x / 2.0
                 && dist.y < MELEE_WIDTH / 2.0 + e_size.y / 2.0
             {
-                let crit_bonus = (hitbox.damage as f32 * stats.crit_chance) as i32;
-                let total_dmg = hitbox.damage + stats.attack + crit_bonus;
+                let (total_dmg, is_crit) = calc_damage(hitbox.damage, &stats);
                 enemy.health -= total_dmg;
-                let kind = if crit_bonus > 0 { DamageNumberKind::CritHit } else { DamageNumberKind::EnemyHit };
+                let kind = if is_crit { DamageNumberKind::CritHit } else { DamageNumberKind::EnemyHit };
                 ev_dmg.send(DamageNumberEvent { position: e_tf.translation, amount: total_dmg, kind });
+
+                // Lifesteal
+                if let Ok(mut player) = player_q.get_single_mut() {
+                    apply_lifesteal(&mut player, total_dmg, stats.lifesteal);
+                }
 
                 if enemy.health <= 0 {
                     // Slime split on death
@@ -118,6 +142,7 @@ fn ranged_vs_enemy(
     mut shake_q: Query<&mut ScreenShake>,
     stats: Res<PlayerStats>,
     room_state: Res<RoomState>,
+    mut player_q: Query<&mut Player>,
 ) {
     for (p_entity, p_tf, proj) in &proj_q {
         for (e_entity, e_tf, mut enemy, sprite, intangible, slime) in &mut enemy_q {
@@ -126,10 +151,15 @@ fn ranged_vs_enemy(
             let dist = (p_tf.translation.xy() - e_tf.translation.xy()).abs();
 
             if dist.x < 5.0 + e_size.x / 2.0 && dist.y < 3.0 + e_size.y / 2.0 {
-                let total_dmg = proj.damage + stats.attack;
+                let (total_dmg, is_crit) = calc_damage(proj.damage, &stats);
                 enemy.health -= total_dmg;
-                ev_dmg.send(DamageNumberEvent { position: e_tf.translation, amount: total_dmg, kind: DamageNumberKind::EnemyHit });
+                let kind = if is_crit { DamageNumberKind::CritHit } else { DamageNumberKind::EnemyHit };
+                ev_dmg.send(DamageNumberEvent { position: e_tf.translation, amount: total_dmg, kind });
                 commands.entity(p_entity).try_despawn_recursive();
+
+                if let Ok(mut player) = player_q.get_single_mut() {
+                    apply_lifesteal(&mut player, total_dmg, stats.lifesteal);
+                }
 
                 if enemy.health <= 0 {
                     if let Some(se) = slime {
@@ -156,6 +186,7 @@ fn spell_vs_enemy(
     mut shake_q: Query<&mut ScreenShake>,
     stats: Res<PlayerStats>,
     room_state: Res<RoomState>,
+    mut player_q: Query<&mut Player>,
 ) {
     for (p_entity, p_tf, proj) in &proj_q {
         for (e_entity, e_tf, mut enemy, sprite, intangible, slime) in &mut enemy_q {
@@ -164,10 +195,15 @@ fn spell_vs_enemy(
             let dist = (p_tf.translation.xy() - e_tf.translation.xy()).abs();
 
             if dist.x < 8.0 + e_size.x / 2.0 && dist.y < 8.0 + e_size.y / 2.0 {
-                let total_dmg = proj.damage + stats.attack;
+                let (total_dmg, is_crit) = calc_damage(proj.damage, &stats);
                 enemy.health -= total_dmg;
-                ev_dmg.send(DamageNumberEvent { position: e_tf.translation, amount: total_dmg, kind: DamageNumberKind::EnemyHit });
+                let kind = if is_crit { DamageNumberKind::CritHit } else { DamageNumberKind::EnemyHit };
+                ev_dmg.send(DamageNumberEvent { position: e_tf.translation, amount: total_dmg, kind });
                 commands.entity(p_entity).despawn();
+
+                if let Ok(mut player) = player_q.get_single_mut() {
+                    apply_lifesteal(&mut player, total_dmg, stats.lifesteal);
+                }
 
                 if enemy.health <= 0 {
                     if let Some(se) = slime {
@@ -192,7 +228,9 @@ fn lightning_vs_enemy(
     mut ev_dmg: EventWriter<DamageNumberEvent>,
     mut run: ResMut<RunData>,
     mut shake_q: Query<&mut ScreenShake>,
+    stats: Res<PlayerStats>,
     room_state: Res<RoomState>,
+    mut player_q: Query<&mut Player>,
 ) {
     for (s_tf, strike) in &strike_q {
         if strike.lifetime < 0.12 { continue; }
@@ -202,8 +240,14 @@ fn lightning_vs_enemy(
             let dist = (s_tf.translation.xy() - e_tf.translation.xy()).length();
 
             if dist < strike.radius {
-                enemy.health -= strike.damage;
-                ev_dmg.send(DamageNumberEvent { position: e_tf.translation, amount: strike.damage, kind: DamageNumberKind::EnemyHit });
+                let (total_dmg, is_crit) = calc_damage(strike.damage, &stats);
+                enemy.health -= total_dmg;
+                let kind = if is_crit { DamageNumberKind::CritHit } else { DamageNumberKind::EnemyHit };
+                ev_dmg.send(DamageNumberEvent { position: e_tf.translation, amount: total_dmg, kind });
+
+                if let Ok(mut player) = player_q.get_single_mut() {
+                    apply_lifesteal(&mut player, total_dmg, stats.lifesteal);
+                }
 
                 if enemy.health <= 0 {
                     if let Some(se) = slime {
