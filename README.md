@@ -137,7 +137,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 |:--|:--|
 | **Engine** | [Bevy 0.15](https://bevyengine.org/) |
 | **Language** | Rust (Edition 2024) |
-| **Rendering** | Procedural pixel sprites from layered colored rectangles |
+| **Rendering** | Spritesheet-based characters + 0x72 Dungeon Tileset for floors/walls |
 | **Architecture** | ECS with state machine (Title, WellIntro, Playing, Paused, GameOver) |
 | **Physics** | Custom AABB tile collision |
 | **Dependencies** | `bevy 0.15`, `rand 0.8`, `serde 1` |
@@ -151,8 +151,8 @@ src/
  |- main.rs           App setup, GameState, RunData, save/load
  |- constants.rs      All numeric constants (physics, spells, layout)
  |- title.rs          Title screen, save slots, WellIntro cutscene
- |- player.rs         Movement, melee, dash, gamepad input
- |- room.rs           Room generation, 16 templates, decorations
+ |- player.rs         Movement, melee, dash, gamepad input, spritesheet animation
+ |- room.rs           Room generation, 16 templates, tileset rendering, decorations
  |- enemy.rs          7 enemy types + 4 unique bosses, elite variants, health bars
  |- combat.rs         Melee / spell / projectile collision & damage
  |- spell.rs          4 spells with trails, frost, bolts, shield ring
@@ -214,7 +214,7 @@ cargo run
 - [x] Treasure chest auto-open on proximity
 - [x] Death screen with run statistics
 - [x] Floor complete screen with confetti celebration
-- [ ] Spritesheet art (replace procedural rectangles)
+- [x] Spritesheet art (replace procedural rectangles with satiro-Sheet + 0x72 tileset)
 - [ ] Audio engine (background music + SFX)
 - [x] Equipment & set-bonus system (20 items, 4 slots, 3 sets with 2pc/3pc bonuses)
 - [x] Economy rebalance with tiered item unlocks (3 tiers, milestone gating)
@@ -249,6 +249,8 @@ cargo run
 - [x] Pause/resume state safety (ResumingFromPause resource guards all OnEnter systems)
 - [x] Block mechanic fix (resolved input conflict with ranged attack)
 - [x] Shop overlay input blocking (movement + spells disabled during shop UI)
+- [x] Player spritesheet integration (satiro-Sheet, idle/run animation with frame cycling)
+- [x] Dungeon tileset integration (0x72 DungeonTilesetII for floor/wall/ceiling tiles)
 
 ---
 

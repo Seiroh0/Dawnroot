@@ -4,10 +4,34 @@ use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, flo
     relic::{RelicChoiceState, RelicInventory, start_relic_choice},
     altar::{AltarState, AltarEntity, spawn_altar, check_altar_interaction}};
 
+// ─── Tileset Assets ──────────────────────────────────────────────────────────
+
+const TILESET_PATH: &str = "tilesets/0x72_DungeonTilesetII_v1.7/0x72_DungeonTilesetII_v1.7/frames";
+
+/// Pre-loaded tile texture handles from the 0x72 Dungeon Tileset.
+#[derive(Resource)]
+pub struct TilesetAssets {
+    /// 8 floor tile variants (floor_1 .. floor_8).
+    pub floors: Vec<Handle<Image>>,
+    /// Wall body tile (wall_mid).
+    pub wall_mid: Handle<Image>,
+    /// Wall top tile (wall_top_mid).
+    pub wall_top: Handle<Image>,
+}
+
 pub struct RoomPlugin;
 
 impl Plugin for RoomPlugin {
     fn build(&self, app: &mut App) {
+        // Load tileset images.
+        let asset_server = app.world().resource::<AssetServer>();
+        let floors: Vec<Handle<Image>> = (1..=8)
+            .map(|i| asset_server.load(format!("{TILESET_PATH}/floor_{i}.png")))
+            .collect();
+        let wall_mid = asset_server.load(format!("{TILESET_PATH}/wall_mid.png"));
+        let wall_top = asset_server.load(format!("{TILESET_PATH}/wall_top_mid.png"));
+        app.insert_resource(TilesetAssets { floors, wall_mid, wall_top });
+
         app.add_event::<RoomCleared>()
             .add_event::<RoomTransition>()
             .add_event::<AdvanceFloor>()
@@ -164,6 +188,7 @@ fn spawn_first_room(
     loaded: Option<Res<crate::LoadedSave>>,
     mut floor_complete: ResMut<FloorCompleteState>,
     resuming: Option<Res<crate::ResumingFromPause>>,
+    tiles: Res<TilesetAssets>,
 ) {
     if resuming.is_some() { return; }
     // Reset floor complete overlay
@@ -184,12 +209,12 @@ fn spawn_first_room(
 
     start_timer.active = false;
 
-    spawn_room(&mut commands, &state, 0);
+    spawn_room(&mut commands, &state, 0, &tiles);
 }
 
 // ─── Room Spawning ────────────────────────────────────────────────────────────
 
-fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize) {
+fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize, tiles: &TilesetAssets) {
     let room_type = state.floor_layout.get(room_idx).copied().unwrap_or(RoomType::Combat);
     let seed = state.seed
         .wrapping_add(room_idx as u64)
@@ -209,31 +234,32 @@ fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize) {
         PlayingEntity,
     ));
 
-    let (floor_color, ceil_color, wall_color) = room_tile_colors(room_type, state.floor);
+    // Keep biome colors for decorations (stalactites, rubble, etc.)
+    let (floor_color, _ceil_color, wall_color) = room_tile_colors(room_type, state.floor);
 
-    // Floor row
+    // Floor row — tileset floor tiles (randomized variant per column)
     for col in 0..ROOM_COLUMNS {
         let x = col as f32 * TILE_SIZE + TILE_SIZE / 2.0;
-        spawn_tile(commands, x, TILE_SIZE / 2.0, floor_color);
+        spawn_tile_sprite(commands, x, TILE_SIZE / 2.0, pick_floor_tile(tiles, col, 0));
     }
 
-    // Ceiling row
+    // Ceiling row — wall_top tiles
     for col in 0..ROOM_COLUMNS {
         let x = col as f32 * TILE_SIZE + TILE_SIZE / 2.0;
-        spawn_tile(commands, x, ROOM_H - TILE_SIZE / 2.0, ceil_color);
+        spawn_tile_sprite(commands, x, ROOM_H - TILE_SIZE / 2.0, tiles.wall_top.clone());
     }
 
-    // Left wall
+    // Left wall — wall_mid tiles
     for row in 0..ROOM_ROWS {
         let y = row as f32 * TILE_SIZE + TILE_SIZE / 2.0;
-        spawn_tile(commands, TILE_SIZE / 2.0, y, wall_color);
+        spawn_tile_sprite(commands, TILE_SIZE / 2.0, y, tiles.wall_mid.clone());
     }
 
-    // Right wall (gap at rows 1-3 for door)
+    // Right wall (gap at rows 1-3 for door) — wall_mid tiles
     for row in 0..ROOM_ROWS {
         if row >= 1 && row <= 3 { continue; }
         let y = row as f32 * TILE_SIZE + TILE_SIZE / 2.0;
-        spawn_tile(commands, ROOM_W - TILE_SIZE / 2.0, y, wall_color);
+        spawn_tile_sprite(commands, ROOM_W - TILE_SIZE / 2.0, y, tiles.wall_mid.clone());
     }
 
     // Exit door
@@ -410,6 +436,27 @@ fn spawn_tile(commands: &mut Commands, x: f32, y: f32, color: Color) {
         RoomEntity,
         PlayingEntity,
     ));
+}
+
+/// Spawn a tile using a tileset texture image instead of a colored rectangle.
+fn spawn_tile_sprite(commands: &mut Commands, x: f32, y: f32, texture: Handle<Image>) {
+    commands.spawn((
+        Sprite {
+            image: texture,
+            custom_size: Some(Vec2::new(TILE_SIZE, TILE_SIZE)),
+            ..default()
+        },
+        Transform::from_xyz(x, y, Z_TILES),
+        Tile,
+        RoomEntity,
+        PlayingEntity,
+    ));
+}
+
+/// Pick a deterministic floor tile variant based on position.
+fn pick_floor_tile(tiles: &TilesetAssets, col: i32, row: i32) -> Handle<Image> {
+    let hash = ((col as u32).wrapping_mul(7) ^ (row as u32).wrapping_mul(13)) as usize;
+    tiles.floors[hash % tiles.floors.len()].clone()
 }
 
 fn spawn_tile_cracked(commands: &mut Commands, x: f32, y: f32, color: Color) {
@@ -2183,6 +2230,7 @@ fn check_room_exit(
     mut floor_complete: ResMut<FloorCompleteState>,
     mut relic_state: ResMut<RelicChoiceState>,
     relic_inventory: Res<RelicInventory>,
+    tiles: Res<TilesetAssets>,
 ) {
     // Block room transitions while overlays are active
     if floor_complete.active { return; }
@@ -2241,7 +2289,7 @@ fn check_room_exit(
                 start_timer.active = false;
             }
 
-            spawn_room(&mut commands, &room_state, room_state.room_index);
+            spawn_room(&mut commands, &room_state, room_state.room_index, &tiles);
 
             // Teleport player to safe spawn (left side, above floor)
             player_tf.translation.x = TILE_SIZE * 2.5;
@@ -2264,6 +2312,7 @@ fn handle_advance_floor(
     room_entities: Query<Entity, With<RoomEntity>>,
     mut player_q: Query<(&mut Player, &mut Transform), Without<ExitDoor>>,
     mut ev_transition: EventWriter<RoomTransition>,
+    tiles: Res<TilesetAssets>,
 ) {
     for _ in ev.read() {
         // Despawn old room
@@ -2286,7 +2335,7 @@ fn handle_advance_floor(
         room_state.room_cleared = true;
         start_timer.active = false;
 
-        spawn_room(&mut commands, &room_state, 0);
+        spawn_room(&mut commands, &room_state, 0, &tiles);
 
         // Teleport player
         if let Ok((mut player, mut tf)) = player_q.get_single_mut() {

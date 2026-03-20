@@ -1,10 +1,59 @@
 use bevy::prelude::*;
 use crate::{constants::*, GameState, PlayingEntity, MetaProgression, LoadedSave, equipment::PlayerStats, shop::ShopUiState};
 
+// ─── Sprite Assets ───────────────────────────────────────────────────────────
+
+/// Holds the loaded satiro spritesheet texture + atlas layout.
+#[derive(Resource)]
+pub struct PlayerSpriteAssets {
+    pub texture: Handle<Image>,
+    pub layout: Handle<TextureAtlasLayout>,
+}
+
+/// Tracks the player's current animation state and frame timer.
+#[derive(Component)]
+pub struct PlayerAnimState {
+    pub state: AnimKind,
+    pub frame: usize,
+    pub timer: f32,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum AnimKind { Idle, Run }
+
+/// Satiro sheet: 320×256 → 10 columns × 8 rows of 32×32 frames.
+const SATIRO_COLS: u32 = 10;
+const SATIRO_ROWS: u32 = 8;
+const SATIRO_FRAME: u32 = 32;
+/// How many frames per animation (first N of each row).
+const IDLE_FRAMES: usize = 4;
+const RUN_FRAMES: usize = 4;
+/// Row indices in the sheet.
+const IDLE_ROW: usize = 0;
+const RUN_ROW: usize = 1;
+/// Seconds per animation frame.
+const ANIM_FPS: f32 = 0.12;
+/// Display scale for the 32px sprite → ~64px on screen.
+const PLAYER_SPRITE_SCALE: f32 = 2.0;
+
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
+        // Load the satiro spritesheet and build the atlas layout.
+        let asset_server = app.world().resource::<AssetServer>();
+        let texture: Handle<Image> = asset_server.load("sprites/satiro-Sheet v1.1.png");
+        let layout = TextureAtlasLayout::from_grid(
+            UVec2::new(SATIRO_FRAME, SATIRO_FRAME),
+            SATIRO_COLS,
+            SATIRO_ROWS,
+            None,
+            None,
+        );
+        let mut layouts = app.world_mut().resource_mut::<Assets<TextureAtlasLayout>>();
+        let layout_handle = layouts.add(layout);
+        app.insert_resource(PlayerSpriteAssets { texture, layout: layout_handle });
+
         app.add_event::<PlayerLanded>()
             .add_event::<PlayerAttack>()
             .add_event::<PlayerDamaged>()
@@ -21,6 +70,7 @@ impl Plugin for PlayerPlugin {
                     melee_hitbox_lifetime,
                     player_projectile_movement,
                     update_player_visuals,
+                    animate_player_sprite,
                 )
                     .chain()
                     .run_if(in_state(GameState::Playing)),
@@ -73,7 +123,6 @@ pub struct Player {
     pub is_blocking: bool,
     pub block_timer: f32,
     pub block_cooldown: f32,
-    pub anim_time: f32,
     pub land_squash: f32,
     /// Permanent attack bonus from shop upgrades (stacks per purchase).
     pub bonus_attack: i32,
@@ -99,7 +148,7 @@ impl Default for Player {
             ranged_cooldown: 0.0,
             is_dashing: false, dash_timer: 0.0, dash_cooldown: 0.0,
             is_blocking: false, block_timer: 0.0, block_cooldown: 0.0,
-            anim_time: 0.0, land_squash: 0.0,
+            land_squash: 0.0,
             bonus_attack: 0, bonus_defense: 0, bonus_speed: 0.0,
             equipment_health_bonus: 0,
         }
@@ -117,14 +166,17 @@ pub struct PlayerProjectile {
     pub lifetime: f32,
 }
 
-// Body part markers
-#[derive(Component)] struct PlayerBody;
-#[derive(Component)] struct PlayerHead;
-#[derive(Component)] struct PlayerLegL;
-#[derive(Component)] struct PlayerLegR;
-#[derive(Component)] struct PlayerWeapon;
+/// Marker for the child entity that renders the player spritesheet.
+#[derive(Component)]
+pub struct PlayerSprite;
 
-fn spawn_player(mut commands: Commands, meta: Res<MetaProgression>, loaded: Option<Res<LoadedSave>>, existing: Query<&Player>) {
+fn spawn_player(
+    mut commands: Commands,
+    meta: Res<MetaProgression>,
+    loaded: Option<Res<LoadedSave>>,
+    existing: Query<&Player>,
+    sprite_assets: Res<PlayerSpriteAssets>,
+) {
     if existing.iter().next().is_some() { return; }
     let max_hp = if let Some(ref save) = loaded {
         save.0.max_health
@@ -138,55 +190,31 @@ fn spawn_player(mut commands: Commands, meta: Res<MetaProgression>, loaded: Opti
     };
 
     commands.spawn((
-        // Invisible collision root
+        // Invisible collision root (keeps original hitbox size)
         Sprite { color: Color::srgba(0.0, 0.0, 0.0, 0.0), custom_size: Some(Vec2::new(20.0, 32.0)), ..default() },
         Transform::from_xyz(80.0, 100.0, Z_PLAYER),
         Player { max_health: max_hp, health: max_hp, max_mana: max_mp, mana: max_mp, ..default() },
         PlayingEntity,
     )).with_children(|p| {
-        // Body (green tunic)
+        // Spritesheet child — renders the satiro character
+        let sprite_size = SATIRO_FRAME as f32 * PLAYER_SPRITE_SCALE;
         p.spawn((
-            Sprite { color: Color::srgb(0.55, 0.30, 0.12), custom_size: Some(Vec2::new(14.0, 14.0)), ..default() },
-            Transform::from_xyz(0.0, 0.0, 0.1), PlayerBody,
-        ));
-        // Belt
-        p.spawn((
-            Sprite { color: Color::srgb(0.40, 0.25, 0.10), custom_size: Some(Vec2::new(14.0, 3.0)), ..default() },
-            Transform::from_xyz(0.0, -5.0, 0.15),
-        ));
-        // Head
-        p.spawn((
-            Sprite { color: Color::srgb(0.78, 0.62, 0.48), custom_size: Some(Vec2::new(12.0, 11.0)), ..default() },
-            Transform::from_xyz(0.0, 12.0, 0.2), PlayerHead,
-        )).with_children(|head| {
-            // Eyes
-            head.spawn((
-                Sprite { color: Color::srgb(0.18, 0.12, 0.08), custom_size: Some(Vec2::new(2.5, 3.0)), ..default() },
-                Transform::from_xyz(-2.5, 0.5, 0.1),
-            ));
-            head.spawn((
-                Sprite { color: Color::srgb(0.18, 0.12, 0.08), custom_size: Some(Vec2::new(2.5, 3.0)), ..default() },
-                Transform::from_xyz(2.5, 0.5, 0.1),
-            ));
-            // Hood/hair
-            head.spawn((
-                Sprite { color: Color::srgb(0.45, 0.25, 0.10), custom_size: Some(Vec2::new(14.0, 5.0)), ..default() },
-                Transform::from_xyz(0.0, 4.5, 0.15),
-            ));
-        });
-        // Legs
-        p.spawn((
-            Sprite { color: Color::srgb(0.32, 0.26, 0.2), custom_size: Some(Vec2::new(5.0, 10.0)), ..default() },
-            Transform::from_xyz(-3.5, -12.0, 0.0), PlayerLegL,
-        ));
-        p.spawn((
-            Sprite { color: Color::srgb(0.3, 0.24, 0.18), custom_size: Some(Vec2::new(5.0, 10.0)), ..default() },
-            Transform::from_xyz(3.5, -12.0, 0.0), PlayerLegR,
-        ));
-        // Weapon (sword held in front)
-        p.spawn((
-            Sprite { color: Color::srgb(0.75, 0.65, 0.50), custom_size: Some(Vec2::new(3.0, 16.0)), ..default() },
-            Transform::from_xyz(10.0, 3.0, 0.35), PlayerWeapon,
+            Sprite {
+                image: sprite_assets.texture.clone(),
+                texture_atlas: Some(TextureAtlas {
+                    layout: sprite_assets.layout.clone(),
+                    index: IDLE_ROW * SATIRO_COLS as usize,
+                }),
+                custom_size: Some(Vec2::new(sprite_size, sprite_size)),
+                ..default()
+            },
+            Transform::from_xyz(0.0, 0.0, 0.1),
+            PlayerSprite,
+            PlayerAnimState {
+                state: AnimKind::Idle,
+                frame: 0,
+                timer: 0.0,
+            },
         ));
     });
 }
@@ -212,7 +240,6 @@ fn player_input(
     let dt = time.delta_secs();
     let gp = gamepads.iter().next();
 
-    player.anim_time = (player.anim_time + dt) % 1000.0;
     player.melee_cooldown = (player.melee_cooldown - dt).max(0.0);
     player.ranged_cooldown = (player.ranged_cooldown - dt).max(0.0);
     player.dash_cooldown = (player.dash_cooldown - dt).max(0.0);
@@ -499,18 +526,12 @@ fn player_projectile_movement(
     }
 }
 
-/// Animate player body parts
+/// Apply facing, squash/stretch, and invuln flash to the player root + sprite.
 fn update_player_visuals(
-    mut player_q: Query<(&Player, &mut Transform), Without<PlayerBody>>,
-    mut body_q: Query<&mut Transform, (With<PlayerBody>, Without<Player>, Without<PlayerHead>, Without<PlayerLegL>, Without<PlayerLegR>, Without<PlayerWeapon>)>,
-    mut head_q: Query<&mut Transform, (With<PlayerHead>, Without<Player>, Without<PlayerBody>, Without<PlayerLegL>, Without<PlayerLegR>, Without<PlayerWeapon>)>,
-    mut legl_q: Query<&mut Transform, (With<PlayerLegL>, Without<Player>, Without<PlayerBody>, Without<PlayerHead>, Without<PlayerLegR>, Without<PlayerWeapon>)>,
-    mut legr_q: Query<&mut Transform, (With<PlayerLegR>, Without<Player>, Without<PlayerBody>, Without<PlayerHead>, Without<PlayerLegL>, Without<PlayerWeapon>)>,
-    mut weap_q: Query<(&mut Transform, &mut Sprite), (With<PlayerWeapon>, Without<Player>, Without<PlayerBody>, Without<PlayerHead>, Without<PlayerLegL>, Without<PlayerLegR>)>,
+    mut player_q: Query<(&Player, &mut Transform), Without<PlayerSprite>>,
+    mut sprite_q: Query<&mut Sprite, With<PlayerSprite>>,
 ) {
     let Ok((player, mut root_tf)) = player_q.get_single_mut() else { return };
-    let t = player.anim_time;
-    let running = player.is_on_floor && player.vx.abs() > 30.0;
 
     // Facing + squash/stretch
     let face = if player.facing < 0.0 { -1.0 } else { 1.0 };
@@ -527,48 +548,55 @@ fn update_player_visuals(
     };
     root_tf.scale = Vec3::new(face * sx, sy, 1.0);
 
-    // Body bob
-    if let Ok(mut b) = body_q.get_single_mut() {
-        b.translation.y = if running { (t * 14.0).sin().abs() * 2.0 } else { 0.0 };
-    }
-    // Head bob
-    if let Ok(mut h) = head_q.get_single_mut() {
-        h.translation.y = 12.0 + if running { (t * 14.0).sin().abs() * 1.5 } else { (t * 2.0).sin() * 0.5 };
-    }
-    // Legs
-    if let Ok(mut ll) = legl_q.get_single_mut() {
-        if running {
-            let sw = (t * 14.0).sin() * 6.0;
-            ll.translation = Vec3::new(-3.5 + sw * 0.3, -12.0 + sw.abs() * 0.5, 0.0);
-        } else if !player.is_on_floor {
-            ll.translation = Vec3::new(-4.0, -11.0, 0.0);
+    // Invulnerability flash (blink the sprite)
+    if let Ok(mut sprite) = sprite_q.get_single_mut() {
+        if player.invulnerable > 0.0 {
+            let blink = ((player.invulnerable * 15.0) as i32 % 2) == 0;
+            sprite.color = if blink { Color::srgba(1.0, 1.0, 1.0, 0.3) } else { Color::WHITE };
         } else {
-            ll.translation = Vec3::new(-3.5, -12.0, 0.0);
+            sprite.color = Color::WHITE;
         }
     }
-    if let Ok(mut rl) = legr_q.get_single_mut() {
-        if running {
-            let sw = (t * 14.0 + std::f32::consts::PI).sin() * 6.0;
-            rl.translation = Vec3::new(3.5 + sw * 0.3, -12.0 + sw.abs() * 0.5, 0.0);
-        } else if !player.is_on_floor {
-            rl.translation = Vec3::new(4.0, -11.0, 0.0);
-        } else {
-            rl.translation = Vec3::new(3.5, -12.0, 0.0);
-        }
+}
+
+/// Cycle spritesheet frames based on player movement state.
+fn animate_player_sprite(
+    player_q: Query<&Player>,
+    mut anim_q: Query<(&mut PlayerAnimState, &mut Sprite), With<PlayerSprite>>,
+    time: Res<Time>,
+) {
+    let Ok(player) = player_q.get_single() else { return };
+    let Ok((mut anim, mut sprite)) = anim_q.get_single_mut() else { return };
+
+    // Determine desired animation kind
+    let desired = if player.is_on_floor && player.vx.abs() > 30.0 {
+        AnimKind::Run
+    } else {
+        AnimKind::Idle
+    };
+
+    // Reset frame on state change
+    if anim.state != desired {
+        anim.state = desired;
+        anim.frame = 0;
+        anim.timer = 0.0;
     }
-    // Weapon swing
-    if let Ok((mut wt, mut ws)) = weap_q.get_single_mut() {
-        let attacking = player.melee_cooldown > MELEE_COOLDOWN - 0.15;
-        if attacking {
-            let st = (MELEE_COOLDOWN - player.melee_cooldown) / 0.15;
-            wt.rotation = Quat::from_rotation_z(-1.5 + st * 3.0);
-            wt.translation = Vec3::new(14.0, 6.0, 0.35);
-            ws.color = Color::srgb(0.95, 0.75, 0.35);
-        } else {
-            wt.rotation = Quat::from_rotation_z(-0.3);
-            wt.translation = Vec3::new(10.0, 3.0, 0.35);
-            ws.color = Color::srgb(0.75, 0.65, 0.50);
-        }
+
+    // Advance timer
+    anim.timer += time.delta_secs();
+    let (row, frame_count) = match anim.state {
+        AnimKind::Idle => (IDLE_ROW, IDLE_FRAMES),
+        AnimKind::Run  => (RUN_ROW, RUN_FRAMES),
+    };
+    while anim.timer >= ANIM_FPS {
+        anim.timer -= ANIM_FPS;
+        anim.frame = (anim.frame + 1) % frame_count;
+    }
+
+    // Update atlas index
+    let index = row * SATIRO_COLS as usize + anim.frame;
+    if let Some(ref mut atlas) = sprite.texture_atlas {
+        atlas.index = index;
     }
 }
 
