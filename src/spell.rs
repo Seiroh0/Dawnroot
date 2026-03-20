@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, LoadedSave, player::Player, shop::ShopUiState, audio::{PlaySfxEvent, SfxType}};
+use crate::{constants::*, GameState, PlayingEntity, LoadedSave, player::Player, shop::ShopUiState, audio::{PlaySfxEvent, SfxType}, game_feel::ShakeEvent};
 
 // ---------------------------------------------------------------------------
 // Pre-loaded spell effect sprite-sheet handles
@@ -230,6 +230,7 @@ fn spell_input(
     mut commands: Commands,
     mut ev_cast: EventWriter<SpellCast>,
     mut ev_sfx: EventWriter<PlaySfxEvent>,
+    mut ev_shake: EventWriter<ShakeEvent>,
     shop_state: Option<Res<ShopUiState>>,
     spell_assets: Res<SpellEffectAssets>,
 ) {
@@ -373,6 +374,7 @@ fn spell_input(
             // Lightning: animated AoE sprite
             // ----------------------------------------------------------------
             SpellId::Lightning => {
+                ev_shake.send(ShakeEvent { trauma: 0.2 });
                 let strike_pos = Vec3::new(
                     tf.translation.x + player.facing * 100.0,
                     tf.translation.y,

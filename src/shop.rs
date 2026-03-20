@@ -4,6 +4,7 @@ use crate::{
     room::{RoomState, RoomType, RoomTransition, RoomEntity},
     equipment::{ItemId, Equipment, RecalcStats},
     spell::SpellId,
+    audio::{PlaySfxEvent, SfxType},
 };
 
 pub struct ShopPlugin;
@@ -760,6 +761,7 @@ fn shop_ui_purchase(
     font: Res<GameFont>,
     merchant_q: Query<&Transform, With<MerchantNpc>>,
     mut merchant_text_q: Query<&mut Text, With<ShopMerchantText>>,
+    mut ev_sfx: EventWriter<PlaySfxEvent>,
 ) {
     let Some(ref mut state) = shop_state else { return };
     if !state.active { return; }
@@ -798,6 +800,7 @@ fn shop_ui_purchase(
     run.gold -= item_cost;
     apply_shop_effect(&item_effect, &mut player_mut, &mut spell_slots_q, &mut equipment_q, &mut recalc_ev);
     state.purchased[idx] = true;
+    ev_sfx.send(PlaySfxEvent(SfxType::ShopBuy));
 
     // Purchase feedback
     if let Ok(m_tf) = merchant_q.get_single() {

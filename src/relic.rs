@@ -5,6 +5,7 @@ use crate::{
     enemy::EnemyDefeated,
     spell::SpellSlots,
     room::RoomTransition,
+    audio::{PlaySfxEvent, SfxType},
 };
 
 pub struct RelicPlugin;
@@ -310,6 +311,7 @@ fn relic_choice_input(
     mut card_q: Query<(&RelicCard, &mut BorderColor)>,
     mut player_q: Query<&mut Player>,
     mut recalc_ev: EventWriter<crate::equipment::RecalcStats>,
+    mut ev_sfx: EventWriter<PlaySfxEvent>,
 ) {
     if !state.active { return; }
 
@@ -358,6 +360,7 @@ fn relic_choice_input(
     // Apply chosen relic
     if let Some(relic) = state.choices[state.selected] {
         inventory.relics.push(relic);
+        ev_sfx.send(PlaySfxEvent(SfxType::RelicPickup));
 
         // Apply immediate effects
         if let Ok(mut player) = player_q.get_single_mut() {

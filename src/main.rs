@@ -20,6 +20,7 @@ mod equipment;
 mod pause_menu;
 mod relic;
 mod altar;
+mod game_feel;
 
 use bevy::prelude::*;
 use constants::*;
@@ -154,6 +155,7 @@ fn main() {
             pause_menu::PauseMenuPlugin,
             relic::RelicPlugin,
             altar::AltarPlugin,
+            game_feel::GameFeelPlugin,
         ))
         .add_systems(OnEnter(GameState::Playing), (setup_run, apply_loaded_save).chain())
         .add_systems(OnEnter(GameState::GameOver), (cleanup_gameplay, on_game_over).chain())

@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, MetaProgression, LoadedSave, equipment::{PlayerStats, ItemId, Equipment}, shop::ShopUiState};
+use crate::{constants::*, GameState, PlayingEntity, MetaProgression, LoadedSave, equipment::{PlayerStats, ItemId, Equipment}, shop::ShopUiState, audio::{PlaySfxEvent, SfxType}, game_feel::{ShakeEvent, AttackPulse}};
 
 // ─── Sprite Assets ───────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ pub struct PlayerAnimState {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum AnimKind { Idle, Run }
+pub enum AnimKind { Idle, Run, Jump, Fall }
 
 /// Satiro sheet: 320×256 → 10 columns × 8 rows of 32×32 frames.
 const SATIRO_COLS: u32 = 10;
@@ -293,16 +293,17 @@ fn player_input(
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     gamepads: Query<&Gamepad>,
-    mut query: Query<(&mut Player, &Transform)>,
+    mut query: Query<(Entity, &mut Player, &Transform)>,
     mut commands: Commands,
     mut ev_attack: EventWriter<PlayerAttack>,
     mut ev_dashed: EventWriter<PlayerDashed>,
+    mut ev_sfx: EventWriter<PlaySfxEvent>,
     time: Res<Time>,
     stats: Res<PlayerStats>,
     shop_state: Option<Res<ShopUiState>>,
     weapon_sprite_q: Query<Entity, With<WeaponSprite>>,
 ) {
-    let Ok((mut player, tf)) = query.get_single_mut() else { return };
+    let Ok((player_entity, mut player, tf)) = query.get_single_mut() else { return };
     // Block player movement/actions while shop overlay is open
     if shop_state.map_or(false, |s| s.active) {
         player.vx = 0.0;
@@ -369,6 +370,7 @@ fn player_input(
         player.jump_hold_time = MAX_JUMP_HOLD;
         player.jump_buffer = 0.0;
         player.coyote_timer = 0.0;
+        ev_sfx.send(PlaySfxEvent(SfxType::Jump));
     }
     if player.is_jumping && jh && player.jump_hold_time > 0.0 {
         player.vy += JUMP_HOLD_BOOST * dt;
@@ -410,6 +412,11 @@ fn player_input(
             MeleeHitbox { damage: MELEE_DAMAGE, lifetime: MELEE_ACTIVE_TIME },
             PlayingEntity,
         ));
+        // Attack pulse on root entity
+        commands.entity(player_entity).insert(AttackPulse {
+            timer: 0.0,
+            duration: 0.15,
+        });
         // Trigger weapon swing animation
         if let Ok(weapon_entity) = weapon_sprite_q.get_single() {
             commands.entity(weapon_entity).insert(WeaponSwingAnim {
@@ -475,6 +482,8 @@ fn player_physics(
     mut ev_landed: EventWriter<PlayerLanded>,
     time: Res<Time>,
     mut ev_died: EventWriter<PlayerDied>,
+    mut ev_sfx: EventWriter<PlaySfxEvent>,
+    mut ev_shake: EventWriter<ShakeEvent>,
 ) {
     let Ok((mut player, mut tf)) = query.get_single_mut() else { return };
     let dt = time.delta_secs();
@@ -566,6 +575,8 @@ fn player_physics(
         ev_landed.send(PlayerLanded);
     }
     if tf.translation.y < -200.0 {
+        ev_sfx.send(PlaySfxEvent(SfxType::PlayerDeath));
+        ev_shake.send(ShakeEvent { trauma: 0.5 });
         ev_died.send(PlayerDied);
     }
 }
@@ -611,7 +622,7 @@ fn player_projectile_movement(
 fn update_player_visuals(
     player_q: Query<(Entity, &Player), Without<PlayerSprite>>,
     mut root_tf_q: Query<&mut Transform, (With<Player>, Without<PlayerSprite>, Without<WeaponSprite>)>,
-    mut sprite_q: Query<&mut Sprite, With<PlayerSprite>>,
+    mut sprite_q: Query<(&mut Sprite, &mut Transform), (With<PlayerSprite>, Without<Player>, Without<WeaponSprite>)>,
     mut weapon_q: Query<(&mut Sprite, &mut Transform, &mut Visibility), (With<WeaponSprite>, Without<PlayerSprite>, Without<Player>)>,
     equip_q: Query<&Equipment>,
     weapon_assets: Res<WeaponSpriteAssets>,
@@ -634,14 +645,24 @@ fn update_player_visuals(
     };
     root_tf.scale = Vec3::new(face * sx, sy, 1.0);
 
-    // Invulnerability flash (blink the sprite)
-    if let Ok(mut sprite) = sprite_q.get_single_mut() {
+    // Invulnerability flash (blink the sprite) + jump/fall tilt
+    if let Ok((mut sprite, mut sprite_tf)) = sprite_q.get_single_mut() {
         if player.invulnerable > 0.0 {
             let blink = ((player.invulnerable * 15.0) as i32 % 2) == 0;
             sprite.color = if blink { Color::srgba(1.0, 1.0, 1.0, 0.3) } else { Color::WHITE };
         } else {
             sprite.color = Color::WHITE;
         }
+
+        // Slight tilt when airborne
+        let tilt = if !player.is_on_floor && player.vy > 50.0 {
+            0.26 * face // ~15° lean back when jumping
+        } else if !player.is_on_floor && player.vy < -50.0 {
+            -0.17 * face // ~10° lean forward when falling
+        } else {
+            0.0
+        };
+        sprite_tf.rotation = Quat::from_rotation_z(tilt);
     }
 
     // Weapon sprite: position, flip, and image based on equipped weapon.
@@ -678,7 +699,11 @@ fn animate_player_sprite(
     let Ok((mut anim, mut sprite)) = anim_q.get_single_mut() else { return };
 
     // Determine desired animation kind
-    let desired = if player.is_on_floor && player.vx.abs() > 30.0 {
+    let desired = if !player.is_on_floor && player.vy > 50.0 {
+        AnimKind::Jump
+    } else if !player.is_on_floor && player.vy < -50.0 {
+        AnimKind::Fall
+    } else if player.is_on_floor && player.vx.abs() > 30.0 {
         AnimKind::Run
     } else {
         AnimKind::Idle
@@ -693,13 +718,19 @@ fn animate_player_sprite(
 
     // Advance timer
     anim.timer += time.delta_secs();
-    let (row, frame_count) = match anim.state {
-        AnimKind::Idle => (IDLE_ROW, IDLE_FRAMES),
-        AnimKind::Run  => (RUN_ROW, RUN_FRAMES),
+    let (row, frame_count, freeze) = match anim.state {
+        AnimKind::Idle => (IDLE_ROW, IDLE_FRAMES, false),
+        AnimKind::Run  => (RUN_ROW, RUN_FRAMES, false),
+        // Jump/Fall: use last run frame, frozen (no animation loop)
+        AnimKind::Jump | AnimKind::Fall => (RUN_ROW, RUN_FRAMES, true),
     };
-    while anim.timer >= ANIM_FPS {
-        anim.timer -= ANIM_FPS;
-        anim.frame = (anim.frame + 1) % frame_count;
+    if freeze {
+        anim.frame = frame_count - 1; // freeze on last run frame
+    } else {
+        while anim.timer >= ANIM_FPS {
+            anim.timer -= ANIM_FPS;
+            anim.frame = (anim.frame + 1) % frame_count;
+        }
     }
 
     // Update atlas index

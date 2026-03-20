@@ -70,6 +70,8 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - **4 Spells** -- Fireball (flame trail), Ice Shards (spread shot), Lightning (AoE bolts), Shield (rotating barrier)
 - **Crit system** -- all damage types (melee, ranged, spells, lightning) can crit for 1.5x damage
 - **Lifesteal** -- equipment/set bonus heals player on dealing damage
+- **Game feel** -- trauma-based screenshake, hit-stop freeze frames, hit-flash on damage, attack scale pulse
+- **Jump & fall** animation states with rotation tilt
 - Squash & stretch on jump/land, landing dust puffs
 
 </td>
@@ -134,8 +136,8 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 <td>
 
 ### Audio
-- **Background music** -- looping dungeon soundtrack with state-aware start/stop
-- **Sound effects** -- melee hit (pitch variation), coin pickup, spell cast SFX (fireball, shield, lightning)
+- **Multi-track BGM** -- context-aware music switching (Dungeon, Shop, Boss) with smooth transitions
+- **Sound effects** -- melee hit, coin pickup, spell cast, jump, enemy death, player death, shop buy, relic pickup, level complete (all with pitch variation)
 - **Volume system** -- Master, SFX, and Music volume controls with persistent settings
 - **Safe audio loading** -- LoadState guards prevent crashes from unloaded assets
 
@@ -188,6 +190,9 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 | SFX: Thunder strike | AyaDrevis (Freesound.org) | CC0 |
 | SFX: Shield | Metzik (Freesound.org) | CC0 |
 | BGM: Dungeon of Fate | Music asset | Free license |
+| BGM: Chill Lofi (Shop) | holizna (Freesound.org) | CC0 |
+| BGM: Battle (Boss) | levelclearer (Freesound.org) | CC0 |
+| SFX: Player Death | zy7 (Freesound.org) | CC0 |
 
 ---
 
@@ -204,10 +209,11 @@ src/
  |- combat.rs         Melee / spell / projectile collision & damage
  |- spell.rs          4 spells with animated effect sprites, trails, frost, bolts
  |- pause_menu.rs     ESC pause menu, full settings UI (audio/graphics/controls)
+ |- game_feel.rs      Screenshake, hit-stop, hit-flash, attack pulse systems
  |- effects.rs        Particles, afterimages, dust, confetti, flash, damage numbers
  |- altar.rs          Curse/blessing altar choice system
  |- hud.rs            UI overlay (HP, mana, gold, floor, spell icons, equipment, minimap)
- |- camera.rs         Smooth follow camera + screen shake
+ |- camera.rs         Lerp-smoothed follow camera + trauma-based screenshake
  |- animation.rs      Generic frame-based animation support
  |- loot.rs           Drops, magnet pickup, treasure chest
  |- shop.rs           Cuphead-style shop UI, stone merchant NPC, overlay panel
@@ -245,7 +251,7 @@ cargo run
 - [x] Well intro cutscene with walk + jump animation
 - [x] 8 combat room templates with decorations
 - [x] Room lock mechanic (enemies must be defeated to proceed)
-- [x] Particle effects (death, damage, confetti, dust, afterimages)
+- [x] Particle effects (enemy-colored death burst, damage, confetti, dust, afterimages)
 - [x] Screen transitions & fade effects between rooms
 - [x] Save / Load for meta-progression (JSON file)
 - [x] Game balance pass & difficulty scaling (floor-based enemy count/HP, shop prices, gold drops)
@@ -300,7 +306,11 @@ cargo run
 - [x] Dungeon tileset integration (0x72 DungeonTilesetII for floor/wall/ceiling tiles)
 - [x] Enemy sprite integration (7 types + 4 bosses using tileset animated sprites)
 - [x] Spell effect sprites (fireball, ice, lightning from Super Pixel Effects Gigapack)
-- [x] Audio system with SFX events, BGM looping, pitch variation
+- [x] Multi-track BGM system (Dungeon/Shop/Boss context-aware switching)
+- [x] Full SFX coverage (jump, death, enemy death, shop buy, relic pickup, level complete)
+- [x] Game feel systems (trauma screenshake, hit-stop freeze frames, hit-flash, attack pulse)
+- [x] Lerp-smoothed camera with trauma-based screenshake integration
+- [x] Enemy-colored death particles (burst color matches enemy sprite)
 - [x] Weapon sprite system (equipped weapon visible on player with swing animation)
 - [x] Equipment HUD (4-slot icon display with Raven Fantasy Icons)
 - [x] Spell icon bar (icon-based spell slots with cooldown overlay)

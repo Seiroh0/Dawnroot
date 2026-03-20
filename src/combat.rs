@@ -10,6 +10,7 @@ use crate::{
     room::{RoomState, DestructibleWall},
     loot::{Pickup, PickupKind},
     audio::{PlaySfxEvent, SfxType},
+    game_feel::{ShakeEvent, HitStopEvent, HitFlash},
 };
 
 #[derive(Event)]
@@ -56,6 +57,7 @@ fn kill_enemy(
     entity: Entity,
     position: Vec3,
     enemy: &Enemy,
+    particle_color: Color,
 ) {
     run.score += enemy.score_reward;
     run.gold += enemy.gold_drop;
@@ -64,6 +66,7 @@ fn kill_enemy(
         position,
         score: enemy.score_reward,
         gold_drop: enemy.gold_drop,
+        particle_color,
     });
     commands.entity(entity).try_despawn_recursive();
 }
@@ -90,10 +93,12 @@ fn apply_lifesteal(player: &mut Player, damage: i32, lifesteal: f32) {
 fn melee_vs_enemy(
     mut commands: Commands,
     hitbox_q: Query<(&Transform, &MeleeHitbox)>,
-    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite, Option<&Intangible>, Option<&SlimeEnemy>)>,
+    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite, Option<&Intangible>, Option<&SlimeEnemy>, Option<&crate::enemy::BossEnemy>)>,
     mut ev_defeated: EventWriter<EnemyDefeated>,
     mut ev_dmg: EventWriter<DamageNumberEvent>,
     mut ev_sfx: EventWriter<PlaySfxEvent>,
+    mut ev_shake: EventWriter<ShakeEvent>,
+    mut ev_hitstop: EventWriter<HitStopEvent>,
     mut run: ResMut<RunData>,
     mut shake_q: Query<&mut ScreenShake>,
     stats: Res<PlayerStats>,
@@ -102,7 +107,7 @@ fn melee_vs_enemy(
     assets: Res<EnemySpriteAssets>,
 ) {
     for (h_tf, hitbox) in &hitbox_q {
-        for (e_entity, e_tf, mut enemy, sprite, intangible, slime) in &mut enemy_q {
+        for (e_entity, e_tf, mut enemy, sprite, intangible, slime, boss) in &mut enemy_q {
             if intangible.is_some() { continue; }
             let e_size = sprite.custom_size.unwrap_or(Vec2::new(20.0, 20.0));
             let dist = (h_tf.translation.xy() - e_tf.translation.xy()).abs();
@@ -113,8 +118,16 @@ fn melee_vs_enemy(
                 let (total_dmg, is_crit) = calc_damage(hitbox.damage, &stats);
                 enemy.health -= total_dmg;
                 ev_sfx.send(PlaySfxEvent(SfxType::MeleeHit));
+                ev_shake.send(ShakeEvent { trauma: 0.15 });
+                ev_hitstop.send(HitStopEvent { frames: if boss.is_some() { 6 } else { 3 } });
                 let kind = if is_crit { DamageNumberKind::CritHit } else { DamageNumberKind::EnemyHit };
                 ev_dmg.send(DamageNumberEvent { position: e_tf.translation, amount: total_dmg, kind });
+
+                // Hit flash on enemy
+                commands.entity(e_entity).insert(HitFlash {
+                    timer: 0.15,
+                    original_color: sprite.color,
+                });
 
                 // Lifesteal
                 if let Ok(mut player) = player_q.get_single_mut() {
@@ -122,11 +135,13 @@ fn melee_vs_enemy(
                 }
 
                 if enemy.health <= 0 {
+                    ev_sfx.send(PlaySfxEvent(SfxType::EnemyDeath));
                     // Slime split on death
                     if let Some(se) = slime {
                         crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run, &assets);
                     }
-                    kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy);
+                    let pcol = if boss.is_some() { Color::srgb(0.9, 0.15, 0.1) } else { sprite.color };
+                    kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy, pcol);
                     if let Ok(mut shake) = shake_q.get_single_mut() {
                         trigger_shake(&mut shake, 8.0, 0.15);
                     }
@@ -170,7 +185,7 @@ fn ranged_vs_enemy(
                     if let Some(se) = slime {
                         crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run, &assets);
                     }
-                    kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy);
+                    kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy, sprite.color);
                     if let Ok(mut shake) = shake_q.get_single_mut() {
                         trigger_shake(&mut shake, 6.0, 0.12);
                     }
@@ -215,7 +230,7 @@ fn spell_vs_enemy(
                     if let Some(se) = slime {
                         crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run, &assets);
                     }
-                    kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy);
+                    kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy, sprite.color);
                     if let Ok(mut shake) = shake_q.get_single_mut() {
                         trigger_shake(&mut shake, 10.0, 0.2);
                     }
@@ -260,7 +275,7 @@ fn lightning_vs_enemy(
                     if let Some(se) = slime {
                         crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run, &assets);
                     }
-                    kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy);
+                    kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy, Color::srgb(0.6, 0.8, 1.0));
                 }
             }
         }
@@ -281,16 +296,21 @@ fn apply_block_reduction(raw_dmg: i32, is_blocking: bool) -> i32 {
 }
 
 fn player_vs_enemy(
-    mut player_q: Query<(&Transform, &mut Player)>,
+    mut commands: Commands,
+    mut player_q: Query<(Entity, &Transform, &mut Player)>,
     enemy_q: Query<(&Transform, &Enemy, &Sprite, Option<&Intangible>), Without<Player>>,
     mut ev_damaged: EventWriter<PlayerDamaged>,
     mut ev_died: EventWriter<PlayerDied>,
     mut ev_blocked: EventWriter<PlayerBlocked>,
     mut ev_dmg: EventWriter<DamageNumberEvent>,
+    mut ev_sfx: EventWriter<PlaySfxEvent>,
+    mut ev_shake: EventWriter<ShakeEvent>,
+    mut ev_hitstop: EventWriter<HitStopEvent>,
     mut shake_q: Query<&mut ScreenShake>,
     stats: Res<PlayerStats>,
+    player_sprite_q: Query<Entity, With<crate::player::PlayerSprite>>,
 ) {
-    let Ok((p_tf, mut player)) = player_q.get_single_mut() else { return };
+    let Ok((_player_entity, p_tf, mut player)) = player_q.get_single_mut() else { return };
 
     for (e_tf, enemy, sprite, intangible) in &enemy_q {
         if intangible.is_some() { continue; }
@@ -315,9 +335,19 @@ fn player_vs_enemy(
                     remaining: player.health,
                 });
 
+                ev_shake.send(ShakeEvent { trauma: if is_blocked { 0.15 } else { 0.3 } });
+
                 if let Ok(mut shake) = shake_q.get_single_mut() {
                     let intensity = if is_blocked { 6.0 } else { 14.0 };
                     trigger_shake(&mut shake, intensity, 0.3);
+                }
+
+                // Hit flash on player sprite
+                if let Ok(ps_entity) = player_sprite_q.get_single() {
+                    commands.entity(ps_entity).insert(HitFlash {
+                        timer: 0.15,
+                        original_color: Color::WHITE,
+                    });
                 }
 
                 let kb_dir = if diff.x >= 0.0 { 1.0 } else { -1.0 };
@@ -326,6 +356,9 @@ fn player_vs_enemy(
                 player.vy = 200.0 * kb_mult;
 
                 if player.health <= 0 {
+                    ev_sfx.send(PlaySfxEvent(SfxType::PlayerDeath));
+                    ev_shake.send(ShakeEvent { trauma: 0.5 });
+                    ev_hitstop.send(HitStopEvent { frames: 8 });
                     ev_died.send(PlayerDied);
                 }
             }

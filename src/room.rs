@@ -2,7 +2,8 @@ use bevy::prelude::*;
 use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, floor_complete::FloorCompleteState,
     hazards::{spawn_lava_strip, spawn_water_strip, spawn_moving_platform, spawn_arrow_trap, spawn_spike_floor, spawn_poison_cloud},
     relic::{RelicChoiceState, RelicInventory, start_relic_choice},
-    altar::{AltarState, AltarEntity, spawn_altar, check_altar_interaction}};
+    altar::{AltarState, AltarEntity, spawn_altar, check_altar_interaction},
+    audio::{PlaySfxEvent, SfxType}};
 
 // ─── Tileset Assets ──────────────────────────────────────────────────────────
 
@@ -307,6 +308,20 @@ fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize, tiles
                 ..default()
             },
             Transform::from_xyz(door_x, door_y, Z_TILES + 1.2),
+            RoomEntity,
+            PlayingEntity,
+        ));
+    }
+
+    // Boss room: dramatic reddish tint overlay on all tiles
+    if room_type == RoomType::Boss {
+        commands.spawn((
+            Sprite {
+                color: Color::srgba(0.4, 0.0, 0.0, 0.15),
+                custom_size: Some(Vec2::new(ROOM_W, ROOM_H)),
+                ..default()
+            },
+            Transform::from_xyz(ROOM_W / 2.0, ROOM_H / 2.0, Z_TILES + 0.05),
             RoomEntity,
             PlayingEntity,
         ));
@@ -2231,6 +2246,7 @@ fn check_room_exit(
     mut relic_state: ResMut<RelicChoiceState>,
     relic_inventory: Res<RelicInventory>,
     tiles: Res<TilesetAssets>,
+    mut ev_sfx: EventWriter<PlaySfxEvent>,
 ) {
     // Block room transitions while overlays are active
     if floor_complete.active { return; }
@@ -2258,6 +2274,7 @@ fn check_room_exit(
                     floor_complete.active = true;
                     floor_complete.floor_completed = room_state.floor;
                     floor_complete.ui_spawned = false;
+                    ev_sfx.send(PlaySfxEvent(SfxType::LevelComplete));
                     // Reset relic choice state for next floor
                     relic_state.choices = [None; 3];
                 }

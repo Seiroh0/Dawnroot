@@ -89,20 +89,21 @@ fn on_enemy_defeated(
     for event in ev.read() {
         let pos = event.position;
 
-        // --- 12 red/crimson burst particles with varied sizes ---
-        for i in 0..12_u32 {
-            let angle = (i as f32 / 12.0) * std::f32::consts::TAU;
+        // --- 8 colored burst particles based on enemy type ---
+        let base = event.particle_color.to_srgba();
+        for i in 0..8_u32 {
+            let angle = (i as f32 / 8.0) * std::f32::consts::TAU;
             let speed = 70.0 + (i as f32 % 4.0) * 45.0;
-            // Alternate between small and large fragments
             let size = if i % 3 == 0 { 6.0 } else if i % 3 == 1 { 4.0 } else { 2.5 };
-            let red_shade = if i % 2 == 0 {
-                Color::srgb(0.9, 0.2, 0.25)
+            // Darken every other particle for variation
+            let shade = if i % 2 == 0 {
+                Color::srgb(base.red, base.green, base.blue)
             } else {
-                Color::srgb(0.7, 0.1, 0.15)
+                Color::srgb(base.red * 0.7, base.green * 0.7, base.blue * 0.7)
             };
             commands.spawn((
                 Sprite {
-                    color: red_shade,
+                    color: shade,
                     custom_size: Some(Vec2::splat(size)),
                     ..default()
                 },
@@ -110,8 +111,8 @@ fn on_enemy_defeated(
                 Particle {
                     vx: angle.cos() * speed,
                     vy: angle.sin() * speed,
-                    lifetime: 0.45,
-                    max_lifetime: 0.45,
+                    lifetime: 0.35,
+                    max_lifetime: 0.35,
                 },
                 PlayingEntity,
             ));

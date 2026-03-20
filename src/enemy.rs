@@ -121,6 +121,8 @@ pub struct EnemyDefeated {
     pub position: Vec3,
     pub score: i32,
     pub gold_drop: i32,
+    /// Particle color hint based on enemy type.
+    pub particle_color: Color,
 }
 
 #[derive(Component)]
