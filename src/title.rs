@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{GameState, GameFont, constants::*, ActiveSaveSlot, LoadedSave, load_slot, delete_slot};
+use crate::{GameState, GameFont, constants::*, ActiveSaveSlot, LoadedSave, load_slot, delete_slot, player::PlayerSpriteAssets};
 
 pub struct TitlePlugin;
 
@@ -30,6 +30,7 @@ impl Plugin for TitlePlugin {
                     update_intro_afterimages,
                     update_intro_dust,
                     intro_camera_shake,
+                    animate_intro_sprite,
                 )
                     .run_if(in_state(GameState::WellIntro)),
             );
@@ -904,6 +905,13 @@ struct IntroLegR;
 #[derive(Component)]
 struct DarknessOverlay;
 
+/// Animation state for the intro player spritesheet.
+#[derive(Component)]
+struct IntroSpriteAnim {
+    frame: usize,
+    timer: f32,
+}
+
 #[derive(Component)]
 struct FallingParticle {
     vy: f32,
@@ -933,7 +941,7 @@ enum IntroPhase {
     LandInCave,
 }
 
-fn setup_well_intro(mut commands: Commands) {
+fn setup_well_intro(mut commands: Commands, sprite_assets: Res<PlayerSpriteAssets>) {
     let ground_y = -VIEWPORT_H / 2.0 + 50.0;
     let well_base_y = ground_y + 52.5;
 
@@ -977,7 +985,10 @@ fn setup_well_intro(mut commands: Commands) {
         Transform::from_xyz(0.0, well_base_y + 30.0, Z_BACKGROUND + 6.0), IntroEntity,
     ));
 
-    // Intro player
+    // Intro player — uses the same satiro spritesheet as the gameplay player.
+    // Start on the run animation row so the character animates while walking.
+    let run_start_index = 1 * 10; // RUN_ROW(1) * SATIRO_COLS(10)
+    let sprite_size = 32.0 * 2.0; // SATIRO_FRAME * PLAYER_SPRITE_SCALE
     commands.spawn((
         Transform::from_xyz(-280.0, well_base_y + 16.0, Z_PLAYER),
         Visibility::Visible,
@@ -985,41 +996,19 @@ fn setup_well_intro(mut commands: Commands) {
         IntroPlayer,
     )).with_children(|p| {
         p.spawn((
-            Sprite { color: Color::srgb(0.50, 0.30, 0.12), custom_size: Some(Vec2::new(14.0, 14.0)), ..default() },
-            Transform::from_xyz(0.0, 0.0, 0.1), IntroEntity, IntroPlayerPart,
-        ));
-        p.spawn((
-            Sprite { color: Color::srgb(0.45, 0.30, 0.15), custom_size: Some(Vec2::new(14.0, 3.0)), ..default() },
-            Transform::from_xyz(0.0, -5.0, 0.15), IntroEntity, IntroPlayerPart,
-        ));
-        p.spawn((
-            Sprite { color: Color::srgb(0.78, 0.62, 0.48), custom_size: Some(Vec2::new(12.0, 11.0)), ..default() },
-            Transform::from_xyz(0.0, 12.0, 0.2), IntroEntity, IntroPlayerPart,
-        )).with_children(|head| {
-            head.spawn((
-                Sprite { color: Color::srgb(0.9, 0.92, 0.95), custom_size: Some(Vec2::new(2.5, 3.0)), ..default() },
-                Transform::from_xyz(-2.5, 0.5, 0.1), IntroEntity, IntroPlayerPart,
-            ));
-            head.spawn((
-                Sprite { color: Color::srgb(0.9, 0.92, 0.95), custom_size: Some(Vec2::new(2.5, 3.0)), ..default() },
-                Transform::from_xyz(2.5, 0.5, 0.1), IntroEntity, IntroPlayerPart,
-            ));
-            head.spawn((
-                Sprite { color: Color::srgb(0.40, 0.22, 0.10), custom_size: Some(Vec2::new(14.0, 5.0)), ..default() },
-                Transform::from_xyz(0.0, 4.5, 0.15), IntroEntity, IntroPlayerPart,
-            ));
-        });
-        p.spawn((
-            Sprite { color: Color::srgb(0.28, 0.22, 0.16), custom_size: Some(Vec2::new(5.0, 10.0)), ..default() },
-            Transform::from_xyz(-3.5, -12.0, 0.0), IntroEntity, IntroPlayerPart, IntroLegL,
-        ));
-        p.spawn((
-            Sprite { color: Color::srgb(0.26, 0.20, 0.14), custom_size: Some(Vec2::new(5.0, 10.0)), ..default() },
-            Transform::from_xyz(3.5, -12.0, 0.0), IntroEntity, IntroPlayerPart, IntroLegR,
-        ));
-        p.spawn((
-            Sprite { color: Color::srgb(0.68, 0.70, 0.74), custom_size: Some(Vec2::new(3.0, 16.0)), ..default() },
-            Transform::from_xyz(10.0, 3.0, 0.35), IntroEntity, IntroPlayerPart,
+            Sprite {
+                image: sprite_assets.texture.clone(),
+                texture_atlas: Some(TextureAtlas {
+                    layout: sprite_assets.layout.clone(),
+                    index: run_start_index,
+                }),
+                custom_size: Some(Vec2::new(sprite_size, sprite_size)),
+                ..default()
+            },
+            Transform::from_xyz(0.0, 0.0, 0.1),
+            IntroEntity,
+            IntroPlayerPart,
+            IntroSpriteAnim { frame: 0, timer: 0.0 },
         ));
     });
 
@@ -1265,6 +1254,28 @@ fn update_well_intro(
             if state.timer >= 0.6 {
                 next_state.set(GameState::Playing);
             }
+        }
+    }
+}
+
+/// Animate the intro player spritesheet — cycles run frames at 12 FPS.
+fn animate_intro_sprite(
+    mut anim_q: Query<(&mut IntroSpriteAnim, &mut Sprite)>,
+    time: Res<Time>,
+) {
+    for (mut anim, mut sprite) in &mut anim_q {
+        anim.timer += time.delta_secs();
+        let fps = 0.083; // ~12 FPS
+        let run_frames = 4;
+        let run_row = 1;
+        let cols = 10;
+        while anim.timer >= fps {
+            anim.timer -= fps;
+            anim.frame = (anim.frame + 1) % run_frames;
+        }
+        let index = run_row * cols + anim.frame;
+        if let Some(ref mut atlas) = sprite.texture_atlas {
+            atlas.index = index;
         }
     }
 }

@@ -57,7 +57,10 @@ fn sfx_system(
             SfxType::FireballCast => Some(audio_assets.fireball_cast.clone()),
             SfxType::ShieldCast => Some(audio_assets.shield_cast.clone()),
             SfxType::LightningCast => Some(audio_assets.lightning_cast.clone()),
-            SfxType::IceCast => None, // m4a not supported
+            SfxType::IceCast => {
+                warn!("IceCast SFX: m4a not supported by Bevy, skipped");
+                None
+            }
         };
 
         if let Some(h) = handle {
