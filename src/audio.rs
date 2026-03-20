@@ -306,20 +306,20 @@ impl Plugin for GameAudioPlugin {
 
         let assets = AudioAssets {
             melee_hit: asset_server
-                .load("audio/sfx/547042__cogfirestudios__hit-impact-sword-3.wav"),
+                .load("audio/sfx/547042__cogfirestudios__hit-impact-sword-3.ogg"),
             coin_pickup: asset_server
-                .load("audio/sfx/347174__davidsraba__coin-pickup-sound-v-0.wav"),
+                .load("audio/sfx/347174__davidsraba__coin-pickup-sound-v-0.ogg"),
             fireball_cast: asset_server
                 .load("audio/sfx/652690__ayadrevis__thunder-strike.ogg"),
             shield_cast: asset_server
-                .load("audio/sfx/459782__metzik__deflector-shield.wav"),
+                .load("audio/sfx/459782__metzik__deflector-shield.ogg"),
             lightning_cast: asset_server
                 .load("audio/sfx/652690__ayadrevis__thunder-strike.ogg"),
             player_death: asset_server
-                .load("audio/791967__zy7__player-death-via-endless-pit.mp3"),
-            bgm_dungeon: asset_server.load("audio/music/DungeonOfFate.mp3"),
-            bgm_shop: asset_server.load("audio/629170__holizna__chill-lofi-epiano-loop-80-bpm.wav"),
-            bgm_boss: asset_server.load("audio/346200__levelclearer__battle.wav"),
+                .load("audio/sfx/791967__zy7__player-death-via-endless-pit.ogg"),
+            bgm_dungeon: asset_server.load("audio/music/DungeonOfFate.ogg"),
+            bgm_shop: asset_server.load("audio/music/629170__holizna__chill-lofi-epiano-loop-80-bpm.ogg"),
+            bgm_boss: asset_server.load("audio/music/346200__levelclearer__battle.ogg"),
         };
 
         app.insert_resource(assets);
