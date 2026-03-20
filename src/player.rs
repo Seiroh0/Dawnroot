@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, MetaProgression, LoadedSave, equipment::PlayerStats, shop::ShopUiState};
+use crate::{constants::*, GameState, PlayingEntity, MetaProgression, LoadedSave, equipment::{PlayerStats, ItemId, Equipment}, shop::ShopUiState};
 
 // ─── Sprite Assets ───────────────────────────────────────────────────────────
 
@@ -8,6 +8,29 @@ use crate::{constants::*, GameState, PlayingEntity, MetaProgression, LoadedSave,
 pub struct PlayerSpriteAssets {
     pub texture: Handle<Image>,
     pub layout: Handle<TextureAtlasLayout>,
+}
+
+/// Holds pre-loaded weapon sprite handles, one per weapon ItemId.
+#[derive(Resource)]
+pub struct WeaponSpriteAssets {
+    pub rusty_sword:     Handle<Image>,
+    pub steel_blade:     Handle<Image>,
+    pub flame_edge:      Handle<Image>,
+    pub frost_fang:      Handle<Image>,
+    pub thunder_cleaver: Handle<Image>,
+}
+
+impl WeaponSpriteAssets {
+    pub fn handle_for(&self, id: ItemId) -> Option<&Handle<Image>> {
+        match id {
+            ItemId::RustySword      => Some(&self.rusty_sword),
+            ItemId::SteelBlade      => Some(&self.steel_blade),
+            ItemId::FlameEdge       => Some(&self.flame_edge),
+            ItemId::FrostFang       => Some(&self.frost_fang),
+            ItemId::ThunderCleaver  => Some(&self.thunder_cleaver),
+            _                       => None,
+        }
+    }
 }
 
 /// Tracks the player's current animation state and frame timer.
@@ -50,9 +73,25 @@ impl Plugin for PlayerPlugin {
             None,
             None,
         );
+
+        // Load weapon sprites at startup (path has spaces — exact string required).
+        let weapon_base = "Weapons/Weapons Asset 16x16/Weapons Asset 16x16/Weapons Asset 16x16/";
+        let rusty_sword:     Handle<Image> = asset_server.load(format!("{weapon_base}001.png"));
+        let steel_blade:     Handle<Image> = asset_server.load(format!("{weapon_base}010.png"));
+        let flame_edge:      Handle<Image> = asset_server.load(format!("{weapon_base}020.png"));
+        let frost_fang:      Handle<Image> = asset_server.load(format!("{weapon_base}050.png"));
+        let thunder_cleaver: Handle<Image> = asset_server.load(format!("{weapon_base}070.png"));
+
         let mut layouts = app.world_mut().resource_mut::<Assets<TextureAtlasLayout>>();
         let layout_handle = layouts.add(layout);
         app.insert_resource(PlayerSpriteAssets { texture, layout: layout_handle });
+        app.insert_resource(WeaponSpriteAssets {
+            rusty_sword,
+            steel_blade,
+            flame_edge,
+            frost_fang,
+            thunder_cleaver,
+        });
 
         app.add_event::<PlayerLanded>()
             .add_event::<PlayerAttack>()
@@ -71,6 +110,7 @@ impl Plugin for PlayerPlugin {
                     player_projectile_movement,
                     update_player_visuals,
                     animate_player_sprite,
+                    animate_weapon_swing,
                 )
                     .chain()
                     .run_if(in_state(GameState::Playing)),
@@ -170,12 +210,30 @@ pub struct PlayerProjectile {
 #[derive(Component)]
 pub struct PlayerSprite;
 
+/// Marker for the child entity that renders the held weapon sprite.
+#[derive(Component)]
+pub struct WeaponSprite;
+
+/// Animates a weapon swing: rotates ±90° over `duration`, then returns.
+#[derive(Component)]
+pub struct WeaponSwingAnim {
+    /// Total duration of one full swing-and-return (seconds).
+    pub duration: f32,
+    /// Current elapsed time.
+    pub elapsed: f32,
+    /// Starting rotation (radians) — set when the animation begins.
+    pub base_angle: f32,
+    /// Direction of initial swing (+1 = clockwise, -1 = counter-clockwise).
+    pub direction: f32,
+}
+
 fn spawn_player(
     mut commands: Commands,
     meta: Res<MetaProgression>,
     loaded: Option<Res<LoadedSave>>,
     existing: Query<&Player>,
     sprite_assets: Res<PlayerSpriteAssets>,
+    weapon_assets: Res<WeaponSpriteAssets>,
 ) {
     if existing.iter().next().is_some() { return; }
     let max_hp = if let Some(ref save) = loaded {
@@ -216,6 +274,18 @@ fn spawn_player(
                 timer: 0.0,
             },
         ));
+
+        // Weapon sprite child — initially hidden (no weapon equipped)
+        p.spawn((
+            Sprite {
+                image: weapon_assets.rusty_sword.clone(),
+                custom_size: Some(Vec2::new(32.0, 32.0)),
+                ..default()
+            },
+            Transform::from_xyz(12.0, -2.0, 0.2),
+            Visibility::Hidden,
+            WeaponSprite,
+        ));
     });
 }
 
@@ -230,6 +300,7 @@ fn player_input(
     time: Res<Time>,
     stats: Res<PlayerStats>,
     shop_state: Option<Res<ShopUiState>>,
+    weapon_sprite_q: Query<Entity, With<WeaponSprite>>,
 ) {
     let Ok((mut player, tf)) = query.get_single_mut() else { return };
     // Block player movement/actions while shop overlay is open
@@ -339,6 +410,15 @@ fn player_input(
             MeleeHitbox { damage: MELEE_DAMAGE, lifetime: MELEE_ACTIVE_TIME },
             PlayingEntity,
         ));
+        // Trigger weapon swing animation
+        if let Ok(weapon_entity) = weapon_sprite_q.get_single() {
+            commands.entity(weapon_entity).insert(WeaponSwingAnim {
+                duration: MELEE_COOLDOWN * 0.8,
+                elapsed: 0.0,
+                base_angle: 0.0,
+                direction: player.facing,
+            });
+        }
     }
 
     // Ranged attack (F key only — RMB/North reserved for Block)
@@ -527,11 +607,17 @@ fn player_projectile_movement(
 }
 
 /// Apply facing, squash/stretch, and invuln flash to the player root + sprite.
+/// Also syncs the weapon sprite position/visibility to the equipped weapon.
 fn update_player_visuals(
-    mut player_q: Query<(&Player, &mut Transform), Without<PlayerSprite>>,
+    player_q: Query<(Entity, &Player), Without<PlayerSprite>>,
+    mut root_tf_q: Query<&mut Transform, (With<Player>, Without<PlayerSprite>, Without<WeaponSprite>)>,
     mut sprite_q: Query<&mut Sprite, With<PlayerSprite>>,
+    mut weapon_q: Query<(&mut Sprite, &mut Transform, &mut Visibility), (With<WeaponSprite>, Without<PlayerSprite>, Without<Player>)>,
+    equip_q: Query<&Equipment>,
+    weapon_assets: Res<WeaponSpriteAssets>,
 ) {
-    let Ok((player, mut root_tf)) = player_q.get_single_mut() else { return };
+    let Ok((player_entity, player)) = player_q.get_single() else { return };
+    let Ok(mut root_tf) = root_tf_q.get_single_mut() else { return };
 
     // Facing + squash/stretch
     let face = if player.facing < 0.0 { -1.0 } else { 1.0 };
@@ -555,6 +641,29 @@ fn update_player_visuals(
             sprite.color = if blink { Color::srgba(1.0, 1.0, 1.0, 0.3) } else { Color::WHITE };
         } else {
             sprite.color = Color::WHITE;
+        }
+    }
+
+    // Weapon sprite: position, flip, and image based on equipped weapon.
+    if let Ok((mut w_sprite, mut w_tf, mut w_vis)) = weapon_q.get_single_mut() {
+        let equipped_weapon = equip_q.get(player_entity).ok().and_then(|e| e.weapon);
+        match equipped_weapon {
+            None => {
+                *w_vis = Visibility::Hidden;
+            }
+            Some(item_id) => {
+                *w_vis = Visibility::Inherited;
+                // Offset to the right of the player in local space; root scale handles flip.
+                w_tf.translation.x = 12.0;
+                w_tf.translation.y = -2.0;
+                w_tf.translation.z = 0.2;
+                // Counter-flip so the weapon sprite stays unmirrored in world space
+                // when the player root is flipped.
+                w_sprite.flip_x = player.facing < 0.0;
+                if let Some(handle) = weapon_assets.handle_for(item_id) {
+                    w_sprite.image = handle.clone();
+                }
+            }
         }
     }
 }
@@ -597,6 +706,33 @@ fn animate_player_sprite(
     let index = row * SATIRO_COLS as usize + anim.frame;
     if let Some(ref mut atlas) = sprite.texture_atlas {
         atlas.index = index;
+    }
+}
+
+/// Rotates the weapon sprite through a ±90° arc over `duration` seconds, then snaps back.
+/// The component is removed when the animation completes.
+fn animate_weapon_swing(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Transform, &mut WeaponSwingAnim), With<WeaponSprite>>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut tf, mut anim) in &mut query {
+        anim.elapsed += dt;
+        let t = (anim.elapsed / anim.duration).clamp(0.0, 1.0);
+
+        // First half: swing forward 90°; second half: return to rest.
+        let angle = if t < 0.5 {
+            anim.direction * std::f32::consts::FRAC_PI_2 * (t / 0.5)
+        } else {
+            anim.direction * std::f32::consts::FRAC_PI_2 * (1.0 - (t - 0.5) / 0.5)
+        };
+        tf.rotation = Quat::from_rotation_z(anim.base_angle + angle);
+
+        if t >= 1.0 {
+            tf.rotation = Quat::IDENTITY;
+            commands.entity(entity).remove::<WeaponSwingAnim>();
+        }
     }
 }
 

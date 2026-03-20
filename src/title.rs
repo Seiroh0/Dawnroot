@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 use crate::{GameState, GameFont, constants::*, ActiveSaveSlot, LoadedSave, load_slot, delete_slot, player::PlayerSpriteAssets};
+use crate::audio::AudioSettings;
+use crate::pause_menu::{SettingsPanel, SettingsState, spawn_settings_panel, settings_input};
 
 pub struct TitlePlugin;
 
@@ -12,6 +14,8 @@ impl Plugin for TitlePlugin {
                 (
                     handle_title_input,
                     handle_slot_input,
+                    handle_title_settings_input,
+                    settings_input,
                     parallax_mouse_tracking,
                     pulse_text_alpha,
                     well_glow_animate,
@@ -380,6 +384,15 @@ fn setup_title(mut commands: Commands, font: Res<GameFont>) {
         TitleEntity,
         PromptText,
         PulsingAlpha { speed: 2.5, min_alpha: 0.3, max_alpha: 1.0 },
+    ));
+
+    // Settings hint (static, dimmer)
+    commands.spawn((
+        Text2d::new("[S] Settings"),
+        TextFont { font: f.clone(), font_size: 7.0, ..default() },
+        TextColor(Color::srgba(0.55, 0.45, 0.30, 0.7)),
+        Transform::from_xyz(0.0, -248.0, Z_HUD),
+        TitleEntity,
     ));
 }
 
@@ -750,14 +763,58 @@ fn handle_title_input(
     mut commands: Commands,
     mut slot_state: ResMut<SlotMenuState>,
     font: Res<GameFont>,
+    settings_q: Query<Entity, With<SettingsPanel>>,
+    audio: Res<AudioSettings>,
+    windows: Query<&Window>,
 ) {
+    // Block all title input while slot menu or settings are open.
     if slot_state.open { return; }
+    if settings_q.iter().next().is_some() { return; }
 
     let gp = gamepads.iter().next();
     let gp_confirm = gp.map_or(false, |g| g.just_pressed(GamepadButton::South) || g.just_pressed(GamepadButton::Start));
+
+    // Space / Enter → open save-slot menu.
     if keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter) || gp_confirm {
         slot_state.open = true;
         spawn_slot_menu(&mut commands, &font.0);
+        return;
+    }
+
+    // S or Select → open settings overlay directly from title screen.
+    let open_settings = keys.just_pressed(KeyCode::KeyS)
+        || gp.map_or(false, |g| g.just_pressed(GamepadButton::Select));
+    if open_settings {
+        let is_fullscreen = windows.iter().next().map_or(false, |w| {
+            matches!(w.mode, bevy::window::WindowMode::BorderlessFullscreen(_))
+        });
+        commands.insert_resource(SettingsState::default());
+        spawn_settings_panel(&mut commands, &font.0, &audio, is_fullscreen);
+    }
+}
+
+/// Handles closing the settings overlay opened from the title screen.
+/// The shared `settings_input` system handles all the internal navigation;
+/// this just makes sure the overlay can also be dismissed by ESC on title.
+fn handle_title_settings_input(
+    mut commands: Commands,
+    keys: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
+    settings_q: Query<Entity, With<SettingsPanel>>,
+    audio: Res<AudioSettings>,
+) {
+    if settings_q.iter().next().is_none() { return; }
+
+    let gp  = gamepads.iter().next();
+    let back = keys.just_pressed(KeyCode::Escape)
+        || keys.just_pressed(KeyCode::Backspace)
+        || gp.map_or(false, |g| g.just_pressed(GamepadButton::East));
+    if back {
+        crate::audio::save_audio_settings(&audio);
+        for e in &settings_q {
+            commands.entity(e).despawn_recursive();
+        }
+        commands.remove_resource::<SettingsState>();
     }
 }
 

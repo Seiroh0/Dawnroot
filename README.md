@@ -49,6 +49,8 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 | Navigate Shop | `Up` / `Down` |
 | Close Shop | `Escape` |
 | Pause Menu | `Escape` (in-game) |
+| Settings (title screen) | `S` |
+| Toggle Fullscreen | `F11` |
 
 ---
 
@@ -60,7 +62,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 
 ### Combat & Movement
 - Tight platforming with **coyote time**, **jump buffering**, and **variable jump height**
-- Melee sword with animated swing arc
+- Melee sword with animated swing arc and **weapon sprite** from equipped item
 - **Dash** with invincibility frames and afterimage trail
 - **Ranged Attack** -- golden energy bolt projectile (F key)
 - **Block** -- 70% damage reduction with 3s cooldown, shield flash effect
@@ -81,7 +83,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - **Mage** -- teleports when player approaches, casts purple fireballs, goes invisible
 - **Slime** -- hops toward player, **splits into 2 small slimes on death**
 - **Ghost** -- phases in/out of existence (intangible when phased), floats toward player
-- **4 Unique Floor Bosses** -- Warlord (floor 1), Mushroom King (floor 2), Lava Golem (floor 3), Root Guardian (floor 4) -- each with distinct AI and multi-part sprites
+- **4 Unique Floor Bosses** -- Warlord (floor 1), Mushroom King (floor 2), Lava Golem (floor 3), Root Guardian (floor 4) -- each with distinct AI and animated tileset sprites
 - **Boss phases** -- 50% HP aggressive, 25% HP enraged with AoE slam shockwave
 - **Elite Enemies** -- rare glowing variants (Armored, Swift, Brutal) with 2x HP, bonus loot, pulsing aura
 - **Floating damage numbers** on all hits (white, yellow crit, red player damage, blue block) with drop shadow, pop-scale animation, and ease-out movement
@@ -96,7 +98,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 ### World & Atmosphere
 - **Title screen parallax** -- mouse-tracking depth layers on trees, hills, stars, moon, and well
 - **Well glow & particles** -- pulsing magical glow above the well with golden sparkle particles floating upward
-- **Well intro cutscene** -- animated descent with afterimage trail, speed lines, dust puffs on landing, and impact flash
+- **Well intro cutscene** -- animated player sprite descent with afterimage trail, speed lines, dust puffs on landing, and impact flash
 - **4 Biomes** -- Dark Dungeon (floor 1), Mushroom Cave (floor 2), Lava Caverns (floor 3), Root Depths (floor 4) -- each with unique tile colors, backgrounds, and ambient decorations
 - **16 combat room templates** -- staircase, arena, pit bridges, towers, zigzag, floating islands, walkways, tunnel, lava gauntlet, swamp marsh, elevator shaft, split path, pillared hall, crumbling ruins, the pit, alternating hazards
 - **Visual decorations** -- flickering torches, pulsing crystals, stalactites, mushrooms, glowing moss, embers, root tendrils
@@ -115,6 +117,7 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - **Cuphead-style shop UI** -- stone merchant NPC, overlay panel with item list, keyboard/gamepad navigation
 - **Tiered shop** -- 30+ items across 3 tiers, milestone-gated unlocks
 - **Equipment system** -- 20 items across 4 slots (Weapon, Armor, Relic, Charm) with active stat application (attack%, defense%, max HP/MP, lifesteal, crit, speed)
+- **Visible weapon sprites** -- equipped weapon shown on player character with swing animation on attack (16x16 weapon asset pack)
 - **3 item sets** (Fire, Ice, Storm) with 2-piece and 3-piece bonuses -- actively calculated and applied
 - **Stat upgrades** -- Attack, Defense, Speed purchasable in shop
 - **Meta-progression** -- persistent upgrades between runs
@@ -123,7 +126,31 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 - **Relic choice after boss** -- pick 1 of 3 random relics (10 relics with procedural pixel art icons and active passive effects: crit, lifesteal per 5 kills, spell cooldown reduction, auto-block on room enter)
 - **Curse/Blessing Altars** (floor 2+) -- risk/reward choice: pick a blessing (HP, mana, heal, crit, gold) or accept a curse for a powerful tradeoff (e.g. +3 ATK / -2 HP)
 - **Minimap** -- bottom-right HUD indicator showing room progress with color-coded room types and current room highlight
-- **Pause menu** (ESC) -- Resume, Settings, Save & Quit with dedicated `ResumingFromPause` state guard
+- **Equipment HUD** -- 4-slot icon display (bottom-right) showing equipped Weapon, Armor, Relic, and Charm with Raven Fantasy Icons
+
+</td>
+</tr>
+<tr>
+<td>
+
+### Audio
+- **Background music** -- looping dungeon soundtrack with state-aware start/stop
+- **Sound effects** -- melee hit (pitch variation), coin pickup, spell cast SFX (fireball, shield, lightning)
+- **Volume system** -- Master, SFX, and Music volume controls with persistent settings
+- **Safe audio loading** -- LoadState guards prevent crashes from unloaded assets
+
+</td>
+<td>
+
+### UI & Settings
+- **Spell icon bar** -- 4 spell slots with Raven Fantasy icon images, key number labels, and cooldown overlay (dark fill shrinking upward as cooldown drains)
+- **Equipment icon HUD** -- 4-slot display with item-specific icons from Raven Fantasy Icons pack
+- **Full settings menu** (Pause Menu > Settings, or `S` on title screen):
+  - **Audio tab** -- Master/SFX/Music volume sliders (0-100%, live preview)
+  - **Graphics tab** -- Fullscreen toggle (Windowed / Borderless Fullscreen)
+  - **Controls tab** -- Read-only key binding reference table
+- **Pause menu** (ESC) -- Resume, Settings, Save & Quit with `ResumingFromPause` state guard
+- Settings persist to `dawnroot_settings.json`
 
 </td>
 </tr>
@@ -137,10 +164,30 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 |:--|:--|
 | **Engine** | [Bevy 0.15](https://bevyengine.org/) |
 | **Language** | Rust (Edition 2024) |
-| **Rendering** | Spritesheet-based characters + 0x72 Dungeon Tileset for floors/walls |
+| **Rendering** | Spritesheet-based characters (satiro-Sheet) + 0x72 Dungeon Tileset + animated spell effects |
 | **Architecture** | ECS with state machine (Title, WellIntro, Playing, Paused, GameOver) |
 | **Physics** | Custom AABB tile collision |
-| **Dependencies** | `bevy 0.15`, `rand 0.8`, `serde 1` |
+| **Audio** | Bevy audio with Symphonia backend (WAV, OGG, MP3) |
+| **Dependencies** | `bevy 0.15`, `rand 0.8`, `serde 1`, `serde_json 1` |
+
+---
+
+## Asset Credits
+
+| Asset | Author | License |
+|:------|:-------|:--------|
+| Player sprites | [satiro-Sheet](https://pixeldudesmaker.com/) | Pixeldudesmaker |
+| Dungeon tileset | [0x72 DungeonTilesetII](https://0x72.itch.io/dungeontileset-ii) | CC0 |
+| Enemy & boss sprites | 0x72 DungeonTilesetII | CC0 |
+| Spell effects | Super Pixel Effects Gigapack (Free Version) | Free license |
+| Weapon sprites | Weapons Asset 16x16 | Asset pack |
+| UI icons | [Raven Fantasy Icons](https://clockworkraven.itch.io/) | Free version |
+| Pixel font | [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P) | OFL |
+| SFX: Sword hit | CogfireStudios (Freesound.org) | CC0 |
+| SFX: Coin pickup | DavidSraba (Freesound.org) | CC0 |
+| SFX: Thunder strike | AyaDrevis (Freesound.org) | CC0 |
+| SFX: Shield | Metzik (Freesound.org) | CC0 |
+| BGM: Dungeon of Fate | Music asset | Free license |
 
 ---
 
@@ -148,18 +195,18 @@ Press **SPACE** on the title screen -- your character approaches the well and le
 
 ```
 src/
- |- main.rs           App setup, GameState, RunData, save/load
+ |- main.rs           App setup, GameState, RunData, save/load, settings persistence
  |- constants.rs      All numeric constants (physics, spells, layout)
- |- title.rs          Title screen, save slots, WellIntro cutscene
- |- player.rs         Movement, melee, dash, gamepad input, spritesheet animation
+ |- title.rs          Title screen, save slots, WellIntro cutscene, settings access
+ |- player.rs         Movement, melee, dash, weapon sprites, spritesheet animation
  |- room.rs           Room generation, 16 templates, tileset rendering, decorations
- |- enemy.rs          7 enemy types + 4 unique bosses, elite variants, health bars
+ |- enemy.rs          7 enemy types + 4 unique bosses, tileset sprites, elite variants
  |- combat.rs         Melee / spell / projectile collision & damage
- |- spell.rs          4 spells with trails, frost, bolts, shield ring
- |- pause_menu.rs     ESC pause menu with save & quit
+ |- spell.rs          4 spells with animated effect sprites, trails, frost, bolts
+ |- pause_menu.rs     ESC pause menu, full settings UI (audio/graphics/controls)
  |- effects.rs        Particles, afterimages, dust, confetti, flash, damage numbers
  |- altar.rs          Curse/blessing altar choice system
- |- hud.rs            UI overlay (HP, mana, gold, floor, spells, minimap)
+ |- hud.rs            UI overlay (HP, mana, gold, floor, spell icons, equipment, minimap)
  |- camera.rs         Smooth follow camera + screen shake
  |- animation.rs      Generic frame-based animation support
  |- loot.rs           Drops, magnet pickup, treasure chest
@@ -170,7 +217,7 @@ src/
  |- hazards.rs        Lava, water, moving platforms, arrow traps, spikes, poison
  |- death_screen.rs   Game over screen with run stats
  |- floor_complete.rs Floor victory screen + confetti
- |- audio.rs          Audio system (stub, pending valid assets)
+ |- audio.rs          Audio system with SFX, BGM, volume settings, safe loading
 ```
 
 ---
@@ -215,7 +262,7 @@ cargo run
 - [x] Death screen with run statistics
 - [x] Floor complete screen with confetti celebration
 - [x] Spritesheet art (replace procedural rectangles with satiro-Sheet + 0x72 tileset)
-- [ ] Audio engine (background music + SFX)
+- [x] Audio engine (BGM + SFX with volume controls and safe loading)
 - [x] Equipment & set-bonus system (20 items, 4 slots, 3 sets with 2pc/3pc bonuses)
 - [x] Economy rebalance with tiered item unlocks (3 tiers, milestone gating)
 - [x] Platform visual polish (3-part caps, surface highlights, boss arena glow)
@@ -251,6 +298,16 @@ cargo run
 - [x] Shop overlay input blocking (movement + spells disabled during shop UI)
 - [x] Player spritesheet integration (satiro-Sheet, idle/run animation with frame cycling)
 - [x] Dungeon tileset integration (0x72 DungeonTilesetII for floor/wall/ceiling tiles)
+- [x] Enemy sprite integration (7 types + 4 bosses using tileset animated sprites)
+- [x] Spell effect sprites (fireball, ice, lightning from Super Pixel Effects Gigapack)
+- [x] Audio system with SFX events, BGM looping, pitch variation
+- [x] Weapon sprite system (equipped weapon visible on player with swing animation)
+- [x] Equipment HUD (4-slot icon display with Raven Fantasy Icons)
+- [x] Spell icon bar (icon-based spell slots with cooldown overlay)
+- [x] Full settings menu (Audio sliders, Graphics toggle, Controls reference)
+- [x] Volume system (Master/SFX/Music with persistent settings)
+- [ ] Key rebinding UI
+- [ ] Localization (German/English)
 
 ---
 

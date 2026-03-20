@@ -1,20 +1,163 @@
 use bevy::prelude::*;
-use crate::{GameState, GameFont, RunData, PlayingEntity, player::Player, spell::SpellSlots, room::{RoomState, RoomType}};
+use crate::{
+    GameState, GameFont, RunData, PlayingEntity,
+    player::Player,
+    spell::{SpellSlots, SpellId},
+    room::{RoomState, RoomType},
+    equipment::{Equipment, ItemId},
+};
 
 pub struct HudPlugin;
 
 impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
+        // Load all equipment icon handles at startup.
+        let asset_server = app.world().resource::<AssetServer>();
+        let icon_base = "Icon/Free - Raven Fantasy Icons/Separated Files/16x16/";
+        macro_rules! icon {
+            ($name:expr) => { asset_server.load(format!("{}{}", icon_base, $name)) }
+        }
+        let icons = EquipmentIconAssets {
+            rusty_sword:      icon!("fa577.png"),
+            steel_blade:      icon!("fa578.png"),
+            flame_edge:       icon!("fa579.png"),
+            frost_fang:       icon!("fa581.png"),
+            thunder_cleaver:  icon!("fa582.png"),
+            leather_tunic:    icon!("fa583.png"),
+            chain_mail:       icon!("fa584.png"),
+            ember_plate:      icon!("fa585.png"),
+            frost_guard:      icon!("fa588.png"),
+            storm_armor:      icon!("fa586.png"),
+            life_ring:        icon!("fa200.png"),
+            mana_stone:       icon!("fa60.png"),
+            gold_magnet:      icon!("fa590.png"),
+            speed_boots:      icon!("fa75.png"),
+            crit_charm:       icon!("fa100.png"),
+            fire_amulet:      icon!("fa95.png"),
+            ice_amulet:       icon!("fa90.png"),
+            storm_amulet:     icon!("fa70.png"),
+            vampire_fang:     icon!("fa45.png"),
+            iron_will:        icon!("fa30.png"),
+        };
+        let spell_icons = SpellIconAssets {
+            fireball:  asset_server.load(format!("{icon_base}fa3.png")),
+            ice:       asset_server.load(format!("{icon_base}fa20.png")),
+            lightning: asset_server.load(format!("{icon_base}fa70.png")),
+            shield:    asset_server.load(format!("{icon_base}fa9.png")),
+            locked:    asset_server.load(format!("{icon_base}fa50.png")),
+        };
+        let _ = asset_server;
+        app.insert_resource(icons);
+        app.insert_resource(spell_icons);
+
         app.add_systems(OnEnter(GameState::Playing), setup_hud)
             .add_systems(
                 Update,
-                (update_hud, update_minimap, health_bar_update).run_if(in_state(GameState::Playing)),
+                (update_hud, update_minimap, health_bar_update, update_equipment_hud, update_spell_bar)
+                    .run_if(in_state(GameState::Playing)),
             );
     }
 }
 
+// ─── Equipment icon assets ────────────────────────────────────────────────────
+
+#[derive(Resource)]
+pub struct EquipmentIconAssets {
+    pub rusty_sword:     Handle<Image>,
+    pub steel_blade:     Handle<Image>,
+    pub flame_edge:      Handle<Image>,
+    pub frost_fang:      Handle<Image>,
+    pub thunder_cleaver: Handle<Image>,
+    pub leather_tunic:   Handle<Image>,
+    pub chain_mail:      Handle<Image>,
+    pub ember_plate:     Handle<Image>,
+    pub frost_guard:     Handle<Image>,
+    pub storm_armor:     Handle<Image>,
+    pub life_ring:       Handle<Image>,
+    pub mana_stone:      Handle<Image>,
+    pub gold_magnet:     Handle<Image>,
+    pub speed_boots:     Handle<Image>,
+    pub crit_charm:      Handle<Image>,
+    pub fire_amulet:     Handle<Image>,
+    pub ice_amulet:      Handle<Image>,
+    pub storm_amulet:    Handle<Image>,
+    pub vampire_fang:    Handle<Image>,
+    pub iron_will:       Handle<Image>,
+}
+
+impl EquipmentIconAssets {
+    pub fn handle_for(&self, id: ItemId) -> &Handle<Image> {
+        match id {
+            ItemId::RustySword      => &self.rusty_sword,
+            ItemId::SteelBlade      => &self.steel_blade,
+            ItemId::FlameEdge       => &self.flame_edge,
+            ItemId::FrostFang       => &self.frost_fang,
+            ItemId::ThunderCleaver  => &self.thunder_cleaver,
+            ItemId::LeatherTunic    => &self.leather_tunic,
+            ItemId::ChainMail       => &self.chain_mail,
+            ItemId::EmberPlate      => &self.ember_plate,
+            ItemId::FrostGuard      => &self.frost_guard,
+            ItemId::StormArmor      => &self.storm_armor,
+            ItemId::LifeRing        => &self.life_ring,
+            ItemId::ManaStone       => &self.mana_stone,
+            ItemId::GoldMagnet      => &self.gold_magnet,
+            ItemId::SpeedBoots      => &self.speed_boots,
+            ItemId::CritCharm       => &self.crit_charm,
+            ItemId::FireAmulet      => &self.fire_amulet,
+            ItemId::IceAmulet       => &self.ice_amulet,
+            ItemId::StormAmulet     => &self.storm_amulet,
+            ItemId::VampireFang     => &self.vampire_fang,
+            ItemId::IronWill        => &self.iron_will,
+        }
+    }
+}
+
+// ─── Spell icon assets ────────────────────────────────────────────────────────
+
+#[derive(Resource)]
+pub struct SpellIconAssets {
+    pub fireball:  Handle<Image>,
+    pub ice:       Handle<Image>,
+    pub lightning: Handle<Image>,
+    pub shield:    Handle<Image>,
+    /// Shown for slots that have not been purchased yet.
+    pub locked:    Handle<Image>,
+}
+
+// ─── Spell bar components ─────────────────────────────────────────────────────
+
+/// Marks one of the four spell slot boxes (index 0-3).
+#[derive(Component)]
+struct SpellSlotUi {
+    index: usize,
+}
+
+/// The icon image node inside a spell slot.
+#[derive(Component)]
+struct SpellSlotIcon {
+    index: usize,
+}
+
+/// Dark cooldown overlay that grows from the bottom up while a spell is on cooldown.
+#[derive(Component)]
+struct SpellCooldownOverlay {
+    index: usize,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 #[derive(Component)]
 struct HudRoot;
+
+/// Marker for the entire equipment slot row container.
+#[derive(Component)]
+struct EquipmentSlotsRoot;
+
+/// Identifies which slot index (0=Weapon, 1=Armor, 2=Relic, 3=Charm) this node represents.
+#[derive(Component)]
+struct EquipmentSlotIcon {
+    slot_index: usize,
+}
 
 #[derive(Component)]
 struct ManaText;
@@ -24,9 +167,6 @@ struct GoldText;
 
 #[derive(Component)]
 struct FloorText;
-
-#[derive(Component)]
-struct SpellText;
 
 #[derive(Component)]
 struct ScoreText;
@@ -61,7 +201,25 @@ struct HealthBarLabel;
 const HEALTH_BAR_W: f32 = 120.0;
 const HEALTH_BAR_H: f32 = 14.0;
 
-fn setup_hud(mut commands: Commands, font: Res<GameFont>, existing: Query<&HudRoot>) {
+const SLOT_SIZE: f32 = 40.0;
+const ICON_SIZE: f32 = 28.0;
+const SLOT_GAP:  f32 = 6.0;
+
+fn icon_handle_for_spell(spell: SpellId, icons: &SpellIconAssets) -> Handle<Image> {
+    match spell {
+        SpellId::Fireball  => icons.fireball.clone(),
+        SpellId::IceShards => icons.ice.clone(),
+        SpellId::Lightning => icons.lightning.clone(),
+        SpellId::Shield    => icons.shield.clone(),
+    }
+}
+
+fn setup_hud(
+    mut commands: Commands,
+    font: Res<GameFont>,
+    icons: Res<SpellIconAssets>,
+    existing: Query<&HudRoot>,
+) {
     if existing.iter().next().is_some() { return; }
     commands
         .spawn((
@@ -194,19 +352,115 @@ fn setup_hud(mut commands: Commands, font: Res<GameFont>, existing: Query<&HudRo
                     });
                 });
 
-            // Bottom: Spell slots
+            // ── Bottom-left: Spell icon bar ───────────────────────
             parent.spawn((
-                Text::new("[1] Fireball [2] Ice [3] Lightning [4] Shield"),
-                TextFont { font: font.0.clone(), font_size: 7.0, ..default() },
-                TextColor(Color::srgb(0.75, 0.6, 0.4)),
                 Node {
                     position_type: PositionType::Absolute,
                     bottom: Val::Px(12.0),
                     left: Val::Px(12.0),
+                    flex_direction: FlexDirection::Row,
+                    column_gap: Val::Px(SLOT_GAP),
                     ..default()
                 },
-                SpellText,
-            ));
+            )).with_children(|bar| {
+                let key_labels = ["1", "2", "3", "4"];
+                for i in 0..4usize {
+                    bar.spawn((
+                        Node {
+                            width: Val::Px(SLOT_SIZE),
+                            height: Val::Px(SLOT_SIZE),
+                            border: UiRect::all(Val::Px(1.0)),
+                            overflow: Overflow::clip(),
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgba(0.1, 0.08, 0.06, 0.8)),
+                        BorderColor(Color::srgba(0.3, 0.25, 0.2, 0.8)),
+                        SpellSlotUi { index: i },
+                    )).with_children(|slot| {
+                        // (a) Key number label — top-left corner
+                        slot.spawn((
+                            Text::new(key_labels[i]),
+                            TextFont { font: font.0.clone(), font_size: 6.0, ..default() },
+                            TextColor(Color::srgba(0.9, 0.85, 0.7, 0.9)),
+                            Node {
+                                position_type: PositionType::Absolute,
+                                top: Val::Px(2.0),
+                                left: Val::Px(3.0),
+                                ..default()
+                            },
+                        ));
+
+                        // (b) Centered spell icon
+                        slot.spawn((
+                            ImageNode::new(icons.locked.clone()),
+                            Node {
+                                position_type: PositionType::Absolute,
+                                width: Val::Px(ICON_SIZE),
+                                height: Val::Px(ICON_SIZE),
+                                left: Val::Px((SLOT_SIZE - ICON_SIZE) / 2.0),
+                                top: Val::Px((SLOT_SIZE - ICON_SIZE) / 2.0),
+                                ..default()
+                            },
+                            SpellSlotIcon { index: i },
+                        ));
+
+                        // (c) Cooldown overlay — dark rect that shrinks from top as cooldown drains
+                        slot.spawn((
+                            Node {
+                                position_type: PositionType::Absolute,
+                                bottom: Val::Px(0.0),
+                                left: Val::Px(0.0),
+                                width: Val::Px(SLOT_SIZE),
+                                height: Val::Px(0.0), // driven by update_spell_bar
+                                ..default()
+                            },
+                            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.65)),
+                            SpellCooldownOverlay { index: i },
+                        ));
+                    });
+                }
+            });
+
+            // Equipment slots row (bottom-right, above minimap)
+            parent.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    bottom: Val::Px(36.0),
+                    right: Val::Px(10.0),
+                    flex_direction: FlexDirection::Row,
+                    column_gap: Val::Px(2.0),
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                EquipmentSlotsRoot,
+            )).with_children(|row| {
+                for slot_index in 0..4 {
+                    // Outer box (dark background border)
+                    row.spawn((
+                        Node {
+                            width: Val::Px(24.0),
+                            height: Val::Px(24.0),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            border: UiRect::all(Val::Px(1.0)),
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgba(0.05, 0.05, 0.08, 0.8)),
+                        BorderColor(Color::srgba(0.3, 0.3, 0.35, 0.9)),
+                    )).with_children(|cell| {
+                        // Inner icon image node
+                        cell.spawn((
+                            ImageNode::default(),
+                            Node {
+                                width: Val::Px(16.0),
+                                height: Val::Px(16.0),
+                                ..default()
+                            },
+                            EquipmentSlotIcon { slot_index },
+                        ));
+                    });
+                }
+            });
 
             // Minimap container (bottom-right)
             parent.spawn((
@@ -230,13 +484,11 @@ fn update_hud(
     run: Res<RunData>,
     room_state: Res<RoomState>,
     player_q: Query<&Player>,
-    slots_q: Query<&SpellSlots>,
-    mut score_q:  Query<&mut Text, (With<ScoreText>,  Without<ManaText>, Without<GoldText>, Without<FloorText>, Without<SpellText>, Without<EnemyText>, Without<HealthBarLabel>)>,
-    mut mana_q:   Query<&mut Text, (With<ManaText>,   Without<ScoreText>, Without<GoldText>, Without<FloorText>, Without<SpellText>, Without<EnemyText>, Without<HealthBarLabel>)>,
-    mut gold_q:   Query<&mut Text, (With<GoldText>,   Without<ScoreText>, Without<ManaText>, Without<FloorText>, Without<SpellText>, Without<EnemyText>, Without<HealthBarLabel>)>,
-    mut floor_q:  Query<&mut Text, (With<FloorText>,  Without<ScoreText>, Without<ManaText>, Without<GoldText>,  Without<SpellText>, Without<EnemyText>, Without<HealthBarLabel>)>,
-    mut spell_q:  Query<&mut Text, (With<SpellText>,  Without<ScoreText>, Without<ManaText>, Without<GoldText>,  Without<FloorText>, Without<EnemyText>, Without<HealthBarLabel>)>,
-    mut enemy_q:  Query<&mut Text, (With<EnemyText>,  Without<ScoreText>, Without<ManaText>, Without<GoldText>,  Without<FloorText>, Without<SpellText>, Without<HealthBarLabel>)>,
+    mut score_q:  Query<&mut Text, (With<ScoreText>,  Without<ManaText>, Without<GoldText>, Without<FloorText>, Without<EnemyText>, Without<HealthBarLabel>)>,
+    mut mana_q:   Query<&mut Text, (With<ManaText>,   Without<ScoreText>, Without<GoldText>, Without<FloorText>, Without<EnemyText>, Without<HealthBarLabel>)>,
+    mut gold_q:   Query<&mut Text, (With<GoldText>,   Without<ScoreText>, Without<ManaText>, Without<FloorText>, Without<EnemyText>, Without<HealthBarLabel>)>,
+    mut floor_q:  Query<&mut Text, (With<FloorText>,  Without<ScoreText>, Without<ManaText>, Without<GoldText>,  Without<EnemyText>, Without<HealthBarLabel>)>,
+    mut enemy_q:  Query<&mut Text, (With<EnemyText>,  Without<ScoreText>, Without<ManaText>, Without<GoldText>,  Without<FloorText>, Without<HealthBarLabel>)>,
 ) {
     let player = player_q.get_single().ok();
 
@@ -258,31 +510,62 @@ fn update_hud(
         **text = format!("Floor {} - Room {} ({:?})", room_state.floor, room_state.room_index + 1, room_state.current_type);
     }
 
-    if let Ok(mut text) = spell_q.get_single_mut() {
-        if let Ok(slots) = slots_q.get_single() {
-            let mut parts = Vec::new();
-            for (i, slot) in slots.slots.iter().enumerate() {
-                if let Some(spell) = slot {
-                    let cd = slots.cooldowns[i];
-                    if cd > 0.0 {
-                        parts.push(format!("[{}] {} ({:.1}s)", i + 1, spell.name(), cd));
-                    } else {
-                        parts.push(format!("[{}] {}", i + 1, spell.name()));
-                    }
-                } else {
-                    parts.push(format!("[{}] ---", i + 1));
-                }
-            }
-            **text = parts.join("  ");
-        }
-    }
-
     if let Ok(mut text) = enemy_q.get_single_mut() {
         if run.enemies_alive > 0 {
             **text = format!("Enemies: {}", run.enemies_alive);
         } else {
             **text = String::new();
         }
+    }
+}
+
+// ── Spell bar update system ───────────────────────────────────────
+
+fn update_spell_bar(
+    slots_q: Query<&SpellSlots>,
+    icons: Res<SpellIconAssets>,
+    mut slot_q: Query<(&SpellSlotUi, &mut BorderColor)>,
+    mut icon_q: Query<(&SpellSlotIcon, &mut ImageNode)>,
+    mut overlay_q: Query<(&SpellCooldownOverlay, &mut Node)>,
+) {
+    let Ok(slots) = slots_q.get_single() else { return };
+
+    // Border color: gold when ready, dim orange on cooldown, dark grey when locked
+    for (slot_ui, mut border) in &mut slot_q {
+        let i = slot_ui.index;
+        *border = match slots.slots[i] {
+            Some(_) if slots.cooldowns[i] <= 0.0 => BorderColor(Color::srgb(0.85, 0.7, 0.2)),
+            Some(_)                               => BorderColor(Color::srgba(0.55, 0.35, 0.1, 0.9)),
+            None                                  => BorderColor(Color::srgba(0.25, 0.2, 0.18, 0.7)),
+        };
+    }
+
+    // Icon image: spell icon if unlocked, locked placeholder otherwise
+    for (slot_icon, mut img) in &mut icon_q {
+        let i = slot_icon.index;
+        let new_handle = match slots.slots[i] {
+            Some(spell) => icon_handle_for_spell(spell, &icons),
+            None        => icons.locked.clone(),
+        };
+        if img.image != new_handle {
+            img.image = new_handle;
+        }
+    }
+
+    // Cooldown overlay: height = (remaining / max) * SLOT_SIZE, anchored at bottom
+    for (overlay, mut node) in &mut overlay_q {
+        let i = overlay.index;
+        let cd = slots.cooldowns[i];
+        let height_px = if cd <= 0.0 {
+            0.0
+        } else {
+            let max_cd = match slots.slots[i] {
+                Some(spell) => spell.cooldown(),
+                None        => 1.0,
+            };
+            (cd / max_cd).clamp(0.0, 1.0) * SLOT_SIZE
+        };
+        node.height = Val::Px(height_px);
     }
 }
 
@@ -333,6 +616,41 @@ fn health_bar_update(
 }
 
 // ── Minimap ──────────────────────────────────────────────────────
+
+// ── Equipment HUD ─────────────────────────────────────────────────
+
+fn update_equipment_hud(
+    player_q: Query<(Entity, &Player)>,
+    equip_q: Query<&Equipment>,
+    mut slot_q: Query<(&EquipmentSlotIcon, &mut ImageNode)>,
+    icon_assets: Res<EquipmentIconAssets>,
+) {
+    let Ok((player_entity, _)) = player_q.get_single() else { return };
+    let Ok(equip) = equip_q.get(player_entity) else { return };
+
+    // Collect the 4 slot values in order: Weapon, Armor, Relic, Charm.
+    let slots: [Option<ItemId>; 4] = [
+        equip.weapon,
+        equip.armor,
+        equip.relic,
+        equip.charm,
+    ];
+
+    for (slot_icon, mut image_node) in &mut slot_q {
+        let item = slots[slot_icon.slot_index];
+        match item {
+            Some(id) => {
+                image_node.image = icon_assets.handle_for(id).clone();
+                image_node.color = Color::WHITE;
+            }
+            None => {
+                // Empty slot — show no image (default empty handle is fine).
+                image_node.image = Handle::default();
+                image_node.color = Color::srgba(0.0, 0.0, 0.0, 0.0);
+            }
+        }
+    }
+}
 
 fn minimap_room_color(room_type: RoomType) -> Color {
     match room_type {
