@@ -18,7 +18,8 @@ impl Plugin for GameFeelPlugin {
                     update_attack_pulse,
                 )
                     .run_if(in_state(GameState::Playing)),
-            );
+            )
+            .add_systems(OnExit(GameState::Playing), reset_game_feel);
     }
 }
 
@@ -161,4 +162,16 @@ fn update_attack_pulse(
             commands.entity(entity).remove::<AttackPulse>();
         }
     }
+}
+
+/// Reset hit-stop and virtual time speed when leaving Playing state.
+/// Prevents Time<Virtual> from staying at 0.05 if the player dies mid hit-stop.
+fn reset_game_feel(
+    mut stop: ResMut<HitStop>,
+    mut shake: ResMut<ScreenShakeState>,
+    mut time: ResMut<Time<Virtual>>,
+) {
+    stop.frames_remaining = 0;
+    shake.trauma = 0.0;
+    time.set_relative_speed(1.0);
 }
