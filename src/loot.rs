@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, enemy::EnemyDefeated, room::TreasureChest, equipment::PlayerStats, audio::{PlaySfxEvent, SfxType}};
+use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, enemy::EnemyDefeated, room::{TreasureChest, RoomEntity}, equipment::PlayerStats, audio::{PlaySfxEvent, SfxType}};
 
 pub struct LootPlugin;
 
@@ -53,6 +53,7 @@ fn spawn_drops(
                     magnet_radius: 80.0,
                     lifetime: 10.0,
                 },
+                RoomEntity,
                 PlayingEntity,
             ));
         }
@@ -72,6 +73,7 @@ fn spawn_drops(
                     magnet_radius: 60.0,
                     lifetime: 10.0,
                 },
+                RoomEntity,
                 PlayingEntity,
             ));
         }
@@ -90,6 +92,7 @@ fn spawn_drops(
                     magnet_radius: 60.0,
                     lifetime: 10.0,
                 },
+                RoomEntity,
                 PlayingEntity,
             ));
         }
@@ -213,6 +216,7 @@ fn chest_auto_open(
                     magnet_radius: 100.0,
                     lifetime: 3.0,
                 },
+                RoomEntity,
                 PlayingEntity,
             ));
         }

@@ -7,7 +7,7 @@ use crate::{
     spell::{SpellProjectile, LightningStrike},
     camera::{ScreenShake, trigger_shake},
     equipment::PlayerStats,
-    room::{RoomState, DestructibleWall},
+    room::{RoomState, RoomEntity, DestructibleWall},
     loot::{Pickup, PickupKind},
     audio::{PlaySfxEvent, SfxType},
     game_feel::{ShakeEvent, HitStopEvent, HitFlash},
@@ -458,6 +458,7 @@ fn melee_vs_wall(
                                 magnet_radius: 100.0,
                                 lifetime: 10.0,
                             },
+                            RoomEntity,
                             PlayingEntity,
                         ));
                     }
@@ -474,6 +475,7 @@ fn melee_vs_wall(
                             magnet_radius: 80.0,
                             lifetime: 10.0,
                         },
+                        RoomEntity,
                         PlayingEntity,
                     ));
                     // Mana pickup
@@ -489,6 +491,7 @@ fn melee_vs_wall(
                             magnet_radius: 80.0,
                             lifetime: 10.0,
                         },
+                        RoomEntity,
                         PlayingEntity,
                     ));
 

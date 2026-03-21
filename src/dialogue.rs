@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, GameFont, PlayingEntity, room::{RoomState, RoomType, RoomTransition}};
+use crate::{constants::*, GameState, GameFont, PlayingEntity, room::{RoomState, RoomType, RoomTransition, RoomEntity}};
 
 pub struct DialoguePlugin;
 
@@ -7,6 +7,7 @@ impl Plugin for DialoguePlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(DialogueState::default())
             .add_event::<StartDialogue>()
+            .add_systems(OnEnter(GameState::Playing), reset_dialogue_state)
             .add_systems(
                 Update,
                 (
@@ -19,6 +20,19 @@ impl Plugin for DialoguePlugin {
                     .chain()
                     .run_if(in_state(GameState::Playing)),
             );
+    }
+}
+
+fn reset_dialogue_state(
+    mut state: ResMut<DialogueState>,
+    mut commands: Commands,
+    ui_q: Query<Entity, With<DialogueUI>>,
+    resuming: Option<Res<crate::ResumingFromPause>>,
+) {
+    if resuming.is_some() { return; }
+    *state = DialogueState::default();
+    for e in &ui_q {
+        commands.entity(e).try_despawn_recursive();
     }
 }
 
@@ -160,6 +174,7 @@ fn spawn_npc(commands: &mut Commands, name: &str, lines: Vec<String>, x: f32, y:
             lines,
             interacted: false,
         },
+        RoomEntity,
         PlayingEntity,
     )).with_children(|p| {
         // Body (robed figure)

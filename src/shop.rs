@@ -11,22 +11,32 @@ pub struct ShopPlugin;
 
 impl Plugin for ShopPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            (
-                reset_shop_on_transition,
-                spawn_merchant_npc,
-                merchant_interaction,
-                shop_ui_navigation,
-                shop_ui_purchase,
-                shop_ui_close,
-                shop_ui_update_visuals,
-                purchase_feedback_decay,
-            )
-                .chain()
-                .run_if(in_state(GameState::Playing)),
-        );
+        app.add_systems(OnEnter(GameState::Playing), reset_shop_state)
+            .add_systems(
+                Update,
+                (
+                    reset_shop_on_transition,
+                    spawn_merchant_npc,
+                    merchant_interaction,
+                    shop_ui_navigation,
+                    shop_ui_purchase,
+                    shop_ui_close,
+                    shop_ui_update_visuals,
+                    purchase_feedback_decay,
+                )
+                    .chain()
+                    .run_if(in_state(GameState::Playing)),
+            );
     }
+}
+
+fn reset_shop_state(
+    mut commands: Commands,
+    resuming: Option<Res<crate::ResumingFromPause>>,
+) {
+    if resuming.is_some() { return; }
+    commands.insert_resource(MerchantSpawned(false));
+    commands.remove_resource::<ShopUiState>();
 }
 
 // ---------------------------------------------------------------------------
