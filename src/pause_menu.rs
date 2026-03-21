@@ -339,8 +339,8 @@ mod col {
     pub const HEADING:     Color = Color::srgb(0.90, 0.80, 0.50);
 }
 
-const SLIDER_W: f32 = 150.0;
-const SLIDER_H: f32 = 10.0;
+const SLIDER_W: f32 = 200.0;
+const SLIDER_H: f32 = 12.0;
 
 /// Public so title.rs can call it directly.
 pub(crate) fn spawn_settings_panel(
@@ -355,10 +355,10 @@ pub(crate) fn spawn_settings_panel(
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
-                left:   Val::Percent(20.0),
-                right:  Val::Percent(20.0),
-                top:    Val::Percent(15.0),
-                bottom: Val::Percent(15.0),
+                left:   Val::Percent(12.0),
+                right:  Val::Percent(12.0),
+                top:    Val::Percent(10.0),
+                bottom: Val::Percent(10.0),
                 flex_direction: FlexDirection::Column,
                 ..default()
             },
@@ -444,9 +444,9 @@ pub(crate) fn spawn_settings_panel(
                 BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.3)),
             )).with_children(|f| {
                 f.spawn((
-                    Text::new("[Q/E] Tab  [Up/Down] Select  [Left/Right] Change  [Esc/Back] Close"),
-                    TextFont { font: font.clone(), font_size: 6.0, ..default() },
-                    TextColor(col::HINT),
+                    Text::new("[Q/E] Tab  [Up/Down] Select  [Left/Right] Adjust  [Esc] Back"),
+                    TextFont { font: font.clone(), font_size: 7.0, ..default() },
+                    TextColor(Color::srgb(0.55, 0.45, 0.30)),
                 ));
             });
         });
@@ -748,10 +748,11 @@ pub(crate) fn settings_input(
     }
 
     // ── Left / Right: change value ────────────────────────────────
-    let left  = keys.just_pressed(KeyCode::ArrowLeft)  || keys.just_pressed(KeyCode::KeyA)
-        || gp.map_or(false, |g| g.just_pressed(GamepadButton::DPadLeft));
-    let right = keys.just_pressed(KeyCode::ArrowRight) || keys.just_pressed(KeyCode::KeyD)
-        || gp.map_or(false, |g| g.just_pressed(GamepadButton::DPadRight));
+    // Allow holding left/right for continuous slider adjustment
+    let left  = keys.pressed(KeyCode::ArrowLeft)  || keys.pressed(KeyCode::KeyA)
+        || gp.map_or(false, |g| g.pressed(GamepadButton::DPadLeft));
+    let right = keys.pressed(KeyCode::ArrowRight) || keys.pressed(KeyCode::KeyD)
+        || gp.map_or(false, |g| g.pressed(GamepadButton::DPadRight));
 
     // Enter / confirm for toggles
     let confirm = keys.just_pressed(KeyCode::Enter)

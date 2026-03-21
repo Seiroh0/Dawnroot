@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{GameState, GameFont, constants::*, ActiveSaveSlot, LoadedSave, load_slot, delete_slot, player::PlayerSpriteAssets};
+use crate::{GameState, GameFont, constants::*, ActiveSaveSlot, LoadedSave, load_slot, delete_slot, player::PlayerSpriteAssets, MetaProgression};
 use crate::audio::AudioSettings;
 use crate::pause_menu::{SettingsPanel, SettingsState, spawn_settings_panel, settings_input};
 
@@ -18,6 +18,7 @@ impl Plugin for TitlePlugin {
                     settings_input,
                     parallax_mouse_tracking,
                     pulse_text_alpha,
+                    well_bob_animate,
                     well_glow_animate,
                     well_particle_emit,
                     update_well_particles,
@@ -75,6 +76,13 @@ struct PulsingAlpha {
 
 // ── Module 3: Well Effects ───────────────────────────────────────
 
+/// Gentle bobbing animation for the well sprite on the title screen.
+#[derive(Component)]
+struct WellBob {
+    timer: f32,
+    base_y: f32,
+}
+
 #[derive(Component)]
 struct WellGlow {
     timer: f32,
@@ -113,7 +121,12 @@ struct IntroDustPuff {
 
 // ── Title screen ──────────────────────────────────────────────────
 
-fn setup_title(mut commands: Commands, font: Res<GameFont>) {
+fn setup_title(
+    mut commands: Commands,
+    font: Res<GameFont>,
+    meta: Res<MetaProgression>,
+    asset_server: Res<AssetServer>,
+) {
     commands.spawn((Camera2d, TitleEntity));
     commands.insert_resource(SlotMenuState { open: false });
 
@@ -211,56 +224,27 @@ fn setup_title(mut commands: Commands, font: Res<GameFont>) {
         TitleEntity,
     ));
 
-    // Well (parallax: foreground)
+    // Well sprite (parallax: foreground)
+    // Use Well2 (empty) if player has completed at least one run, else Well1 (full)
     let well_base_y = ground_y + 52.5;
     let well_x = 0.0;
+    let well_size = 96.0; // ~2x native sprite size
+    let well_sprite_y = well_base_y + well_size / 2.0; // bottom edge sits on ground
+    let well_texture: Handle<Image> = if meta.runs_completed > 0 {
+        asset_server.load("sprites/Well2.png")
+    } else {
+        asset_server.load("sprites/Well1.png")
+    };
     commands.spawn((
-        Sprite { color: Color::srgb(0.35, 0.3, 0.25), custom_size: Some(Vec2::new(64.0, 28.0)), ..default() },
-        Transform::from_xyz(well_x, well_base_y + 14.0, Z_BACKGROUND + 5.0), TitleEntity,
+        Sprite {
+            image: well_texture,
+            custom_size: Some(Vec2::new(well_size, well_size)),
+            ..default()
+        },
+        Transform::from_xyz(well_x, well_sprite_y, Z_BACKGROUND + 5.5),
+        TitleEntity,
         ParallaxLayer { depth: 0.7, base_x: well_x },
-    ));
-    commands.spawn((
-        Sprite { color: Color::srgb(0.01, 0.01, 0.02), custom_size: Some(Vec2::new(48.0, 20.0)), ..default() },
-        Transform::from_xyz(well_x, well_base_y + 14.0, Z_BACKGROUND + 5.5), TitleEntity,
-        ParallaxLayer { depth: 0.7, base_x: well_x },
-    ));
-    commands.spawn((
-        Sprite { color: Color::srgb(0.4, 0.35, 0.28), custom_size: Some(Vec2::new(70.0, 8.0)), ..default() },
-        Transform::from_xyz(well_x, well_base_y + 30.0, Z_BACKGROUND + 6.0), TitleEntity,
-        ParallaxLayer { depth: 0.7, base_x: well_x },
-    ));
-    // Pillars
-    commands.spawn((
-        Sprite { color: Color::srgb(0.32, 0.27, 0.2), custom_size: Some(Vec2::new(8.0, 60.0)), ..default() },
-        Transform::from_xyz(well_x - 30.0, well_base_y + 60.0, Z_BACKGROUND + 6.0), TitleEntity,
-        ParallaxLayer { depth: 0.7, base_x: well_x - 30.0 },
-    ));
-    commands.spawn((
-        Sprite { color: Color::srgb(0.32, 0.27, 0.2), custom_size: Some(Vec2::new(8.0, 60.0)), ..default() },
-        Transform::from_xyz(well_x + 30.0, well_base_y + 60.0, Z_BACKGROUND + 6.0), TitleEntity,
-        ParallaxLayer { depth: 0.7, base_x: well_x + 30.0 },
-    ));
-    // Roof
-    commands.spawn((
-        Sprite { color: Color::srgb(0.28, 0.2, 0.14), custom_size: Some(Vec2::new(80.0, 10.0)), ..default() },
-        Transform::from_xyz(well_x, well_base_y + 90.0, Z_BACKGROUND + 6.5), TitleEntity,
-        ParallaxLayer { depth: 0.7, base_x: well_x },
-    ));
-    commands.spawn((
-        Sprite { color: Color::srgb(0.3, 0.22, 0.15), custom_size: Some(Vec2::new(50.0, 8.0)), ..default() },
-        Transform::from_xyz(well_x, well_base_y + 98.0, Z_BACKGROUND + 6.5), TitleEntity,
-        ParallaxLayer { depth: 0.7, base_x: well_x },
-    ));
-    // Rope + bucket
-    commands.spawn((
-        Sprite { color: Color::srgb(0.5, 0.4, 0.25), custom_size: Some(Vec2::new(2.0, 40.0)), ..default() },
-        Transform::from_xyz(well_x, well_base_y + 50.0, Z_BACKGROUND + 5.8), TitleEntity,
-        ParallaxLayer { depth: 0.7, base_x: well_x },
-    ));
-    commands.spawn((
-        Sprite { color: Color::srgb(0.4, 0.3, 0.18), custom_size: Some(Vec2::new(10.0, 8.0)), ..default() },
-        Transform::from_xyz(well_x, well_base_y + 32.0, Z_BACKGROUND + 5.8), TitleEntity,
-        ParallaxLayer { depth: 0.7, base_x: well_x },
+        WellBob { timer: 0.0, base_y: well_sprite_y },
     ));
 
     // ── Module 3: Well glow sprite (golden upward light) ─────────
@@ -687,6 +671,19 @@ fn pulse_text_alpha(
 
 // ── Module 3: Well glow + particles ──────────────────────────────
 
+fn well_bob_animate(
+    time: Res<Time>,
+    mut query: Query<(&mut WellBob, &mut Transform)>,
+) {
+    let dt = time.delta_secs();
+    for (mut bob, mut tf) in &mut query {
+        bob.timer += dt;
+        // Gentle bob: 3px amplitude, slow speed
+        let offset = (bob.timer * 1.2).sin() * 3.0;
+        tf.translation.y = bob.base_y + offset;
+    }
+}
+
 fn well_glow_animate(
     time: Res<Time>,
     mut query: Query<(&mut WellGlow, &mut Sprite)>,
@@ -962,6 +959,11 @@ struct IntroLegR;
 #[derive(Component)]
 struct DarknessOverlay;
 
+#[derive(Component)]
+struct IntroWellSprite {
+    target_y: f32,
+}
+
 /// Animation state for the intro player spritesheet.
 #[derive(Component)]
 struct IntroSpriteAnim {
@@ -992,18 +994,19 @@ struct IntroState {
 
 #[derive(PartialEq)]
 enum IntroPhase {
+    WellSlideIn,
     WalkToWell,
     JumpIn,
     FallDarkness,
     LandInCave,
 }
 
-fn setup_well_intro(mut commands: Commands, sprite_assets: Res<PlayerSpriteAssets>) {
+fn setup_well_intro(mut commands: Commands, sprite_assets: Res<PlayerSpriteAssets>, asset_server: Res<AssetServer>) {
     let ground_y = -VIEWPORT_H / 2.0 + 50.0;
     let well_base_y = ground_y + 52.5;
 
     commands.insert_resource(IntroState {
-        phase: IntroPhase::WalkToWell,
+        phase: IntroPhase::WellSlideIn,
         timer: 0.0,
         player_start_y: well_base_y + 16.0,
         afterimage_timer: 0.0,
@@ -1028,27 +1031,27 @@ fn setup_well_intro(mut commands: Commands, sprite_assets: Res<PlayerSpriteAsset
         Transform::from_xyz(0.0, ground_y + 52.5, Z_BACKGROUND + 3.0), IntroEntity,
     ));
 
-    // Well
+    // Well — slide in from below screen
+    let well_size = 96.0;
+    let well_final_y = well_base_y + well_size / 2.0;
+    let well_start_y = -VIEWPORT_H / 2.0 - well_size; // fully below screen
     commands.spawn((
-        Sprite { color: Color::srgb(0.35, 0.3, 0.25), custom_size: Some(Vec2::new(64.0, 28.0)), ..default() },
-        Transform::from_xyz(0.0, well_base_y + 14.0, Z_BACKGROUND + 5.0), IntroEntity,
-    ));
-    commands.spawn((
-        Sprite { color: Color::srgb(0.01, 0.01, 0.02), custom_size: Some(Vec2::new(48.0, 20.0)), ..default() },
-        Transform::from_xyz(0.0, well_base_y + 14.0, Z_BACKGROUND + 5.5), IntroEntity,
-    ));
-    commands.spawn((
-        Sprite { color: Color::srgb(0.4, 0.35, 0.28), custom_size: Some(Vec2::new(70.0, 8.0)), ..default() },
-        Transform::from_xyz(0.0, well_base_y + 30.0, Z_BACKGROUND + 6.0), IntroEntity,
+        Sprite {
+            image: asset_server.load("sprites/Well1.png"),
+            custom_size: Some(Vec2::new(well_size, well_size)),
+            ..default()
+        },
+        Transform::from_xyz(0.0, well_start_y, Z_BACKGROUND + 5.0),
+        IntroEntity,
+        IntroWellSprite { target_y: well_final_y },
     ));
 
-    // Intro player — uses the same satiro spritesheet as the gameplay player.
-    // Start on the run animation row so the character animates while walking.
+    // Intro player — hidden until well arrives, then walks in
     let run_start_index = 1 * 10; // RUN_ROW(1) * SATIRO_COLS(10)
     let sprite_size = 32.0 * 2.0; // SATIRO_FRAME * PLAYER_SPRITE_SCALE
     commands.spawn((
         Transform::from_xyz(-280.0, well_base_y + 16.0, Z_PLAYER),
-        Visibility::Visible,
+        Visibility::Hidden,
         IntroEntity,
         IntroPlayer,
     )).with_children(|p| {
@@ -1085,21 +1088,46 @@ fn setup_well_intro(mut commands: Commands, sprite_assets: Res<PlayerSpriteAsset
 fn update_well_intro(
     mut commands: Commands,
     mut state: ResMut<IntroState>,
-    mut player_q: Query<&mut Transform, (With<IntroPlayer>, Without<IntroLegL>, Without<IntroLegR>)>,
+    mut player_q: Query<(&mut Transform, &mut Visibility), (With<IntroPlayer>, Without<IntroLegL>, Without<IntroLegR>, Without<IntroWellSprite>)>,
     mut parts_q: Query<&mut Sprite, (With<IntroPlayerPart>, Without<DarknessOverlay>)>,
-    mut legl_q: Query<&mut Transform, (With<IntroLegL>, Without<IntroPlayer>, Without<IntroLegR>)>,
-    mut legr_q: Query<&mut Transform, (With<IntroLegR>, Without<IntroPlayer>, Without<IntroLegL>)>,
+    mut legl_q: Query<&mut Transform, (With<IntroLegL>, Without<IntroPlayer>, Without<IntroLegR>, Without<IntroWellSprite>)>,
+    mut legr_q: Query<&mut Transform, (With<IntroLegR>, Without<IntroPlayer>, Without<IntroLegL>, Without<IntroWellSprite>)>,
     mut darkness_q: Query<&mut Sprite, (With<DarknessOverlay>, Without<IntroPlayerPart>)>,
     mut shake_q: Query<&mut IntroScreenShake>,
+    mut well_sprite_q: Query<(&IntroWellSprite, &mut Transform), (Without<IntroPlayer>, Without<IntroLegL>, Without<IntroLegR>)>,
     mut next_state: ResMut<NextState<GameState>>,
     time: Res<Time>,
 ) {
     let dt = time.delta_secs();
     state.timer += dt;
 
-    let Ok(mut p_tf) = player_q.get_single_mut() else { return };
+    // Well slide-in phase: animate well from below screen, player hidden
+    if state.phase == IntroPhase::WellSlideIn {
+        let slide_duration = 0.8;
+        let t = (state.timer / slide_duration).min(1.0);
+        // Cubic ease-out: 1 - (1-t)^3
+        let eased = 1.0 - (1.0 - t).powi(3);
+
+        for (well, mut w_tf) in &mut well_sprite_q {
+            let start_y = -VIEWPORT_H / 2.0 - 96.0;
+            w_tf.translation.y = start_y + (well.target_y - start_y) * eased;
+        }
+
+        if state.timer >= slide_duration + 0.15 {
+            state.phase = IntroPhase::WalkToWell;
+            state.timer = 0.0;
+            // Show the player now
+            if let Ok((_, mut vis)) = player_q.get_single_mut() {
+                *vis = Visibility::Visible;
+            }
+        }
+        return;
+    }
+
+    let Ok((mut p_tf, _)) = player_q.get_single_mut() else { return };
 
     match state.phase {
+        IntroPhase::WellSlideIn => unreachable!(),
         IntroPhase::WalkToWell => {
             p_tf.translation.x += 200.0 * dt;
             let bob = (state.timer * 14.0).sin().abs() * 3.0;

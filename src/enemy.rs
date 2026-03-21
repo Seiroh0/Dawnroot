@@ -421,6 +421,7 @@ fn spawn_ground_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32, asset
             Sprite {
                 image: assets.goblin_idle[0].clone(),
                 custom_size: Some(Vec2::new(32.0, 32.0)),
+                color: Color::srgb(0.4, 0.9, 0.4), // Green tint for Goblin
                 ..default()
             },
             Transform::from_xyz(0.0, 0.0, 0.1),
@@ -517,6 +518,7 @@ fn spawn_turret_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32, asset
             Sprite {
                 image: assets.orc_shaman_idle[0].clone(),
                 custom_size: Some(Vec2::new(32.0, 46.0)),
+                color: Color::srgb(0.85, 0.85, 0.85), // Grey tint for Skeleton/Turret
                 ..default()
             },
             Transform::from_xyz(0.0, 0.0, 0.1),
@@ -563,6 +565,7 @@ fn spawn_charger_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32, asse
             Sprite {
                 image: assets.orc_warrior_idle[0].clone(),
                 custom_size: Some(Vec2::new(40.0, 46.0)),
+                color: Color::srgb(0.7, 0.45, 0.2), // Brown tint for Orc/Charger
                 ..default()
             },
             Transform::from_xyz(0.0, 0.0, 0.1),

@@ -3,7 +3,8 @@ use crate::{constants::*, GameState, PlayingEntity, RunData, player::Player, flo
     hazards::{spawn_lava_strip, spawn_water_strip, spawn_moving_platform, spawn_arrow_trap, spawn_spike_floor, spawn_poison_cloud},
     relic::{RelicChoiceState, RelicInventory, start_relic_choice},
     altar::{AltarState, AltarEntity, spawn_altar, check_altar_interaction},
-    audio::{PlaySfxEvent, SfxType}};
+    audio::{PlaySfxEvent, SfxType},
+    well::{WellAssets, spawn_well}};
 
 // ─── Tileset Assets ──────────────────────────────────────────────────────────
 
@@ -190,6 +191,7 @@ fn spawn_first_room(
     mut floor_complete: ResMut<FloorCompleteState>,
     resuming: Option<Res<crate::ResumingFromPause>>,
     tiles: Res<TilesetAssets>,
+    well_assets: Res<WellAssets>,
 ) {
     if resuming.is_some() { return; }
     // Reset floor complete overlay
@@ -210,12 +212,12 @@ fn spawn_first_room(
 
     start_timer.active = false;
 
-    spawn_room(&mut commands, &state, 0, &tiles);
+    spawn_room(&mut commands, &state, 0, &tiles, &well_assets);
 }
 
 // ─── Room Spawning ────────────────────────────────────────────────────────────
 
-fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize, tiles: &TilesetAssets) {
+fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize, tiles: &TilesetAssets, well_assets: &WellAssets) {
     let room_type = state.floor_layout.get(room_idx).copied().unwrap_or(RoomType::Combat);
     let seed = state.seed
         .wrapping_add(room_idx as u64)
@@ -351,6 +353,17 @@ fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize, tiles
         RoomType::Boss     => spawn_boss_room(commands, state.floor),
         RoomType::Shop     => spawn_shop_room(commands, seed),
         RoomType::Altar    => spawn_altar_room(commands, seed),
+    }
+
+    // Healing well: 30% chance in Combat and Treasure rooms (not Boss/Shop)
+    if matches!(room_type, RoomType::Combat | RoomType::Treasure) {
+        let well_roll = seed.wrapping_mul(48271).wrapping_add(room_idx as u64 * 101);
+        if well_roll % 100 < 30 {
+            let well_col = 5 + (well_roll % 14) as i32; // cols 5-18
+            let well_x = well_col as f32 * TILE_SIZE + TILE_SIZE / 2.0;
+            let well_y = TILE_SIZE; // on the floor
+            spawn_well(commands, well_x, well_y, well_assets);
+        }
     }
 }
 
@@ -1942,9 +1955,9 @@ fn spawn_boss_room(commands: &mut Commands, floor: i32) {
             RoomEntity, PlayingEntity,
         ));
     }
-    // Inner shorter pillars
-    spawn_pillar(commands, 8,  2, 5, pillar_color);
-    spawn_pillar(commands, 15, 2, 5, pillar_color);
+    // Inner shorter pillars (decorative, at the edges of the arena)
+    spawn_pillar(commands, 6,  5, 7, pillar_color);
+    spawn_pillar(commands, 17, 5, 7, pillar_color);
 
     // ── Torches on walls and pillars ──
     spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 6.0);
@@ -2136,6 +2149,21 @@ fn spawn_boss_crystal(commands: &mut Commands, x: f32, y: f32, phase_offset: f32
     ));
 }
 
+// ─── Safe Spawn Points ───────────────────────────────────────────────────────
+
+/// Returns a safe (x, y) spawn point for the player based on room type.
+/// Boss rooms spawn on top of the arena platform (row 4 → y = 5*TILE_SIZE).
+/// Other rooms use the default left-side spawn above the floor.
+fn safe_spawn_point(room_type: RoomType) -> (f32, f32) {
+    match room_type {
+        // Boss arena platform is at row 4 → top is y = 5*TILE_SIZE
+        // Spawn at col 5 (well away from lava at cols 2-3)
+        RoomType::Boss => (TILE_SIZE * 5.0, TILE_SIZE * 5.0 + 16.0),
+        // Default: left side, above floor
+        _ => (TILE_SIZE * 2.5, TILE_SIZE * 2.0),
+    }
+}
+
 // ─── Animation Systems ────────────────────────────────────────────────────────
 
 fn check_altar_proximity(
@@ -2246,6 +2274,7 @@ fn check_room_exit(
     mut relic_state: ResMut<RelicChoiceState>,
     relic_inventory: Res<RelicInventory>,
     tiles: Res<TilesetAssets>,
+    well_assets: Res<WellAssets>,
     mut ev_sfx: EventWriter<PlaySfxEvent>,
 ) {
     // Block room transitions while overlays are active
@@ -2306,11 +2335,12 @@ fn check_room_exit(
                 start_timer.active = false;
             }
 
-            spawn_room(&mut commands, &room_state, room_state.room_index, &tiles);
+            spawn_room(&mut commands, &room_state, room_state.room_index, &tiles, &well_assets);
 
-            // Teleport player to safe spawn (left side, above floor)
-            player_tf.translation.x = TILE_SIZE * 2.5;
-            player_tf.translation.y = TILE_SIZE * 2.0;
+            // Teleport player to safe spawn based on room type
+            let (spawn_x, spawn_y) = safe_spawn_point(room_state.current_type);
+            player_tf.translation.x = spawn_x;
+            player_tf.translation.y = spawn_y;
             player.vx = 0.0;
             player.vy = 0.0;
 
@@ -2330,6 +2360,7 @@ fn handle_advance_floor(
     mut player_q: Query<(&mut Player, &mut Transform), Without<ExitDoor>>,
     mut ev_transition: EventWriter<RoomTransition>,
     tiles: Res<TilesetAssets>,
+    well_assets: Res<WellAssets>,
 ) {
     for _ in ev.read() {
         // Despawn old room
@@ -2352,12 +2383,13 @@ fn handle_advance_floor(
         room_state.room_cleared = true;
         start_timer.active = false;
 
-        spawn_room(&mut commands, &room_state, 0, &tiles);
+        spawn_room(&mut commands, &room_state, 0, &tiles, &well_assets);
 
-        // Teleport player
+        // Teleport player to safe spawn
         if let Ok((mut player, mut tf)) = player_q.get_single_mut() {
-            tf.translation.x = TILE_SIZE * 2.5;
-            tf.translation.y = TILE_SIZE * 2.0;
+            let (sx, sy) = safe_spawn_point(room_state.current_type);
+            tf.translation.x = sx;
+            tf.translation.y = sy;
             player.vx = 0.0;
             player.vy = 0.0;
         }
