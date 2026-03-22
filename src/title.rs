@@ -22,6 +22,9 @@ impl Plugin for TitlePlugin {
                     well_glow_animate,
                     well_particle_emit,
                     update_well_particles,
+                    tree_sway_animate,
+                    star_twinkle_animate,
+                    fade_in_delay_system,
                 )
                     .run_if(in_state(GameState::Title)),
             )
@@ -105,6 +108,34 @@ struct WellParticleTimer {
 
 // ── Module 4: Intro Juice ────────────────────────────────────────
 
+// ── Module 5: Tree Sway ──────────────────────────────────────────
+
+#[derive(Component)]
+struct TreeSway {
+    speed: f32,
+    phase: f32,
+    base_angle: f32,
+}
+
+// ── Module 6: Twinkling Stars ────────────────────────────────────
+
+#[derive(Component)]
+struct TwinklingStar {
+    speed: f32,
+    phase: f32,
+    base_alpha: f32,
+}
+
+// ── Module 7: Fade-in Delay ──────────────────────────────────────
+
+#[derive(Component)]
+struct FadeInDelay {
+    delay: f32,
+    elapsed: f32,
+    fade_duration: f32,
+    target_alpha: f32,
+}
+
 #[derive(Component)]
 struct IntroAfterimage {
     lifetime: f32,
@@ -144,45 +175,65 @@ fn setup_title(
         TitleEntity,
     ));
 
-    // Stars (parallax: very far back)
-    for _ in 0..60 {
+    // Stars (parallax: very far back) — 110 stars with size weighting + twinkle
+    for _ in 0..110 {
         let x = rng.gen_range(-VIEWPORT_W / 2.0..VIEWPORT_W / 2.0);
-        let y = rng.gen_range(20.0..VIEWPORT_H / 2.0);
-        let b = rng.gen_range(0.2..0.9_f32);
-        let sz = rng.gen_range(1.0..3.0_f32);
+        let y = rng.gen_range(-20.0..VIEWPORT_H / 2.0);
+        let b = rng.gen_range(0.25..0.95_f32);
+        // Weighted size: 60% at 1px, 25% at 2px, 15% at 3px
+        let roll = rng.gen_range(0.0..1.0_f32);
+        let sz: f32 = if roll < 0.60 { 1.0 } else if roll < 0.85 { 2.0 } else { 3.0 };
+        let speed = rng.gen_range(0.4..1.6_f32);
+        let phase = rng.gen_range(0.0..std::f32::consts::TAU);
+        let base_alpha = b;
         commands.spawn((
             Sprite {
-                color: Color::srgba(b, b * 0.9, b * 0.7, b),
+                color: Color::srgba(b, b * 0.9, b * 0.7, base_alpha),
                 custom_size: Some(Vec2::new(sz, sz)),
                 ..default()
             },
             Transform::from_xyz(x, y, Z_BACKGROUND + 0.5),
             TitleEntity,
             ParallaxLayer { depth: 0.1, base_x: x },
+            TwinklingStar { speed, phase, base_alpha },
         ));
     }
 
-    // Moon (parallax: far)
+    // Moon (parallax: far) — full circle with soft glow halos
     let moon_x = 280.0;
+    let moon_y = 180.0;
+    // Outer softest glow (120x120)
     commands.spawn((
         Sprite {
-            color: Color::srgba(0.95, 0.75, 0.35, 0.9),
-            custom_size: Some(Vec2::new(40.0, 40.0)),
+            color: Color::srgba(0.8, 0.75, 0.5, 0.03),
+            custom_size: Some(Vec2::new(120.0, 120.0)),
             ..default()
         },
-        Transform::from_xyz(moon_x, 180.0, Z_BACKGROUND + 0.8),
+        Transform::from_xyz(moon_x, moon_y, Z_BACKGROUND + 0.6),
         TitleEntity,
         ParallaxLayer { depth: 0.15, base_x: moon_x },
     ));
+    // Inner glow (80x80)
     commands.spawn((
         Sprite {
-            color: Color::srgb(0.06, 0.03, 0.02),
-            custom_size: Some(Vec2::new(34.0, 34.0)),
+            color: Color::srgba(1.0, 0.95, 0.7, 0.08),
+            custom_size: Some(Vec2::new(80.0, 80.0)),
             ..default()
         },
-        Transform::from_xyz(moon_x + 8.0, 184.0, Z_BACKGROUND + 0.9),
+        Transform::from_xyz(moon_x, moon_y, Z_BACKGROUND + 0.7),
         TitleEntity,
-        ParallaxLayer { depth: 0.15, base_x: moon_x + 8.0 },
+        ParallaxLayer { depth: 0.15, base_x: moon_x },
+    ));
+    // Moon disc (40x40)
+    commands.spawn((
+        Sprite {
+            color: Color::srgb(1.0, 0.95, 0.7),
+            custom_size: Some(Vec2::new(40.0, 40.0)),
+            ..default()
+        },
+        Transform::from_xyz(moon_x, moon_y, Z_BACKGROUND + 0.8),
+        TitleEntity,
+        ParallaxLayer { depth: 0.15, base_x: moon_x },
     ));
 
     // Far hills (parallax: background)
@@ -223,6 +274,57 @@ fn setup_title(
         Transform::from_xyz(0.0, ground_y + 52.5, Z_BACKGROUND + 3.0),
         TitleEntity,
     ));
+
+    // Ground decorations: stones and grass tufts along the ground line
+    {
+        let deco_y = ground_y + 52.5; // top of ground line
+        // Stones
+        for _ in 0..6 {
+            // Avoid center 60px where the well sits
+            let x_range_pick = rng.gen_range(0..2_u8);
+            let x: f32 = if x_range_pick == 0 {
+                rng.gen_range(-VIEWPORT_W / 2.0 + 20.0..-35.0)
+            } else {
+                rng.gen_range(35.0..VIEWPORT_W / 2.0 - 20.0)
+            };
+            let sw = rng.gen_range(3.0..7.0_f32);
+            let sh = rng.gen_range(2.0..5.0_f32);
+            commands.spawn((
+                Sprite {
+                    color: Color::srgb(0.18, 0.14, 0.10),
+                    custom_size: Some(Vec2::new(sw, sh)),
+                    ..default()
+                },
+                Transform::from_xyz(x, deco_y + sh / 2.0 + rng.gen_range(1.0..4.0_f32), Z_BACKGROUND + 3.5),
+                TitleEntity,
+            ));
+        }
+        // Grass tufts
+        for _ in 0..8 {
+            let x_range_pick = rng.gen_range(0..2_u8);
+            let x: f32 = if x_range_pick == 0 {
+                rng.gen_range(-VIEWPORT_W / 2.0 + 20.0..-35.0)
+            } else {
+                rng.gen_range(35.0..VIEWPORT_W / 2.0 - 20.0)
+            };
+            let gw = rng.gen_range(2.0..5.0_f32);
+            let gh = rng.gen_range(4.0..9.0_f32);
+            let angle = rng.gen_range(-0.25..0.25_f32);
+            commands.spawn((
+                Sprite {
+                    color: Color::srgb(0.15, 0.22, 0.08),
+                    custom_size: Some(Vec2::new(gw, gh)),
+                    ..default()
+                },
+                Transform {
+                    translation: Vec3::new(x, deco_y + gh / 2.0 + rng.gen_range(0.5..2.5_f32), Z_BACKGROUND + 3.5),
+                    rotation: Quat::from_rotation_z(angle),
+                    scale: Vec3::ONE,
+                },
+                TitleEntity,
+            ));
+        }
+    }
 
     // Well sprite (parallax: foreground)
     // Use Well2 (empty) if player has completed at least one run, else Well1 (full)
@@ -279,40 +381,86 @@ fn setup_title(
         well_y: well_base_y + 25.0,
     });
 
-    // Trees (parallax: mid-ground)
-    for &(x_off, h_min, h_max) in &[
-        (-320.0_f32, 100.0, 150.0),
-        (-240.0, 80.0, 130.0),
-        (-160.0, 120.0, 160.0),
-        (160.0, 110.0, 155.0),
-        (250.0, 90.0, 140.0),
-        (340.0, 100.0, 150.0),
-    ] {
+    // Trees (parallax: mid-ground) — dark silhouette style with 3 variants and sway
+    // Variant data: (x_off, h_min, h_max, trunk_w_min, trunk_w_max, variant)
+    // variant 0=tall narrow, 1=medium broad, 2=small bushy
+    let tree_defs: &[(f32, f32, f32, f32, f32, u8)] = &[
+        (-340.0, 120.0, 160.0, 9.0, 13.0, 0),
+        (-255.0,  80.0, 120.0, 13.0, 19.0, 1),
+        (-170.0, 100.0, 140.0, 10.0, 15.0, 2),
+        ( 170.0, 110.0, 150.0, 11.0, 16.0, 1),
+        ( 260.0,  85.0, 125.0, 12.0, 18.0, 2),
+        ( 345.0, 115.0, 155.0, 8.0,  12.0, 0),
+    ];
+    for &(x_off, h_min, h_max, tw_min, tw_max, variant) in tree_defs {
         let h: f32 = rng.gen_range(h_min..h_max);
-        let trunk_w: f32 = rng.gen_range(10.0..18.0);
-        // Trees further from center get less parallax depth (further back)
-        let depth = if x_off.abs() > 280.0 { 0.35 } else { 0.5 };
+        let trunk_w: f32 = rng.gen_range(tw_min..tw_max);
+        let depth = if x_off.abs() > 290.0 { 0.32 } else { 0.48 };
+        let sway_speed = rng.gen_range(0.3..0.7_f32);
+        let sway_phase = rng.gen_range(0.0..std::f32::consts::TAU);
+        let base_angle: f32 = rng.gen_range(-0.015..0.015);
+        let trunk_z = Z_BACKGROUND + 1.5;
+        let canopy_z = Z_BACKGROUND + 1.6;
+
+        // Trunk
         commands.spawn((
             Sprite {
-                color: Color::srgb(0.12, 0.07, 0.03),
+                color: Color::srgb(0.06, 0.04, 0.02),
                 custom_size: Some(Vec2::new(trunk_w, h)),
                 ..default()
             },
-            Transform::from_xyz(x_off, well_base_y + h / 2.0, Z_BACKGROUND + 1.5),
+            Transform {
+                translation: Vec3::new(x_off, well_base_y + h / 2.0, trunk_z),
+                rotation: Quat::from_rotation_z(base_angle),
+                scale: Vec3::ONE,
+            },
             TitleEntity,
             ParallaxLayer { depth, base_x: x_off },
+            TreeSway { speed: sway_speed, phase: sway_phase, base_angle },
         ));
-        let canopy_w: f32 = rng.gen_range(40.0..65.0);
-        let canopy_h: f32 = rng.gen_range(35.0..55.0);
+
+        // Primary canopy
+        let (cw, ch) = match variant {
+            0 => (rng.gen_range(28.0..42.0_f32), rng.gen_range(55.0..80.0_f32)), // tall narrow
+            1 => (rng.gen_range(50.0..70.0_f32), rng.gen_range(35.0..52.0_f32)), // medium broad
+            _ => (rng.gen_range(42.0..58.0_f32), rng.gen_range(42.0..62.0_f32)), // small bushy
+        };
+        let canopy_phase2 = sway_phase + 0.3;
         commands.spawn((
             Sprite {
-                color: Color::srgb(0.55, 0.25, 0.08),
-                custom_size: Some(Vec2::new(canopy_w, canopy_h)),
+                color: Color::srgb(0.08, 0.06, 0.03),
+                custom_size: Some(Vec2::new(cw, ch)),
                 ..default()
             },
-            Transform::from_xyz(x_off, well_base_y + h - 5.0, Z_BACKGROUND + 1.6),
+            Transform {
+                translation: Vec3::new(x_off, well_base_y + h - ch * 0.3, canopy_z),
+                rotation: Quat::from_rotation_z(base_angle),
+                scale: Vec3::ONE,
+            },
             TitleEntity,
             ParallaxLayer { depth, base_x: x_off },
+            TreeSway { speed: sway_speed * 1.15, phase: canopy_phase2, base_angle },
+        ));
+
+        // Second canopy layer (slightly offset for depth)
+        let cw2 = cw * rng.gen_range(0.65..0.80_f32);
+        let ch2 = ch * rng.gen_range(0.55..0.75_f32);
+        let cx2_off = rng.gen_range(-8.0..8.0_f32);
+        let canopy_phase3 = sway_phase + 0.6;
+        commands.spawn((
+            Sprite {
+                color: Color::srgb(0.07, 0.05, 0.025),
+                custom_size: Some(Vec2::new(cw2, ch2)),
+                ..default()
+            },
+            Transform {
+                translation: Vec3::new(x_off + cx2_off, well_base_y + h - ch * 0.15, canopy_z + 0.05),
+                rotation: Quat::from_rotation_z(base_angle + 0.05),
+                scale: Vec3::ONE,
+            },
+            TitleEntity,
+            ParallaxLayer { depth, base_x: x_off + cx2_off },
+            TreeSway { speed: sway_speed * 1.3, phase: canopy_phase3, base_angle: base_angle + 0.05 },
         ));
     }
 
@@ -352,16 +500,25 @@ fn setup_title(
         Transform::from_xyz(0.0, 120.0, Z_HUD),
         TitleEntity,
     ));
+    // Controls text — fades in after 2 seconds
     commands.spawn((
         Text2d::new("A/D Move  Space Jump  J Melee  K Block  Shift Dash  1-4 Spells  Gamepad OK"),
         TextFont { font: f.clone(), font_size: 6.0, ..default() },
-        TextColor(Color::srgb(0.45, 0.35, 0.25)),
+        TextColor(Color::srgba(0.45, 0.35, 0.25, 0.0)),
         Transform::from_xyz(0.0, -200.0, Z_HUD),
         TitleEntity,
+        FadeInDelay { delay: 2.0, elapsed: 0.0, fade_duration: 1.0, target_alpha: 1.0 },
     ));
-    // "Press SPACE" with PulsingAlpha component (Module 2)
+
+    // "Press SPACE" with PulsingAlpha — text changes based on whether any save exists
+    let any_save = load_slot(0).is_some() || load_slot(1).is_some() || load_slot(2).is_some();
+    let prompt_text = if any_save {
+        "- Press SPACE to continue -"
+    } else {
+        "- Press SPACE to descend -"
+    };
     commands.spawn((
-        Text2d::new("- Press SPACE to descend -"),
+        Text2d::new(prompt_text),
         TextFont { font: f.clone(), font_size: 10.0, ..default() },
         TextColor(Color::srgba(0.95, 0.7, 0.25, 1.0)),
         Transform::from_xyz(0.0, -230.0, Z_HUD),
@@ -370,14 +527,25 @@ fn setup_title(
         PulsingAlpha { speed: 2.5, min_alpha: 0.3, max_alpha: 1.0 },
     ));
 
-    // Settings hint (static, dimmer)
+    // Bottom hints: "[S] Settings    [Q] Quit"
     commands.spawn((
-        Text2d::new("[S] Settings"),
+        Text2d::new("[S] Settings    [Q] Quit"),
         TextFont { font: f.clone(), font_size: 7.0, ..default() },
         TextColor(Color::srgba(0.55, 0.45, 0.30, 0.7)),
         Transform::from_xyz(0.0, -248.0, Z_HUD),
         TitleEntity,
     ));
+
+    // Best run display (bottom-left), only if runs completed
+    if meta.runs_completed > 0 {
+        commands.spawn((
+            Text2d::new(format!("Best: Floor {}  |  Runs: {}", meta.best_floor, meta.runs_completed)),
+            TextFont { font: f.clone(), font_size: 7.0, ..default() },
+            TextColor(Color::srgb(0.45, 0.38, 0.3)),
+            Transform::from_xyz(-VIEWPORT_W / 2.0 + 100.0, -248.0, Z_HUD),
+            TitleEntity,
+        ));
+    }
 }
 
 fn spawn_logo(commands: &mut Commands) {
@@ -752,6 +920,55 @@ fn update_well_particles(
     }
 }
 
+// ── Module 5: Tree sway ───────────────────────────────────────────
+
+fn tree_sway_animate(
+    time: Res<Time>,
+    mut query: Query<(&TreeSway, &mut Transform)>,
+) {
+    let t = time.elapsed_secs();
+    for (sway, mut tf) in &mut query {
+        // ±2 degrees (0.035 rad) gentle oscillation
+        let angle = sway.base_angle + (t * sway.speed + sway.phase).sin() * 0.035;
+        tf.rotation = Quat::from_rotation_z(angle);
+    }
+}
+
+// ── Module 6: Star twinkle ────────────────────────────────────────
+
+fn star_twinkle_animate(
+    time: Res<Time>,
+    mut query: Query<(&TwinklingStar, &mut Sprite)>,
+) {
+    let t = time.elapsed_secs();
+    for (star, mut sprite) in &mut query {
+        let wave = (t * star.speed + star.phase).sin() * 0.5 + 0.5; // 0..1
+        let alpha = (star.base_alpha + wave * 0.3 - 0.15).clamp(0.05, 1.0);
+        let c = sprite.color.to_srgba();
+        sprite.color = Color::srgba(c.red, c.green, c.blue, alpha);
+    }
+}
+
+// ── Module 7: Fade-in delay ───────────────────────────────────────
+
+fn fade_in_delay_system(
+    time: Res<Time>,
+    mut query: Query<(&mut FadeInDelay, &mut TextColor)>,
+) {
+    let dt = time.delta_secs();
+    for (mut fid, mut color) in &mut query {
+        fid.elapsed += dt;
+        let alpha = if fid.elapsed < fid.delay {
+            0.0
+        } else {
+            let t = ((fid.elapsed - fid.delay) / fid.fade_duration).clamp(0.0, 1.0);
+            t * fid.target_alpha
+        };
+        let c = color.0.to_srgba();
+        color.0 = Color::srgba(c.red, c.green, c.blue, alpha);
+    }
+}
+
 // ── Title input (Module 2: pulse extracted to separate system) ───
 
 fn handle_title_input(
@@ -763,6 +980,7 @@ fn handle_title_input(
     settings_q: Query<Entity, With<SettingsPanel>>,
     audio: Res<AudioSettings>,
     windows: Query<&Window>,
+    mut app_exit: EventWriter<AppExit>,
 ) {
     // Block all title input while slot menu or settings are open.
     if slot_state.open { return; }
@@ -787,6 +1005,12 @@ fn handle_title_input(
         });
         commands.insert_resource(SettingsState::default());
         spawn_settings_panel(&mut commands, &font.0, &audio, is_fullscreen);
+        return;
+    }
+
+    // Q → quit the game cleanly
+    if keys.just_pressed(KeyCode::KeyQ) {
+        app_exit.send(AppExit::Success);
     }
 }
 
