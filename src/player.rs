@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::{constants::*, GameState, PlayingEntity, MetaProgression, LoadedSave, equipment::{PlayerStats, ItemId, Equipment}, shop::ShopUiState, audio::{PlaySfxEvent, SfxType}, game_feel::{ShakeEvent, AttackPulse}};
+use crate::{constants::*, GameState, PlayingEntity, MetaProgression, LoadedSave, equipment::{PlayerStats, ItemId, Equipment}, shop::ShopUiState, inventory::InventoryOpen, audio::{PlaySfxEvent, SfxType}, game_feel::{ShakeEvent, AttackPulse}};
 
 // ─── Sprite Assets ───────────────────────────────────────────────────────────
 
@@ -306,11 +306,12 @@ fn player_input(
     time: Res<Time>,
     stats: Res<PlayerStats>,
     shop_state: Option<Res<ShopUiState>>,
+    inv_open: Option<Res<InventoryOpen>>,
     weapon_sprite_q: Query<Entity, With<WeaponSprite>>,
 ) {
     let Ok((player_entity, mut player, tf)) = query.get_single_mut() else { return };
-    // Block player movement/actions while shop overlay is open
-    if shop_state.map_or(false, |s| s.active) {
+    // Block player movement/actions while shop or inventory overlay is open
+    if shop_state.map_or(false, |s| s.active) || inv_open.is_some() {
         player.vx = 0.0;
         return;
     }

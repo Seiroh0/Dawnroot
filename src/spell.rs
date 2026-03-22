@@ -325,20 +325,21 @@ fn spell_input(
             // ----------------------------------------------------------------
             SpellId::IceShards => {
                 let spread = 0.3;
+                let ice_color = Color::srgba(0.5, 0.85, 1.0, 0.9);
                 for j in 0..ICE_SHARD_COUNT {
                     let angle = (j as f32 - 1.0) * spread;
                     let dir_x = player.facing * angle.cos();
                     let dir_y = angle.sin();
 
-                    // Rotate the shard sprite to match its travel direction.
+                    // Rotate the shard to match its travel direction.
                     let rotation = Quat::from_rotation_z(
                         if player.facing >= 0.0 { -angle } else { std::f32::consts::PI + angle }
                     );
 
                     commands.spawn((
                         Sprite {
-                            image: spell_assets.ice[0].clone(),
-                            custom_size: Some(Vec2::new(24.0, 24.0)),
+                            color: ice_color,
+                            custom_size: Some(Vec2::new(14.0, 6.0)),
                             ..default()
                         },
                         Transform {
@@ -358,13 +359,6 @@ fn spell_input(
                             spell: SpellId::IceShards,
                         },
                         FrostTrail { timer: 0.0 },
-                        SpellAnimState {
-                            frames: spell_assets.ice.clone(),
-                            frame: 0,
-                            timer: 0.0,
-                            fps: 12.0,
-                            looping: true,
-                        },
                         PlayingEntity,
                     ));
                 }
@@ -384,6 +378,7 @@ fn spell_input(
                 commands.spawn((
                     Sprite {
                         image: spell_assets.lightning[0].clone(),
+                        color: Color::srgb(1.0, 0.95, 0.3),
                         custom_size: Some(Vec2::new(LIGHTNING_RADIUS * 2.0, LIGHTNING_RADIUS * 2.0)),
                         ..default()
                     },
@@ -433,7 +428,7 @@ fn spell_input(
                         let sy = seg_offset.sin() * orbit_radius;
                         ring.spawn((
                             Sprite {
-                                color: Color::srgba(0.5, 0.85, 1.0, 0.85),
+                                color: Color::srgba(1.0, 0.9, 0.3, 0.85),
                                 custom_size: Some(Vec2::new(5.0, 9.0)),
                                 ..default()
                             },

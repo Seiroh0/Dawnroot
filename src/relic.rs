@@ -58,7 +58,7 @@ pub enum Relic {
 }
 
 impl Relic {
-    fn name(&self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         match self {
             Relic::BerserkersEdge => "Berserker's Edge",
             Relic::VampiricFang => "Vampiric Fang",
@@ -73,7 +73,7 @@ impl Relic {
         }
     }
 
-    fn description(&self) -> &'static str {
+    pub fn description(&self) -> &'static str {
         match self {
             Relic::BerserkersEdge => "+15% Crit Chance",
             Relic::VampiricFang => "Heal 1 HP per 5 kills",
@@ -88,7 +88,7 @@ impl Relic {
         }
     }
 
-    fn color(&self) -> Color {
+    pub fn color(&self) -> Color {
         match self {
             Relic::BerserkersEdge => Color::srgb(0.9, 0.3, 0.2),
             Relic::VampiricFang => Color::srgb(0.7, 0.1, 0.3),

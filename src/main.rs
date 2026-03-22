@@ -22,6 +22,7 @@ mod relic;
 mod altar;
 mod game_feel;
 mod well;
+mod inventory;
 
 use bevy::prelude::*;
 use constants::*;
@@ -159,6 +160,7 @@ fn main() {
             game_feel::GameFeelPlugin,
             well::WellPlugin,
         ))
+        .add_plugins(inventory::InventoryPlugin)
         .add_systems(OnEnter(GameState::Playing), (setup_run, apply_loaded_save).chain())
         .add_systems(OnEnter(GameState::GameOver), (cleanup_gameplay, on_game_over).chain())
         .add_systems(OnEnter(GameState::Title), cleanup_gameplay)
@@ -251,6 +253,7 @@ fn cleanup_gameplay(
     }
     commands.remove_resource::<LoadedSave>();
     commands.remove_resource::<DeferredSaveCleanup>();
+    commands.remove_resource::<inventory::InventoryOpen>();
 }
 
 fn on_game_over(
