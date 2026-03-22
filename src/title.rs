@@ -25,6 +25,7 @@ impl Plugin for TitlePlugin {
                     tree_sway_animate,
                     star_twinkle_animate,
                     fade_in_delay_system,
+                    update_falling_leaves,
                 )
                     .run_if(in_state(GameState::Title)),
             )
@@ -107,6 +108,18 @@ struct WellParticleTimer {
 }
 
 // ── Module 4: Intro Juice ────────────────────────────────────────
+
+// ── Falling autumn leaves ────────────────────────────────────────
+
+#[derive(Component)]
+struct FallingLeaf {
+    vx: f32,
+    vy: f32,
+    spin: f32,
+    sway_phase: f32,
+    lifetime: f32,
+    max_lifetime: f32,
+}
 
 // ── Module 5: Tree Sway ──────────────────────────────────────────
 
@@ -392,6 +405,15 @@ fn setup_title(
         ( 260.0,  85.0, 125.0, 12.0, 18.0, 2),
         ( 345.0, 115.0, 155.0, 8.0,  12.0, 0),
     ];
+    // Autumn canopy palette
+    let autumn_colors: [(f32, f32, f32); 5] = [
+        (0.85, 0.40, 0.05), // deep orange
+        (0.75, 0.18, 0.08), // warm red
+        (0.90, 0.70, 0.10), // golden yellow
+        (0.65, 0.28, 0.08), // rust brown
+        (0.72, 0.50, 0.12), // dark ochre
+    ];
+
     for &(x_off, h_min, h_max, tw_min, tw_max, variant) in tree_defs {
         let h: f32 = rng.gen_range(h_min..h_max);
         let trunk_w: f32 = rng.gen_range(tw_min..tw_max);
@@ -402,10 +424,17 @@ fn setup_title(
         let trunk_z = Z_BACKGROUND + 3.5;
         let canopy_z = Z_BACKGROUND + 3.6;
 
+        // Pick a random autumn color for this tree
+        let ci = rng.gen_range(0..autumn_colors.len());
+        let (cr, cg, cb) = autumn_colors[ci];
+        // Secondary canopy gets a different autumn color
+        let ci2 = (ci + rng.gen_range(1..autumn_colors.len())) % autumn_colors.len();
+        let (cr2, cg2, cb2) = autumn_colors[ci2];
+
         // Trunk
         commands.spawn((
             Sprite {
-                color: Color::srgb(0.45, 0.28, 0.12),
+                color: Color::srgb(0.35, 0.20, 0.08),
                 custom_size: Some(Vec2::new(trunk_w, h)),
                 ..default()
             },
@@ -428,7 +457,7 @@ fn setup_title(
         let canopy_phase2 = sway_phase + 0.3;
         commands.spawn((
             Sprite {
-                color: Color::srgb(0.25, 0.55, 0.15),
+                color: Color::srgb(cr, cg, cb),
                 custom_size: Some(Vec2::new(cw, ch)),
                 ..default()
             },
@@ -442,14 +471,14 @@ fn setup_title(
             TreeSway { speed: sway_speed * 1.15, phase: canopy_phase2, base_angle },
         ));
 
-        // Second canopy layer (slightly offset for depth)
+        // Second canopy layer (slightly offset, different autumn color)
         let cw2 = cw * rng.gen_range(0.65..0.80_f32);
         let ch2 = ch * rng.gen_range(0.55..0.75_f32);
         let cx2_off = rng.gen_range(-8.0..8.0_f32);
         let canopy_phase3 = sway_phase + 0.6;
         commands.spawn((
             Sprite {
-                color: Color::srgb(0.18, 0.42, 0.10),
+                color: Color::srgb(cr2 * 0.8, cg2 * 0.8, cb2 * 0.8),
                 custom_size: Some(Vec2::new(cw2, ch2)),
                 ..default()
             },
@@ -461,6 +490,37 @@ fn setup_title(
             TitleEntity,
             ParallaxLayer { depth, base_x: x_off + cx2_off },
             TreeSway { speed: sway_speed * 1.3, phase: canopy_phase3, base_angle: base_angle + 0.05 },
+        ));
+    }
+
+    // Falling autumn leaf particles (subtle, 7 initial)
+    for _ in 0..7 {
+        let ci = rng.gen_range(0..autumn_colors.len());
+        let (lr, lg, lb) = autumn_colors[ci];
+        let x = rng.gen_range(-VIEWPORT_W / 2.5..VIEWPORT_W / 2.5);
+        let y = rng.gen_range(-VIEWPORT_H / 4.0..VIEWPORT_H / 2.5);
+        let sz = rng.gen_range(2.5..5.0_f32);
+        let lt = rng.gen_range(4.0..9.0_f32);
+        commands.spawn((
+            Sprite {
+                color: Color::srgba(lr, lg, lb, 0.7),
+                custom_size: Some(Vec2::new(sz, sz * 0.6)),
+                ..default()
+            },
+            Transform {
+                translation: Vec3::new(x, y, Z_BACKGROUND + 6.0),
+                rotation: Quat::from_rotation_z(rng.gen_range(0.0..std::f32::consts::TAU)),
+                scale: Vec3::ONE,
+            },
+            TitleEntity,
+            FallingLeaf {
+                vx: rng.gen_range(-12.0..12.0),
+                vy: rng.gen_range(-18.0..-8.0),
+                spin: rng.gen_range(-1.5..1.5),
+                sway_phase: rng.gen_range(0.0..std::f32::consts::TAU),
+                lifetime: lt,
+                max_lifetime: lt,
+            },
         ));
     }
 
@@ -955,6 +1015,33 @@ fn fade_in_delay_system(
         };
         let c = color.0.to_srgba();
         color.0 = Color::srgba(c.red, c.green, c.blue, alpha);
+    }
+}
+
+// ── Falling leaf update ───────────────────────────────────────────
+
+fn update_falling_leaves(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Transform, &mut Sprite, &mut FallingLeaf)>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs();
+    let t = time.elapsed_secs();
+    for (entity, mut tf, mut sprite, mut leaf) in &mut query {
+        leaf.lifetime -= dt;
+        if leaf.lifetime <= 0.0 {
+            commands.entity(entity).despawn();
+            continue;
+        }
+        // Lateral sway
+        let sway = (t * 1.5 + leaf.sway_phase).sin() * 15.0;
+        tf.translation.x += (leaf.vx + sway) * dt;
+        tf.translation.y += leaf.vy * dt;
+        tf.rotation *= Quat::from_rotation_z(leaf.spin * dt);
+        // Fade out in last 20% of lifetime
+        let alpha = (leaf.lifetime / leaf.max_lifetime).clamp(0.0, 1.0).min(1.0) * 0.7;
+        let c = sprite.color.to_srgba();
+        sprite.color = Color::srgba(c.red, c.green, c.blue, alpha);
     }
 }
 
