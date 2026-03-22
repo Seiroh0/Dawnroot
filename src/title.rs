@@ -399,13 +399,13 @@ fn setup_title(
         let sway_speed = rng.gen_range(0.3..0.7_f32);
         let sway_phase = rng.gen_range(0.0..std::f32::consts::TAU);
         let base_angle: f32 = rng.gen_range(-0.015..0.015);
-        let trunk_z = Z_BACKGROUND + 1.5;
-        let canopy_z = Z_BACKGROUND + 1.6;
+        let trunk_z = Z_BACKGROUND + 3.5;
+        let canopy_z = Z_BACKGROUND + 3.6;
 
         // Trunk
         commands.spawn((
             Sprite {
-                color: Color::srgb(0.06, 0.04, 0.02),
+                color: Color::srgb(0.45, 0.28, 0.12),
                 custom_size: Some(Vec2::new(trunk_w, h)),
                 ..default()
             },
@@ -428,7 +428,7 @@ fn setup_title(
         let canopy_phase2 = sway_phase + 0.3;
         commands.spawn((
             Sprite {
-                color: Color::srgb(0.08, 0.06, 0.03),
+                color: Color::srgb(0.25, 0.55, 0.15),
                 custom_size: Some(Vec2::new(cw, ch)),
                 ..default()
             },
@@ -449,12 +449,12 @@ fn setup_title(
         let canopy_phase3 = sway_phase + 0.6;
         commands.spawn((
             Sprite {
-                color: Color::srgb(0.07, 0.05, 0.025),
+                color: Color::srgb(0.18, 0.42, 0.10),
                 custom_size: Some(Vec2::new(cw2, ch2)),
                 ..default()
             },
             Transform {
-                translation: Vec3::new(x_off + cx2_off, well_base_y + h - ch * 0.15, canopy_z + 0.05),
+                translation: Vec3::new(x_off + cx2_off, well_base_y + h - ch * 0.15, canopy_z + 0.1),
                 rotation: Quat::from_rotation_z(base_angle + 0.05),
                 scale: Vec3::ONE,
             },
