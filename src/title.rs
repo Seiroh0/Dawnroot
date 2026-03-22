@@ -481,7 +481,7 @@ fn setup_title(
     }
 
     // Title logo
-    spawn_logo(&mut commands);
+    spawn_logo(&mut commands, &asset_server);
     let f = font.0.clone();
     // Subtitle backdrop
     commands.spawn((
@@ -548,56 +548,45 @@ fn setup_title(
     }
 }
 
-fn spawn_logo(commands: &mut Commands) {
+fn spawn_logo(commands: &mut Commands, asset_server: &AssetServer) {
     let parent = commands.spawn((
         Transform::from_xyz(0.0, 160.0, Z_HUD),
         Visibility::Visible,
         TitleEntity,
     )).id();
 
-    // ── Sun half-circle ──────────────────────────────────────────────
-    let sun_cx: f32 = 0.0;
-    let sun_base_y: f32 = 38.0;
-    let bar_h: f32 = 7.0;
-    let sun_rows: &[(f32, f32, f32, f32, f32)] = &[
-        (48.0, 0.55, 0.22, 0.04, 0.0),
-        (46.0, 0.62, 0.28, 0.06, 7.0),
-        (43.0, 0.70, 0.35, 0.07, 14.0),
-        (38.0, 0.78, 0.44, 0.08, 21.0),
-        (32.0, 0.86, 0.55, 0.10, 28.0),
-        (24.0, 0.92, 0.65, 0.14, 35.0),
-        (15.0, 0.96, 0.76, 0.20, 42.0),
-        ( 6.0, 1.00, 0.88, 0.35, 49.0),
-    ];
-    for &(hw, r, g, b, dy) in sun_rows {
-        let child = commands.spawn((
-            Sprite {
-                color: Color::srgb(r, g, b),
-                custom_size: Some(Vec2::new(hw * 2.0, bar_h + 1.0)),
-                ..default()
-            },
-            Transform::from_xyz(sun_cx, sun_base_y + dy, 0.2),
-            TitleEntity,
-        )).id();
-        commands.entity(parent).add_child(child);
-    }
-
-    // Sun glow halo
+    // ── Logo image (loaded from assets/logo.png) ─────────────────────
+    let logo_size = 120.0; // fits nicely above DAWNROOT text
+    let logo_y = 52.0; // centered above text
     {
+        // Glow halo behind logo
         let child = commands.spawn((
             Sprite {
                 color: Color::srgba(0.70, 0.38, 0.05, 0.18),
-                custom_size: Some(Vec2::new(140.0, 80.0)),
+                custom_size: Some(Vec2::new(180.0, 160.0)),
                 ..default()
             },
-            Transform::from_xyz(sun_cx, sun_base_y + 20.0, 0.05),
+            Transform::from_xyz(0.0, logo_y, 0.05),
+            TitleEntity,
+        )).id();
+        commands.entity(parent).add_child(child);
+    }
+    {
+        let child = commands.spawn((
+            Sprite {
+                image: asset_server.load("logo.png"),
+                custom_size: Some(Vec2::new(logo_size, logo_size)),
+                ..default()
+            },
+            Transform::from_xyz(0.0, logo_y, 0.3),
             TitleEntity,
         )).id();
         commands.entity(parent).add_child(child);
     }
 
-    // Sun rays
-    let ray_origin_y: f32 = sun_base_y + 20.0;
+    // Sun rays (emanate from behind the logo)
+    let sun_cx: f32 = 0.0;
+    let ray_origin_y: f32 = logo_y;
     let ray_angles: &[(f32, f32, f32)] = &[
         (-0.90, 52.0, 3.0),
         (-0.62, 58.0, 2.5),
