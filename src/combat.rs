@@ -92,7 +92,7 @@ fn apply_lifesteal(player: &mut Player, damage: i32, lifesteal: f32) {
 
 fn melee_vs_enemy(
     mut commands: Commands,
-    hitbox_q: Query<(&Transform, &MeleeHitbox)>,
+    mut hitbox_q: Query<(&Transform, &mut MeleeHitbox)>,
     mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite, Option<&Intangible>, Option<&SlimeEnemy>, Option<&crate::enemy::BossEnemy>)>,
     mut ev_defeated: EventWriter<EnemyDefeated>,
     mut ev_dmg: EventWriter<DamageNumberEvent>,
@@ -106,15 +106,18 @@ fn melee_vs_enemy(
     mut player_q: Query<&mut Player>,
     assets: Res<EnemySpriteAssets>,
 ) {
-    for (h_tf, hitbox) in &hitbox_q {
+    for (h_tf, mut hitbox) in &mut hitbox_q {
         for (e_entity, e_tf, mut enemy, sprite, intangible, slime, boss) in &mut enemy_q {
             if intangible.is_some() { continue; }
+            // Skip enemies already hit by this swing
+            if hitbox.hit_entities.contains(&e_entity) { continue; }
             let e_size = sprite.custom_size.unwrap_or(Vec2::new(20.0, 20.0));
             let dist = (h_tf.translation.xy() - e_tf.translation.xy()).abs();
 
             if dist.x < MELEE_RANGE / 2.0 + e_size.x / 2.0
                 && dist.y < MELEE_WIDTH / 2.0 + e_size.y / 2.0
             {
+                hitbox.hit_entities.push(e_entity);
                 let (total_dmg, is_crit) = calc_damage(hitbox.damage, &stats);
                 enemy.health -= total_dmg;
                 ev_sfx.send(PlaySfxEvent(SfxType::MeleeHit));

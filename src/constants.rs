@@ -43,7 +43,7 @@ pub const BLOCK_DAMAGE_REDUCTION: f32 = 0.7; // blocks 70% of damage
 // Melee attack
 pub const MELEE_RANGE: f32 = 36.0;
 pub const MELEE_WIDTH: f32 = 28.0;
-pub const MELEE_DAMAGE: i32 = 1;
+pub const MELEE_DAMAGE: i32 = 2;
 pub const MELEE_COOLDOWN: f32 = 0.35;
 pub const MELEE_ACTIVE_TIME: f32 = 0.1;
 

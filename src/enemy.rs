@@ -498,8 +498,8 @@ fn spawn_turret_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32, asset
         },
         Transform::from_xyz(x, y, Z_ENEMIES),
         Enemy {
-            health: 3 + floor.min(4),
-            max_health: 3 + floor.min(4),
+            health: 5 + floor.min(4),
+            max_health: 5 + floor.min(4),
             contact_damage: 1,
             score_reward: 130,
             gold_drop: 12 + floor * 3,
@@ -544,8 +544,8 @@ fn spawn_charger_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32, asse
         },
         Transform::from_xyz(x, y, Z_ENEMIES),
         Enemy {
-            health: 3 + floor.min(5),
-            max_health: 3 + floor.min(5),
+            health: 9 + floor.min(5),
+            max_health: 9 + floor.min(5),
             contact_damage: 2,
             score_reward: 150,
             gold_drop: 15 + floor * 3,
@@ -591,8 +591,8 @@ pub fn spawn_mage_enemy(commands: &mut Commands, x: f32, y: f32, floor: i32, ass
         },
         Transform::from_xyz(x, y, Z_ENEMIES),
         Enemy {
-            health: 3 + floor.min(4),
-            max_health: 3 + floor.min(4),
+            health: 4 + floor.min(4),
+            max_health: 4 + floor.min(4),
             contact_damage: 1,
             score_reward: 150,
             gold_drop: 15 + floor * 4,
@@ -735,7 +735,7 @@ fn spawn_boss(commands: &mut Commands, floor: i32, assets: &EnemySpriteAssets) {
 
 /// Floor 2: Mushroom Titan — uses big_zombie sprite.
 fn spawn_boss_mushroom(commands: &mut Commands, floor: i32, assets: &EnemySpriteAssets) {
-    let hp = 14 + floor * 4;
+    let hp = 28 + floor * 4;
 
     commands.spawn((
         Sprite { color: Color::NONE, custom_size: Some(Vec2::new(48.0, 48.0)), ..default() },
@@ -766,7 +766,7 @@ fn spawn_boss_mushroom(commands: &mut Commands, floor: i32, assets: &EnemySprite
 
 /// Floor 3: Lava Wyrm — uses big_demon sprite.
 fn spawn_boss_lava(commands: &mut Commands, floor: i32, assets: &EnemySpriteAssets) {
-    let hp = 16 + floor * 4;
+    let hp = 28 + floor * 5;
 
     commands.spawn((
         Sprite { color: Color::NONE, custom_size: Some(Vec2::new(48.0, 40.0)), ..default() },
@@ -797,7 +797,7 @@ fn spawn_boss_lava(commands: &mut Commands, floor: i32, assets: &EnemySpriteAsse
 
 /// Floor 4: Root Ancient — uses big_zombie sprite.
 fn spawn_boss_root(commands: &mut Commands, floor: i32, assets: &EnemySpriteAssets) {
-    let hp = 20 + floor * 5;
+    let hp = 28 + floor * 6;
 
     commands.spawn((
         Sprite { color: Color::NONE, custom_size: Some(Vec2::new(52.0, 52.0)), ..default() },
@@ -828,7 +828,7 @@ fn spawn_boss_root(commands: &mut Commands, floor: i32, assets: &EnemySpriteAsse
 
 /// Floor 1 (default): Crimson Warlord — uses big_demon sprite.
 fn spawn_boss_warlord(commands: &mut Commands, floor: i32, assets: &EnemySpriteAssets) {
-    let hp = 10 + floor * 3;
+    let hp = 28 + floor * 4;
 
     commands.spawn((
         Sprite {

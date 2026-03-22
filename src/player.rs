@@ -196,7 +196,12 @@ impl Default for Player {
 }
 
 #[derive(Component)]
-pub struct MeleeHitbox { pub damage: i32, pub lifetime: f32 }
+pub struct MeleeHitbox {
+    pub damage: i32,
+    pub lifetime: f32,
+    /// Enemies already hit by this swing (prevents multi-hit per swing).
+    pub hit_entities: Vec<Entity>,
+}
 
 #[derive(Component)]
 pub struct PlayerProjectile {
@@ -409,7 +414,7 @@ fn player_input(
         commands.spawn((
             Sprite { color: Color::srgba(1.0, 0.75, 0.3, 0.5), custom_size: Some(Vec2::new(MELEE_RANGE, MELEE_WIDTH)), ..default() },
             Transform::from_xyz(hx, tf.translation.y, Z_EFFECTS),
-            MeleeHitbox { damage: MELEE_DAMAGE, lifetime: MELEE_ACTIVE_TIME },
+            MeleeHitbox { damage: MELEE_DAMAGE, lifetime: MELEE_ACTIVE_TIME, hit_entities: Vec::new() },
             PlayingEntity,
         ));
         // Attack pulse on root entity

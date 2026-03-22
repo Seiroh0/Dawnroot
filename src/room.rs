@@ -347,12 +347,12 @@ fn spawn_room(commands: &mut Commands, state: &RoomState, room_idx: usize, tiles
 
     // Room-specific content
     match room_type {
-        RoomType::Start    => spawn_start_room(commands, seed),
-        RoomType::Combat   => spawn_combat_room(commands, seed, state.floor),
-        RoomType::Treasure => spawn_treasure_room(commands, seed),
-        RoomType::Boss     => spawn_boss_room(commands, state.floor),
-        RoomType::Shop     => spawn_shop_room(commands, seed),
-        RoomType::Altar    => spawn_altar_room(commands, seed),
+        RoomType::Start    => spawn_start_room(commands, seed, tiles),
+        RoomType::Combat   => spawn_combat_room(commands, seed, state.floor, tiles),
+        RoomType::Treasure => spawn_treasure_room(commands, seed, tiles),
+        RoomType::Boss     => spawn_boss_room(commands, state.floor, tiles),
+        RoomType::Shop     => spawn_shop_room(commands, seed, tiles),
+        RoomType::Altar    => spawn_altar_room(commands, seed, tiles),
     }
 
     // Healing well: 30% chance in Combat and Treasure rooms (not Boss/Shop)
@@ -511,7 +511,7 @@ fn spawn_tile_cracked(commands: &mut Commands, x: f32, y: f32, color: Color) {
     ));
 }
 
-fn spawn_platform(commands: &mut Commands, col_start: i32, col_end: i32, row: i32, color: Color) {
+fn spawn_platform(commands: &mut Commands, col_start: i32, col_end: i32, row: i32, color: Color, tiles: &TilesetAssets) {
     let y = row as f32 * TILE_SIZE + TILE_SIZE / 2.0;
     let len = col_end - col_start + 1;
     for col in col_start..=col_end {
@@ -519,22 +519,20 @@ fn spawn_platform(commands: &mut Commands, col_start: i32, col_end: i32, row: i3
         let x = col as f32 * TILE_SIZE + TILE_SIZE / 2.0;
         let is_left  = col == col_start;
         let is_right = col == col_end;
-        spawn_tile(commands, x, y, color);
-        // 3-part visual: left cap, right cap, and surface highlight
+        spawn_tile_sprite(commands, x, y, pick_floor_tile(tiles, col, row));
         if is_left {
             spawn_platform_cap(commands, x, y, color, true);
         }
         if is_right {
             spawn_platform_cap(commands, x, y, color, false);
         }
-        // Surface highlight on middle tiles
         if !is_left && !is_right && len > 2 {
             spawn_platform_surface(commands, x, y, color);
         }
     }
 }
 
-fn spawn_platform_worn(commands: &mut Commands, col_start: i32, col_end: i32, row: i32, color: Color) {
+fn spawn_platform_worn(commands: &mut Commands, col_start: i32, col_end: i32, row: i32, color: Color, tiles: &TilesetAssets) {
     let y = row as f32 * TILE_SIZE + TILE_SIZE / 2.0;
     let len = col_end - col_start + 1;
     for col in col_start..=col_end {
@@ -542,11 +540,7 @@ fn spawn_platform_worn(commands: &mut Commands, col_start: i32, col_end: i32, ro
         let x = col as f32 * TILE_SIZE + TILE_SIZE / 2.0;
         let is_left  = col == col_start;
         let is_right = col == col_end;
-        if (col - col_start) % 3 == 1 {
-            spawn_tile_cracked(commands, x, y, color);
-        } else {
-            spawn_tile(commands, x, y, color);
-        }
+        spawn_tile_sprite(commands, x, y, pick_floor_tile(tiles, col, row));
         if is_left {
             spawn_platform_cap(commands, x, y, color, true);
         }
@@ -1095,13 +1089,13 @@ fn right_wall_torch_x() -> f32 {
 
 // ─── Start Room ───────────────────────────────────────────────────────────────
 
-fn spawn_start_room(commands: &mut Commands, seed: u64) {
+fn spawn_start_room(commands: &mut Commands, seed: u64, tiles: &TilesetAssets) {
     let plat_color = Color::srgb(0.34, 0.26, 0.16);
 
     // Three low, welcoming stepping-stone platforms (rows 2-4, spans 3-4 tiles)
-    spawn_platform(commands, 3,  6,  2, plat_color); // left, very low
-    spawn_platform(commands, 9,  13, 3, plat_color); // center, one step up
-    spawn_platform(commands, 16, 19, 2, plat_color); // right, back low
+    spawn_platform(commands, 3,  6,  2, plat_color, tiles); // left, very low
+    spawn_platform(commands, 9,  13, 3, plat_color, tiles); // center, one step up
+    spawn_platform(commands, 16, 19, 2, plat_color, tiles); // right, back low
 
     // Torches ONLY on left and right walls
     spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
@@ -1136,7 +1130,7 @@ fn spawn_start_room(commands: &mut Commands, seed: u64) {
 
 // ─── Combat Room Templates ────────────────────────────────────────────────────
 
-fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
+fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32, tiles: &TilesetAssets) {
     let plat_color = Color::srgb(0.32, 0.24, 0.14);
     // Floor 1: only safe templates (no hazards). Floor 2+: all 16 templates.
     let safe_templates: &[i32] = &[0, 1, 3, 4, 7];
@@ -1149,10 +1143,10 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
     match template {
         // ── 0: Low staircase – left to right flow ─────────────────────────────
         0 => {
-            spawn_platform_worn(commands, 2,  5,  2, plat_color); // very low left
-            spawn_platform_worn(commands, 7,  10, 3, plat_color); // step up
-            spawn_platform_worn(commands, 12, 15, 4, plat_color); // center
-            spawn_platform_worn(commands, 17, 20, 2, plat_color); // low right
+            spawn_platform_worn(commands, 2,  5,  2, plat_color, tiles); // very low left
+            spawn_platform_worn(commands, 7,  10, 3, plat_color, tiles); // step up
+            spawn_platform_worn(commands, 12, 15, 4, plat_color, tiles); // center
+            spawn_platform_worn(commands, 17, 20, 2, plat_color, tiles); // low right
 
             // Torches on left and right walls only
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 3.5);
@@ -1162,10 +1156,10 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
 
         // ── 1: Multi-level arena ─────────────────────────────────────────────
         1 => {
-            spawn_platform_worn(commands, 2,  5,  2, plat_color);
-            spawn_platform_worn(commands, 8,  12, 4, plat_color);
-            spawn_platform_worn(commands, 15, 18, 2, plat_color);
-            spawn_platform_worn(commands, 5,  9,  5, plat_color); // medium high (was row 6)
+            spawn_platform_worn(commands, 2,  5,  2, plat_color, tiles);
+            spawn_platform_worn(commands, 8,  12, 4, plat_color, tiles);
+            spawn_platform_worn(commands, 15, 18, 2, plat_color, tiles);
+            spawn_platform_worn(commands, 5,  9,  5, plat_color, tiles); // medium high (was row 6)
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
@@ -1175,12 +1169,12 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
 
         // ── 2: Lava pits with narrow bridges ──────────────────────────────────
         2 => {
-            spawn_platform(commands, 3,  5,  3, plat_color);
-            spawn_platform(commands, 9,  11, 3, plat_color);
-            spawn_platform(commands, 15, 17, 3, plat_color);
+            spawn_platform(commands, 3,  5,  3, plat_color, tiles);
+            spawn_platform(commands, 9,  11, 3, plat_color, tiles);
+            spawn_platform(commands, 15, 17, 3, plat_color, tiles);
             // Lower bridge tiles over lava pits
-            spawn_platform(commands, 6,  8,  2, plat_color);
-            spawn_platform(commands, 12, 14, 2, plat_color);
+            spawn_platform(commands, 6,  8,  2, plat_color, tiles);
+            spawn_platform(commands, 12, 14, 2, plat_color, tiles);
             // Lava in the gaps below the bridges
             spawn_lava_strip(commands, 6, 8, 1);
             spawn_lava_strip(commands, 12, 14, 1);
@@ -1193,11 +1187,11 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
 
         // ── 3: Scattered low platforms ───────────────────────────────────────
         3 => {
-            spawn_platform(commands, 2,  4,  2, plat_color);
-            spawn_platform(commands, 6,  8,  4, plat_color);
-            spawn_platform(commands, 10, 12, 2, plat_color);
-            spawn_platform(commands, 14, 16, 5, plat_color);
-            spawn_platform(commands, 18, 21, 3, plat_color);
+            spawn_platform(commands, 2,  4,  2, plat_color, tiles);
+            spawn_platform(commands, 6,  8,  4, plat_color, tiles);
+            spawn_platform(commands, 10, 12, 2, plat_color, tiles);
+            spawn_platform(commands, 14, 16, 5, plat_color, tiles);
+            spawn_platform(commands, 18, 21, 3, plat_color, tiles);
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 3.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.5);
@@ -1205,13 +1199,13 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
 
         // ── 4: Zigzag platforms ──────────────────────────────────────────────
         4 => {
-            spawn_platform(commands, 2,  4,  2, plat_color);
-            spawn_platform(commands, 6,  8,  4, plat_color);
-            spawn_platform(commands, 10, 13, 2, plat_color);
-            spawn_platform(commands, 14, 16, 4, plat_color);
-            spawn_platform(commands, 18, 21, 3, plat_color);
+            spawn_platform(commands, 2,  4,  2, plat_color, tiles);
+            spawn_platform(commands, 6,  8,  4, plat_color, tiles);
+            spawn_platform(commands, 10, 13, 2, plat_color, tiles);
+            spawn_platform(commands, 14, 16, 4, plat_color, tiles);
+            spawn_platform(commands, 18, 21, 3, plat_color, tiles);
             // A medium-high ledge for optional routing (was row 7)
-            spawn_platform(commands, 9, 13, 5, plat_color);
+            spawn_platform(commands, 9, 13, 5, plat_color, tiles);
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 3.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
@@ -1221,12 +1215,12 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
 
         // ── 5: Floating stones + moving platform ─────────────────────────────
         5 => {
-            spawn_platform(commands, 2,  4,  3, plat_color);
-            spawn_platform(commands, 7,  10, 5, plat_color);
-            spawn_platform(commands, 13, 16, 3, plat_color);
-            spawn_platform(commands, 18, 21, 4, plat_color);
+            spawn_platform(commands, 2,  4,  3, plat_color, tiles);
+            spawn_platform(commands, 7,  10, 5, plat_color, tiles);
+            spawn_platform(commands, 13, 16, 3, plat_color, tiles);
+            spawn_platform(commands, 18, 21, 4, plat_color, tiles);
             // Tiny single-tile mid-gap
-            spawn_platform(commands, 5,  6,  4, plat_color);
+            spawn_platform(commands, 5,  6,  4, plat_color, tiles);
             // Moving platform instead of static bridge at col 11-12
             let mp_x = 11.0 * TILE_SIZE + TILE_SIZE;
             let mp_y = 4.0 * TILE_SIZE + TILE_SIZE / 2.0;
@@ -1253,12 +1247,12 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
         // ── 6: Low walkways with swampy water gap ─────────────────────────────
         6 => {
             // Long walkways left and right, gap in middle
-            spawn_platform_worn(commands, 2,  9,  3, plat_color);
-            spawn_platform_worn(commands, 13, 21, 3, plat_color);
+            spawn_platform_worn(commands, 2,  9,  3, plat_color, tiles);
+            spawn_platform_worn(commands, 13, 21, 3, plat_color, tiles);
             // Small mid platform to bridge the gap
-            spawn_platform(commands, 10, 12, 4, plat_color);
+            spawn_platform(commands, 10, 12, 4, plat_color, tiles);
             // Optional high ledge (was row 6)
-            spawn_platform(commands, 7, 10, 5, plat_color);
+            spawn_platform(commands, 7, 10, 5, plat_color, tiles);
             // Swampy water in the central gap (floor level)
             spawn_water_strip(commands, 10, 12, 1);
 
@@ -1270,14 +1264,14 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
         // ── 7: Tunnel / open corridor with overhangs ────────────────────────
         7 => {
             // Partial overhangs instead of sealed ceiling — gaps allow flight
-            spawn_platform(commands, 4,  9,  8, plat_color);  // left overhang
-            spawn_platform(commands, 14, 19, 8, plat_color);  // right overhang
+            spawn_platform(commands, 4,  9,  8, plat_color, tiles);  // left overhang
+            spawn_platform(commands, 14, 19, 8, plat_color, tiles);  // right overhang
             // Ground bumps inside the corridor
-            spawn_platform(commands, 5,  7,  2, plat_color);
-            spawn_platform(commands, 11, 13, 3, plat_color);
-            spawn_platform(commands, 16, 18, 2, plat_color);
+            spawn_platform(commands, 5,  7,  2, plat_color, tiles);
+            spawn_platform(commands, 11, 13, 3, plat_color, tiles);
+            spawn_platform(commands, 16, 18, 2, plat_color, tiles);
             // Mid-height stepping stone in the gap for player to reach flyers
-            spawn_platform(commands, 10, 13, 6, plat_color);
+            spawn_platform(commands, 10, 13, 6, plat_color, tiles);
             // Shorter pillars — decorative, not sealing
             spawn_pillar(commands, 4,  1, 5, Color::srgb(0.25, 0.18, 0.10));
             spawn_pillar(commands, 19, 1, 5, Color::srgb(0.25, 0.18, 0.10));
@@ -1293,13 +1287,13 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             // Lava covering most of the floor
             spawn_lava_strip(commands, 2, 21, 1);
             // Island platforms above the lava
-            spawn_platform(commands, 2,  4,  2, plat_color);
-            spawn_platform(commands, 7,  9,  3, plat_color);
-            spawn_platform(commands, 11, 14, 2, plat_color);
-            spawn_platform(commands, 17, 20, 3, plat_color);
+            spawn_platform(commands, 2,  4,  2, plat_color, tiles);
+            spawn_platform(commands, 7,  9,  3, plat_color, tiles);
+            spawn_platform(commands, 11, 14, 2, plat_color, tiles);
+            spawn_platform(commands, 17, 20, 3, plat_color, tiles);
             // High escape route
-            spawn_platform(commands, 5,  6,  5, plat_color);
-            spawn_platform(commands, 15, 16, 5, plat_color);
+            spawn_platform(commands, 5,  6,  5, plat_color, tiles);
+            spawn_platform(commands, 15, 16, 5, plat_color, tiles);
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
@@ -1316,13 +1310,13 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             // Water across the floor
             spawn_water_strip(commands, 3, 20, 1);
             // Raised dry platforms
-            spawn_platform_worn(commands, 2,  5,  3, plat_color);
-            spawn_platform_worn(commands, 8,  11, 2, plat_color);
-            spawn_platform_worn(commands, 14, 17, 3, plat_color);
-            spawn_platform_worn(commands, 19, 21, 2, plat_color);
+            spawn_platform_worn(commands, 2,  5,  3, plat_color, tiles);
+            spawn_platform_worn(commands, 8,  11, 2, plat_color, tiles);
+            spawn_platform_worn(commands, 14, 17, 3, plat_color, tiles);
+            spawn_platform_worn(commands, 19, 21, 2, plat_color, tiles);
             // Upper catwalk
-            spawn_platform(commands, 6, 8, 5, plat_color);
-            spawn_platform(commands, 12, 14, 5, plat_color);
+            spawn_platform(commands, 6, 8, 5, plat_color, tiles);
+            spawn_platform(commands, 12, 14, 5, plat_color, tiles);
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
@@ -1338,11 +1332,11 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
         // ── 10: Vertical elevator shaft – multiple moving platforms ─────────
         10 => {
             // Ground-level platforms on sides
-            spawn_platform(commands, 2,  5,  2, plat_color);
-            spawn_platform(commands, 18, 21, 2, plat_color);
+            spawn_platform(commands, 2,  5,  2, plat_color, tiles);
+            spawn_platform(commands, 18, 21, 2, plat_color, tiles);
             // High ledges on sides
-            spawn_platform(commands, 2,  4,  5, plat_color);
-            spawn_platform(commands, 19, 21, 5, plat_color);
+            spawn_platform(commands, 2,  4,  5, plat_color, tiles);
+            spawn_platform(commands, 19, 21, 5, plat_color, tiles);
             // Two moving platforms in the center
             let mp1_x = 9.0 * TILE_SIZE + TILE_SIZE;
             let mp1_y = 2.0 * TILE_SIZE + TILE_SIZE / 2.0;
@@ -1373,14 +1367,14 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
         // ── 11: Split path – high road vs low road ──────────────────────────
         11 => {
             // Low road (ground level with water hazard)
-            spawn_platform(commands, 2, 6, 2, plat_color);
+            spawn_platform(commands, 2, 6, 2, plat_color, tiles);
             spawn_water_strip(commands, 7, 16, 1);
-            spawn_platform(commands, 17, 21, 2, plat_color);
+            spawn_platform(commands, 17, 21, 2, plat_color, tiles);
             // High road (upper platforms)
-            spawn_platform(commands, 3,  5,  4, plat_color);
-            spawn_platform(commands, 7,  10, 5, plat_color);
-            spawn_platform(commands, 12, 15, 5, plat_color);
-            spawn_platform(commands, 17, 20, 4, plat_color);
+            spawn_platform(commands, 3,  5,  4, plat_color, tiles);
+            spawn_platform(commands, 7,  10, 5, plat_color, tiles);
+            spawn_platform(commands, 12, 15, 5, plat_color, tiles);
+            spawn_platform(commands, 17, 20, 4, plat_color, tiles);
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
@@ -1391,16 +1385,16 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
         // ── 12: Pillared hall – dense columns creating corridors ─────────────
         12 => {
             // Ground platforms between pillars
-            spawn_platform(commands, 2, 21, 2, plat_color);
+            spawn_platform(commands, 2, 21, 2, plat_color, tiles);
             // Pillars creating corridors
             spawn_pillar(commands, 5,  3, 7, Color::srgb(0.25, 0.18, 0.10));
             spawn_pillar(commands, 10, 3, 7, Color::srgb(0.25, 0.18, 0.10));
             spawn_pillar(commands, 15, 3, 7, Color::srgb(0.25, 0.18, 0.10));
             spawn_pillar(commands, 20, 3, 7, Color::srgb(0.25, 0.18, 0.10));
             // Mid-height walkways between pillars
-            spawn_platform(commands, 6,  9,  5, plat_color);
-            spawn_platform(commands, 11, 14, 5, plat_color);
-            spawn_platform(commands, 16, 19, 5, plat_color);
+            spawn_platform(commands, 6,  9,  5, plat_color, tiles);
+            spawn_platform(commands, 11, 14, 5, plat_color, tiles);
+            spawn_platform(commands, 16, 19, 5, plat_color, tiles);
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 5.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 5.0);
@@ -1413,13 +1407,13 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             // Lava base
             spawn_lava_strip(commands, 4, 19, 1);
             // Worn platforms as safe ground
-            spawn_platform_worn(commands, 2,  5,  3, plat_color);
-            spawn_platform_worn(commands, 7,  9,  4, plat_color);
-            spawn_platform_worn(commands, 11, 13, 3, plat_color);
-            spawn_platform_worn(commands, 15, 18, 5, plat_color);
-            spawn_platform_worn(commands, 19, 21, 3, plat_color);
+            spawn_platform_worn(commands, 2,  5,  3, plat_color, tiles);
+            spawn_platform_worn(commands, 7,  9,  4, plat_color, tiles);
+            spawn_platform_worn(commands, 11, 13, 3, plat_color, tiles);
+            spawn_platform_worn(commands, 15, 18, 5, plat_color, tiles);
+            spawn_platform_worn(commands, 19, 21, 3, plat_color, tiles);
             // Collapsed pillar (decorative, acts as platform)
-            spawn_platform(commands, 10, 10, 2, plat_color);
+            spawn_platform(commands, 10, 10, 2, plat_color, tiles);
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
@@ -1429,13 +1423,13 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
         // ── 14: The pit – deep central chasm with bridges ───────────────────
         14 => {
             // Solid ground on sides
-            spawn_platform(commands, 2,  7,  2, plat_color);
-            spawn_platform(commands, 16, 21, 2, plat_color);
+            spawn_platform(commands, 2,  7,  2, plat_color, tiles);
+            spawn_platform(commands, 16, 21, 2, plat_color, tiles);
             // Lava in the pit
             spawn_lava_strip(commands, 8, 15, 1);
             // Narrow bridge across
-            spawn_platform(commands, 9,  10, 3, plat_color);
-            spawn_platform(commands, 13, 14, 3, plat_color);
+            spawn_platform(commands, 9,  10, 3, plat_color, tiles);
+            spawn_platform(commands, 13, 14, 3, plat_color, tiles);
             // Moving platform in the gap
             let mp_x = 11.0 * TILE_SIZE + TILE_SIZE;
             let mp_y = 3.0 * TILE_SIZE + TILE_SIZE / 2.0;
@@ -1448,8 +1442,8 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
                 30.0, 1.5,
             );
             // Upper platforms for alternate routing
-            spawn_platform(commands, 5,  7,  5, plat_color);
-            spawn_platform(commands, 16, 18, 5, plat_color);
+            spawn_platform(commands, 5,  7,  5, plat_color, tiles);
+            spawn_platform(commands, 16, 18, 5, plat_color, tiles);
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 4.0);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 4.0);
@@ -1466,13 +1460,13 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
             spawn_water_strip(commands, 15, 17, 1);
             spawn_lava_strip(commands, 19, 20, 1);
             // Platforms above the hazards
-            spawn_platform(commands, 2,  4,  3, plat_color);
-            spawn_platform(commands, 6,  8,  2, plat_color);
-            spawn_platform(commands, 10, 12, 4, plat_color);
-            spawn_platform(commands, 14, 16, 2, plat_color);
-            spawn_platform(commands, 18, 21, 3, plat_color);
+            spawn_platform(commands, 2,  4,  3, plat_color, tiles);
+            spawn_platform(commands, 6,  8,  2, plat_color, tiles);
+            spawn_platform(commands, 10, 12, 4, plat_color, tiles);
+            spawn_platform(commands, 14, 16, 2, plat_color, tiles);
+            spawn_platform(commands, 18, 21, 3, plat_color, tiles);
             // High bridge
-            spawn_platform(commands, 8, 14, 5, plat_color);
+            spawn_platform(commands, 8, 14, 5, plat_color, tiles);
 
             spawn_wall_torch(commands, LEFT_WALL_TORCH_X,   TILE_SIZE * 3.5);
             spawn_wall_torch(commands, right_wall_torch_x(), TILE_SIZE * 3.5);
@@ -1496,15 +1490,15 @@ fn spawn_combat_room(commands: &mut Commands, seed: u64, floor: i32) {
 
 // ─── Treasure Room ────────────────────────────────────────────────────────────
 
-fn spawn_altar_room(commands: &mut Commands, seed: u64) {
+fn spawn_altar_room(commands: &mut Commands, seed: u64, tiles: &TilesetAssets) {
     let plat_color = Color::srgb(0.28, 0.22, 0.32);
 
     // Central raised platform with the altar
-    spawn_platform(commands, 8, 15, 2, plat_color);
+    spawn_platform(commands, 8, 15, 2, plat_color, tiles);
     // Steps up from left
-    spawn_platform(commands, 5, 7, 2, plat_color);
+    spawn_platform(commands, 5, 7, 2, plat_color, tiles);
     // Steps up from right
-    spawn_platform(commands, 16, 18, 2, plat_color);
+    spawn_platform(commands, 16, 18, 2, plat_color, tiles);
 
     // Spawn the altar in the center of the room
     let altar_x = ROOM_W / 2.0;
@@ -1565,31 +1559,139 @@ fn spawn_altar_room(commands: &mut Commands, seed: u64) {
 }
 
 /// Shop room: warm safe haven with carpet, crates, shelves, and glowing lanterns.
-fn spawn_shop_room(commands: &mut Commands, _seed: u64) {
+fn spawn_shop_room(commands: &mut Commands, _seed: u64, tiles: &TilesetAssets) {
     let plat_color = Color::srgb(0.32, 0.22, 0.14);
 
     // Raised platform in center for merchant to stand on
-    spawn_platform(commands, 9, 14, 2, plat_color);
+    spawn_platform(commands, 9, 14, 2, plat_color, tiles);
     // Side ledges
-    spawn_platform(commands, 3, 6, 3, plat_color);
-    spawn_platform(commands, 17, 20, 3, plat_color);
+    spawn_platform(commands, 3, 6, 3, plat_color, tiles);
+    spawn_platform(commands, 17, 20, 3, plat_color, tiles);
 
-    // ── Carpet/rug on the floor (under merchant area) ──
-    let carpet_color = Color::srgba(0.55, 0.18, 0.12, 0.35);
-    let carpet_border = Color::srgba(0.65, 0.30, 0.10, 0.3);
-    let carpet_y = TILE_SIZE + TILE_SIZE * 0.3;
-    // Border
+    // ── Podest dark borders + small carpet before each podest ──
+    let border_color = Color::srgb(0.18, 0.12, 0.06);
+    let carpet_rich = Color::srgba(0.60, 0.12, 0.08, 0.45);
+    let carpet_fringe = Color::srgba(0.75, 0.55, 0.15, 0.35);
+    // Center podest border (bottom edge)
+    let center_y = 2.0 * TILE_SIZE;
     commands.spawn((
-        Sprite { color: carpet_border, custom_size: Some(Vec2::new(TILE_SIZE * 10.0, TILE_SIZE * 0.25)), ..default() },
-        Transform::from_xyz(ROOM_W / 2.0, carpet_y, Z_TILES + 0.05),
+        Sprite { color: border_color, custom_size: Some(Vec2::new(TILE_SIZE * 6.2, 4.0)), ..default() },
+        Transform::from_xyz(ROOM_W / 2.0, center_y + 1.0, Z_TILES + 0.09),
         RoomEntity, PlayingEntity,
     ));
-    // Main rug
+    // Carpet in front of center podest
     commands.spawn((
-        Sprite { color: carpet_color, custom_size: Some(Vec2::new(TILE_SIZE * 9.0, TILE_SIZE * 0.18)), ..default() },
-        Transform::from_xyz(ROOM_W / 2.0, carpet_y, Z_TILES + 0.06),
+        Sprite { color: carpet_rich, custom_size: Some(Vec2::new(TILE_SIZE * 5.0, TILE_SIZE * 0.3)), ..default() },
+        Transform::from_xyz(ROOM_W / 2.0, TILE_SIZE + TILE_SIZE * 0.3, Z_TILES + 0.06),
         RoomEntity, PlayingEntity,
     ));
+    commands.spawn((
+        Sprite { color: carpet_fringe, custom_size: Some(Vec2::new(TILE_SIZE * 5.4, TILE_SIZE * 0.1)), ..default() },
+        Transform::from_xyz(ROOM_W / 2.0, TILE_SIZE + TILE_SIZE * 0.15, Z_TILES + 0.07),
+        RoomEntity, PlayingEntity,
+    ));
+    // Side podest borders + carpets
+    for &(col_s, col_e) in &[(3, 6), (17, 20)] {
+        let px = ((col_s + col_e) as f32 / 2.0) * TILE_SIZE + TILE_SIZE / 2.0;
+        let py = 3.0 * TILE_SIZE;
+        let pw = (col_e - col_s + 1) as f32 * TILE_SIZE + 4.0;
+        commands.spawn((
+            Sprite { color: border_color, custom_size: Some(Vec2::new(pw, 4.0)), ..default() },
+            Transform::from_xyz(px, py + 1.0, Z_TILES + 0.09),
+            RoomEntity, PlayingEntity,
+        ));
+        commands.spawn((
+            Sprite { color: carpet_rich, custom_size: Some(Vec2::new(pw - 20.0, TILE_SIZE * 0.25)), ..default() },
+            Transform::from_xyz(px, TILE_SIZE + TILE_SIZE * 0.3, Z_TILES + 0.06),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // ── Elevated center glow (highlights merchant area) ──
+    commands.spawn((
+        Sprite {
+            color: Color::srgba(0.95, 0.70, 0.25, 0.05),
+            custom_size: Some(Vec2::new(TILE_SIZE * 8.0, TILE_SIZE * 5.0)),
+            ..default()
+        },
+        Transform::from_xyz(ROOM_W / 2.0, TILE_SIZE * 3.5, Z_TILES + 0.02),
+        RoomEntity, PlayingEntity,
+    ));
+
+    // ── Wall torches with flickering glow ──
+    let torch_wall_y = TILE_SIZE * 6.5;
+    for &tx in &[TILE_SIZE * 3.5, TILE_SIZE * 8.5, TILE_SIZE * 15.0, TILE_SIZE * 20.0] {
+        spawn_wall_torch(commands, tx, torch_wall_y);
+    }
+
+    // ── SHOP banner above merchant position ──
+    let banner_x = ROOM_W / 2.0;
+    let banner_y = TILE_SIZE * 7.5;
+    // Banner cloth
+    commands.spawn((
+        Sprite { color: Color::srgb(0.55, 0.15, 0.10), custom_size: Some(Vec2::new(56.0, 18.0)), ..default() },
+        Transform::from_xyz(banner_x, banner_y, Z_TILES + 0.4),
+        RoomEntity, PlayingEntity,
+    ));
+    // Banner border (gold trim)
+    commands.spawn((
+        Sprite { color: Color::srgb(0.80, 0.60, 0.15), custom_size: Some(Vec2::new(58.0, 2.0)), ..default() },
+        Transform::from_xyz(banner_x, banner_y + 9.0, Z_TILES + 0.42),
+        RoomEntity, PlayingEntity,
+    ));
+    commands.spawn((
+        Sprite { color: Color::srgb(0.80, 0.60, 0.15), custom_size: Some(Vec2::new(58.0, 2.0)), ..default() },
+        Transform::from_xyz(banner_x, banner_y - 9.0, Z_TILES + 0.42),
+        RoomEntity, PlayingEntity,
+    ));
+    // Hanging ropes from banner to ceiling
+    for &rx in &[banner_x - 26.0, banner_x + 26.0] {
+        commands.spawn((
+            Sprite { color: Color::srgb(0.45, 0.35, 0.20), custom_size: Some(Vec2::new(2.0, ROOM_H - TILE_SIZE - banner_y - 9.0)), ..default() },
+            Transform::from_xyz(rx, (banner_y + 9.0 + ROOM_H - TILE_SIZE) / 2.0, Z_TILES + 0.35),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // ── Hanging curtains/drapes from ceiling ──
+    let curtain_color = Color::srgba(0.50, 0.14, 0.10, 0.55);
+    let curtain_dark = Color::srgba(0.35, 0.08, 0.06, 0.50);
+    for &cx in &[TILE_SIZE * 5.5, TILE_SIZE * 18.0] {
+        let cy_top = ROOM_H - TILE_SIZE - 2.0;
+        let drape_h = TILE_SIZE * 3.5;
+        // Main drape
+        commands.spawn((
+            Sprite { color: curtain_color, custom_size: Some(Vec2::new(18.0, drape_h)), ..default() },
+            Transform::from_xyz(cx, cy_top - drape_h / 2.0, Z_TILES + 0.25),
+            RoomEntity, PlayingEntity,
+        ));
+        // Dark fold line
+        commands.spawn((
+            Sprite { color: curtain_dark, custom_size: Some(Vec2::new(3.0, drape_h - 4.0)), ..default() },
+            Transform::from_xyz(cx + 4.0, cy_top - drape_h / 2.0, Z_TILES + 0.26),
+            RoomEntity, PlayingEntity,
+        ));
+        // Gold tie
+        commands.spawn((
+            Sprite { color: Color::srgb(0.80, 0.60, 0.15), custom_size: Some(Vec2::new(12.0, 3.0)), ..default() },
+            Transform::from_xyz(cx, cy_top - drape_h + 6.0, Z_TILES + 0.27),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // ── Ceiling chains (shop-specific, fewer than combat rooms) ──
+    let chain_color = Color::srgba(0.50, 0.45, 0.40, 0.70);
+    for &chain_x in &[TILE_SIZE * 10.0, TILE_SIZE * 13.5] {
+        for link in 0..3_u32 {
+            let (w, h) = if link % 2 == 0 { (3.0, 8.0) } else { (6.0, 3.0) };
+            let y = ROOM_H - TILE_SIZE - 6.0 - link as f32 * 9.0;
+            commands.spawn((
+                Sprite { color: chain_color, custom_size: Some(Vec2::new(w, h)), ..default() },
+                Transform::from_xyz(chain_x, y, Z_TILES + 0.3),
+                RoomEntity, PlayingEntity,
+            ));
+        }
+    }
 
     // ── Crates / shelves flanking the merchant ──
     let crate_color = Color::srgb(0.38, 0.26, 0.14);
@@ -1601,13 +1703,11 @@ fn spawn_shop_room(commands: &mut Commands, _seed: u64) {
         (TILE_SIZE * 19.5, 3.0 * TILE_SIZE + TILE_SIZE),
     ];
     for (cx, cy) in crate_positions {
-        // Crate body
         commands.spawn((
             Sprite { color: crate_color, custom_size: Some(Vec2::new(16.0, 14.0)), ..default() },
             Transform::from_xyz(cx, cy + 7.0, Z_PICKUPS - 0.2),
             RoomEntity, PlayingEntity,
         ));
-        // Cross brace
         commands.spawn((
             Sprite { color: crate_dark, custom_size: Some(Vec2::new(14.0, 2.0)), ..default() },
             Transform::from_xyz(cx, cy + 7.0, Z_PICKUPS - 0.15),
@@ -1623,19 +1723,16 @@ fn spawn_shop_room(commands: &mut Commands, _seed: u64) {
     // ── Shelves behind merchant (on walls) ──
     let shelf_color = Color::srgb(0.35, 0.24, 0.12);
     for sx in [TILE_SIZE * 7.0, TILE_SIZE * 16.5] {
-        // Shelf plank
         commands.spawn((
             Sprite { color: shelf_color, custom_size: Some(Vec2::new(TILE_SIZE * 1.5, 4.0)), ..default() },
             Transform::from_xyz(sx, TILE_SIZE * 5.5, Z_TILES + 0.1),
             RoomEntity, PlayingEntity,
         ));
-        // Item on shelf (potion bottle)
         commands.spawn((
             Sprite { color: Color::srgb(0.3, 0.7, 0.4), custom_size: Some(Vec2::new(5.0, 8.0)), ..default() },
             Transform::from_xyz(sx - 6.0, TILE_SIZE * 5.5 + 6.0, Z_TILES + 0.12),
             RoomEntity, PlayingEntity,
         ));
-        // Item on shelf (scroll)
         commands.spawn((
             Sprite { color: Color::srgb(0.85, 0.75, 0.5), custom_size: Some(Vec2::new(8.0, 5.0)), ..default() },
             Transform::from_xyz(sx + 8.0, TILE_SIZE * 5.5 + 5.0, Z_TILES + 0.12),
@@ -1643,52 +1740,10 @@ fn spawn_shop_room(commands: &mut Commands, _seed: u64) {
         ));
     }
 
-    // ── Glowing lanterns on the ground (warm, pulsing glow) ──
-    let lantern_positions: [(f32, f32); 4] = [
-        (TILE_SIZE * 3.0, TILE_SIZE + TILE_SIZE * 0.5),
-        (TILE_SIZE * 8.0, TILE_SIZE + TILE_SIZE * 0.5),
-        (TILE_SIZE * 15.5, TILE_SIZE + TILE_SIZE * 0.5),
-        (TILE_SIZE * 20.5, TILE_SIZE + TILE_SIZE * 0.5),
-    ];
-    for (lx, ly) in lantern_positions {
-        // Lantern base
-        commands.spawn((
-            Sprite { color: Color::srgb(0.4, 0.3, 0.2), custom_size: Some(Vec2::new(6.0, 10.0)), ..default() },
-            Transform::from_xyz(lx, ly + 5.0, Z_TILES + 0.15),
-            RoomEntity, PlayingEntity,
-        ));
-        // Lantern top
-        commands.spawn((
-            Sprite { color: Color::srgb(0.5, 0.35, 0.2), custom_size: Some(Vec2::new(8.0, 3.0)), ..default() },
-            Transform::from_xyz(lx, ly + 11.0, Z_TILES + 0.16),
-            RoomEntity, PlayingEntity,
-        ));
-        // Warm glow (large soft radial light)
-        commands.spawn((
-            Sprite {
-                color: Color::srgba(0.95, 0.65, 0.2, 0.08),
-                custom_size: Some(Vec2::new(50.0, 50.0)),
-                ..default()
-            },
-            Transform::from_xyz(lx, ly + 15.0, Z_TILES + 0.02),
-            RoomEntity, PlayingEntity,
-        ));
-        // Bright flame center
-        commands.spawn((
-            Sprite {
-                color: Color::srgba(1.0, 0.85, 0.3, 0.25),
-                custom_size: Some(Vec2::new(4.0, 6.0)),
-                ..default()
-            },
-            Transform::from_xyz(lx, ly + 13.0, Z_TILES + 0.18),
-            RoomEntity, PlayingEntity,
-        ));
-    }
-
     // ── Warm ambient tint overlay (subtle) ──
     commands.spawn((
         Sprite {
-            color: Color::srgba(0.6, 0.3, 0.1, 0.04),
+            color: Color::srgba(0.6, 0.3, 0.1, 0.05),
             custom_size: Some(Vec2::new(ROOM_W, ROOM_H)),
             ..default()
         },
@@ -1697,16 +1752,16 @@ fn spawn_shop_room(commands: &mut Commands, _seed: u64) {
     ));
 }
 
-fn spawn_treasure_room(commands: &mut Commands, seed: u64) {
+fn spawn_treasure_room(commands: &mut Commands, seed: u64, tiles: &TilesetAssets) {
     let plat_color = Color::srgb(0.34, 0.30, 0.22);
     let gold_accent = Color::srgb(0.85, 0.70, 0.20);
     let gold_dark = Color::srgb(0.65, 0.50, 0.12);
 
     // Raised central altar – lower than before (row 2 instead of 3)
-    spawn_platform(commands, 7, 16, 2, plat_color);
+    spawn_platform(commands, 7, 16, 2, plat_color, tiles);
     // Side wings at row 4
-    spawn_platform(commands, 3, 6,  4, plat_color);
-    spawn_platform(commands, 17, 20, 4, plat_color);
+    spawn_platform(commands, 3, 6,  4, plat_color, tiles);
+    spawn_platform(commands, 17, 20, 4, plat_color, tiles);
 
     // ── Golden carpet/runner on the altar ──
     for col in 8..=15 {
@@ -1928,20 +1983,20 @@ fn spawn_treasure_room(commands: &mut Commands, seed: u64) {
 
 // ─── Boss Room ────────────────────────────────────────────────────────────────
 
-fn spawn_boss_room(commands: &mut Commands, floor: i32) {
+fn spawn_boss_room(commands: &mut Commands, floor: i32, tiles: &TilesetAssets) {
     let plat_color = Color::srgb(0.32, 0.16, 0.08);
     let pillar_color = Color::srgb(0.28, 0.14, 0.07);
     let arena_top = 4.0 * TILE_SIZE + TILE_SIZE;
     let center_x = ROOM_W / 2.0;
 
     // Wide ground arena
-    spawn_platform(commands, 3, 20, 4, plat_color);
+    spawn_platform(commands, 3, 20, 4, plat_color, tiles);
     // Two raised side platforms
-    spawn_platform_worn(commands, 4,  7,  6, plat_color);
-    spawn_platform_worn(commands, 16, 19, 6, plat_color);
+    spawn_platform_worn(commands, 4,  7,  6, plat_color, tiles);
+    spawn_platform_worn(commands, 16, 19, 6, plat_color, tiles);
     // Small stepping stones to side platforms
-    spawn_platform(commands, 3, 4, 5, plat_color);
-    spawn_platform(commands, 19, 20, 5, plat_color);
+    spawn_platform(commands, 3, 4, 5, plat_color, tiles);
+    spawn_platform(commands, 19, 20, 5, plat_color, tiles);
 
     // ── Dramatic stone pillars with capitals ──
     spawn_pillar(commands, 4,  5, 9, pillar_color);
