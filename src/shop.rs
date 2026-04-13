@@ -7,6 +7,15 @@ use crate::{
     audio::{PlaySfxEvent, SfxType},
 };
 
+/// Compute scaled cost for a repeatable stat upgrade.
+pub fn stat_upgrade_cost(base: i32, level: i32) -> i32 {
+    (base as f32 * (1.0 + level as f32 * 0.65)).round() as i32
+}
+
+fn is_stat_upgrade(effect: &ShopEffect) -> bool {
+    matches!(effect, ShopEffect::AttackUp | ShopEffect::DefenseUp | ShopEffect::SpeedUp | ShopEffect::MaxHpUp | ShopEffect::ManaUp)
+}
+
 pub struct ShopPlugin;
 
 impl Plugin for ShopPlugin {
@@ -112,24 +121,24 @@ fn all_shop_entries() -> Vec<ShopEntry> {
             tier: ShopTier::Tier1, unlock: UnlockReq::None,
         },
         ShopEntry {
-            name: "+1 Max HP", cost: 60, effect: ShopEffect::MaxHpUp,
+            name: "+1 Max HP", cost: 55, effect: ShopEffect::MaxHpUp,
             tier: ShopTier::Tier1, unlock: UnlockReq::None,
         },
         ShopEntry {
-            name: "+Mana Pool", cost: 45, effect: ShopEffect::ManaUp,
+            name: "+Mana Pool", cost: 40, effect: ShopEffect::ManaUp,
             tier: ShopTier::Tier1, unlock: UnlockReq::None,
         },
         // ── Stat upgrades (Tier 2) ──
         ShopEntry {
-            name: "Attack Up", cost: 55, effect: ShopEffect::AttackUp,
+            name: "Attack Up", cost: 50, effect: ShopEffect::AttackUp,
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloor(2),
         },
         ShopEntry {
-            name: "Speed Up", cost: 50, effect: ShopEffect::SpeedUp,
+            name: "Speed Up", cost: 45, effect: ShopEffect::SpeedUp,
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloor(2),
         },
         ShopEntry {
-            name: "Defense Up", cost: 55, effect: ShopEffect::DefenseUp,
+            name: "Defense Up", cost: 50, effect: ShopEffect::DefenseUp,
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloor(2),
         },
         // ── Spells ──
@@ -793,9 +802,23 @@ fn shop_ui_purchase(
         return;
     }
 
-    let item_cost = state.items[idx].cost;
     let item_name = state.items[idx].name.to_string();
     let item_effect = state.items[idx].effect.clone();
+
+    // For stat upgrades, cost scales with level; otherwise use static cost
+    let item_cost = if is_stat_upgrade(&item_effect) {
+        let level = match &item_effect {
+            ShopEffect::AttackUp  => run.stat_attack,
+            ShopEffect::DefenseUp => run.stat_defense,
+            ShopEffect::SpeedUp   => run.stat_speed,
+            ShopEffect::MaxHpUp   => run.stat_hp,
+            ShopEffect::ManaUp    => run.stat_mana,
+            _ => 0,
+        };
+        stat_upgrade_cost(state.items[idx].cost, level)
+    } else {
+        state.items[idx].cost
+    };
 
     if run.gold < item_cost {
         if let Ok(mut text) = merchant_text_q.get_single_mut() {
@@ -809,7 +832,22 @@ fn shop_ui_purchase(
 
     run.gold -= item_cost;
     apply_shop_effect(&item_effect, &mut player_mut, &mut spell_slots_q, &mut equipment_q, &mut recalc_ev);
-    state.purchased[idx] = true;
+
+    // Stat upgrades are infinitely repeatable — do not mark as purchased
+    let is_stat = is_stat_upgrade(&item_effect);
+    if !is_stat {
+        state.purchased[idx] = true;
+    }
+
+    // Increment stat level counter
+    match &item_effect {
+        ShopEffect::AttackUp  => run.stat_attack  += 1,
+        ShopEffect::DefenseUp => run.stat_defense += 1,
+        ShopEffect::SpeedUp   => run.stat_speed   += 1,
+        ShopEffect::MaxHpUp   => run.stat_hp      += 1,
+        ShopEffect::ManaUp    => run.stat_mana    += 1,
+        _ => {}
+    }
     ev_sfx.send(PlaySfxEvent(SfxType::ShopBuy));
 
     // Purchase feedback
@@ -948,10 +986,29 @@ fn shop_ui_update_visuals(
         let tier_label = entry.tier.label();
         let prefix = if i == state.selected { "> " } else { "  " };
 
-        **text = if purchased {
-            format!("{}{}{} [SOLD]", prefix, tier_label, entry.name)
+        if purchased {
+            **text = format!("{}{}{} [SOLD]", prefix, tier_label, entry.name);
+        } else if is_stat_upgrade(&entry.effect) {
+            // Show current upgrade level in the name
+            let level = match &entry.effect {
+                ShopEffect::AttackUp  => run.stat_attack,
+                ShopEffect::DefenseUp => run.stat_defense,
+                ShopEffect::SpeedUp   => run.stat_speed,
+                ShopEffect::MaxHpUp   => run.stat_hp,
+                ShopEffect::ManaUp    => run.stat_mana,
+                _ => 0,
+            };
+            let stat_label = match &entry.effect {
+                ShopEffect::AttackUp  => "Attack",
+                ShopEffect::DefenseUp => "Defense",
+                ShopEffect::SpeedUp   => "Speed",
+                ShopEffect::MaxHpUp   => "Max HP",
+                ShopEffect::ManaUp    => "Mana",
+                _ => entry.name,
+            };
+            **text = format!("{}{}{} Lv.{}", prefix, tier_label, stat_label, level + 1);
         } else {
-            format!("{}{}{}", prefix, tier_label, entry.name)
+            **text = format!("{}{}{}", prefix, tier_label, entry.name);
         };
 
         color.0 = if purchased {
@@ -970,15 +1027,30 @@ fn shop_ui_update_visuals(
         let entry = &state.items[i];
         let purchased = state.purchased[i];
 
+        // Compute effective cost (scaled for stat upgrades)
+        let effective_cost = if is_stat_upgrade(&entry.effect) {
+            let level = match &entry.effect {
+                ShopEffect::AttackUp  => run.stat_attack,
+                ShopEffect::DefenseUp => run.stat_defense,
+                ShopEffect::SpeedUp   => run.stat_speed,
+                ShopEffect::MaxHpUp   => run.stat_hp,
+                ShopEffect::ManaUp    => run.stat_mana,
+                _ => 0,
+            };
+            stat_upgrade_cost(entry.cost, level)
+        } else {
+            entry.cost
+        };
+
         **text = if purchased {
             "---".to_string()
         } else {
-            format!("{}g", entry.cost)
+            format!("{}g", effective_cost)
         };
 
         color.0 = if purchased {
             Color::srgb(0.4, 0.35, 0.28)
-        } else if run.gold >= entry.cost {
+        } else if run.gold >= effective_cost {
             Color::srgb(0.9, 0.85, 0.4)
         } else {
             Color::srgb(0.7, 0.3, 0.2)

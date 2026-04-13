@@ -462,6 +462,19 @@ fn setup_hud(
                 }
             });
 
+            // Inventory hint label (above equipment slots)
+            parent.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    bottom: Val::Px(62.0),
+                    right: Val::Px(10.0),
+                    ..default()
+                },
+                Text::new("[I] Inventory"),
+                TextFont { font: font.0.clone(), font_size: 5.5, ..default() },
+                TextColor(Color::srgba(0.6, 0.55, 0.4, 0.7)),
+            ));
+
             // Minimap container (bottom-right)
             parent.spawn((
                 Node {

@@ -48,6 +48,12 @@ pub struct RunData {
     pub rooms_cleared: i32,
     pub enemies_alive: i32,
     pub enemies_killed: i32,
+    /// How many times each stat has been upgraded this run (for scaling costs)
+    pub stat_attack: i32,
+    pub stat_defense: i32,
+    pub stat_hp: i32,
+    pub stat_mana: i32,
+    pub stat_speed: i32,
 }
 
 impl Default for RunData {
@@ -61,6 +67,11 @@ impl Default for RunData {
             rooms_cleared: 0,
             enemies_alive: 0,
             enemies_killed: 0,
+            stat_attack: 0,
+            stat_defense: 0,
+            stat_hp: 0,
+            stat_mana: 0,
+            stat_speed: 0,
         }
     }
 }
@@ -207,6 +218,7 @@ fn setup_run(
             rooms_cleared: 0,
             enemies_alive: 0,
             enemies_killed: save.0.enemies_killed,
+            ..default()
         };
     } else {
         *run = RunData {
