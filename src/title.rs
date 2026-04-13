@@ -390,102 +390,48 @@ fn setup_title(
         well_y: well_base_y + 25.0,
     });
 
-    // Trees (parallax: mid-ground) — dark silhouette style with 3 variants and sway
-    // Variant data: (x_off, h_min, h_max, trunk_w_min, trunk_w_max, variant)
-    // variant 0=tall narrow, 1=medium broad, 2=small bushy
-    let tree_defs: &[(f32, f32, f32, f32, f32, u8)] = &[
-        (-340.0, 120.0, 160.0, 9.0, 13.0, 0),
-        (-255.0,  80.0, 120.0, 13.0, 19.0, 1),
-        (-170.0, 100.0, 140.0, 10.0, 15.0, 2),
-        ( 170.0, 110.0, 150.0, 11.0, 16.0, 1),
-        ( 260.0,  85.0, 125.0, 12.0, 18.0, 2),
-        ( 345.0, 115.0, 155.0, 8.0,  12.0, 0),
+    // Trees (parallax: mid-ground) — tree.png sprite, 3 size variants
+    // (x_off, w, h) — sprite bottom sits on ground, anchor offset applied via Y
+    let tree_handle: Handle<Image> = asset_server.load("tree.png");
+    let tree_defs: &[(f32, f32, f32)] = &[
+        (-340.0, 90.0,  110.0),  // outer left  — medium
+        (-240.0, 70.0,   86.0),  // inner left  — small
+        (-155.0, 110.0, 135.0),  // near left   — large
+        ( 155.0, 105.0, 128.0),  // near right  — large
+        ( 245.0,  68.0,  83.0),  // inner right — small
+        ( 345.0,  88.0, 108.0),  // outer right — medium
     ];
-    // Autumn canopy palette
+    // Autumn canopy palette (used for leaf particles below)
     let autumn_colors: [(f32, f32, f32); 5] = [
-        (0.85, 0.40, 0.05), // deep orange
-        (0.75, 0.18, 0.08), // warm red
-        (0.90, 0.70, 0.10), // golden yellow
-        (0.65, 0.28, 0.08), // rust brown
-        (0.72, 0.50, 0.12), // dark ochre
+        (0.85, 0.40, 0.05),
+        (0.75, 0.18, 0.08),
+        (0.90, 0.70, 0.10),
+        (0.65, 0.28, 0.08),
+        (0.72, 0.50, 0.12),
     ];
 
-    for &(x_off, h_min, h_max, tw_min, tw_max, variant) in tree_defs {
-        let h: f32 = rng.gen_range(h_min..h_max);
-        let trunk_w: f32 = rng.gen_range(tw_min..tw_max);
+    for &(x_off, tw, th) in tree_defs {
         let depth = if x_off.abs() > 290.0 { 0.32 } else { 0.48 };
-        let sway_speed = rng.gen_range(0.3..0.7_f32);
+        let sway_speed = rng.gen_range(0.3..0.6_f32);
         let sway_phase = rng.gen_range(0.0..std::f32::consts::TAU);
-        let base_angle: f32 = rng.gen_range(-0.015..0.015);
-        let trunk_z = Z_BACKGROUND + 3.5;
-        let canopy_z = Z_BACKGROUND + 3.6;
+        let base_angle: f32 = rng.gen_range(-0.012..0.012);
+        // Bottom of sprite on ground — center Y = ground + half height
+        let sprite_y = well_base_y + th / 2.0;
 
-        // Pick a random autumn color for this tree
-        let ci = rng.gen_range(0..autumn_colors.len());
-        let (cr, cg, cb) = autumn_colors[ci];
-        // Secondary canopy gets a different autumn color
-        let ci2 = (ci + rng.gen_range(1..autumn_colors.len())) % autumn_colors.len();
-        let (cr2, cg2, cb2) = autumn_colors[ci2];
-
-        // Trunk
         commands.spawn((
             Sprite {
-                color: Color::srgb(0.35, 0.20, 0.08),
-                custom_size: Some(Vec2::new(trunk_w, h)),
+                image: tree_handle.clone(),
+                custom_size: Some(Vec2::new(tw, th)),
                 ..default()
             },
             Transform {
-                translation: Vec3::new(x_off, well_base_y + h / 2.0, trunk_z),
+                translation: Vec3::new(x_off, sprite_y, Z_BACKGROUND + 3.5),
                 rotation: Quat::from_rotation_z(base_angle),
                 scale: Vec3::ONE,
             },
             TitleEntity,
             ParallaxLayer { depth, base_x: x_off },
             TreeSway { speed: sway_speed, phase: sway_phase, base_angle },
-        ));
-
-        // Primary canopy
-        let (cw, ch) = match variant {
-            0 => (rng.gen_range(28.0..42.0_f32), rng.gen_range(55.0..80.0_f32)), // tall narrow
-            1 => (rng.gen_range(50.0..70.0_f32), rng.gen_range(35.0..52.0_f32)), // medium broad
-            _ => (rng.gen_range(42.0..58.0_f32), rng.gen_range(42.0..62.0_f32)), // small bushy
-        };
-        let canopy_phase2 = sway_phase + 0.3;
-        commands.spawn((
-            Sprite {
-                color: Color::srgb(cr, cg, cb),
-                custom_size: Some(Vec2::new(cw, ch)),
-                ..default()
-            },
-            Transform {
-                translation: Vec3::new(x_off, well_base_y + h - ch * 0.3, canopy_z),
-                rotation: Quat::from_rotation_z(base_angle),
-                scale: Vec3::ONE,
-            },
-            TitleEntity,
-            ParallaxLayer { depth, base_x: x_off },
-            TreeSway { speed: sway_speed * 1.15, phase: canopy_phase2, base_angle },
-        ));
-
-        // Second canopy layer (slightly offset, different autumn color)
-        let cw2 = cw * rng.gen_range(0.65..0.80_f32);
-        let ch2 = ch * rng.gen_range(0.55..0.75_f32);
-        let cx2_off = rng.gen_range(-8.0..8.0_f32);
-        let canopy_phase3 = sway_phase + 0.6;
-        commands.spawn((
-            Sprite {
-                color: Color::srgb(cr2 * 0.8, cg2 * 0.8, cb2 * 0.8),
-                custom_size: Some(Vec2::new(cw2, ch2)),
-                ..default()
-            },
-            Transform {
-                translation: Vec3::new(x_off + cx2_off, well_base_y + h - ch * 0.15, canopy_z + 0.1),
-                rotation: Quat::from_rotation_z(base_angle + 0.05),
-                scale: Vec3::ONE,
-            },
-            TitleEntity,
-            ParallaxLayer { depth, base_x: x_off + cx2_off },
-            TreeSway { speed: sway_speed * 1.3, phase: canopy_phase3, base_angle: base_angle + 0.05 },
         ));
     }
 
