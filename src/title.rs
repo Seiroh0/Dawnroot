@@ -390,17 +390,14 @@ fn setup_title(
         well_y: well_base_y + 25.0,
     });
 
-    // Trees (parallax: mid-ground) — tree.png sprite, 3 size variants
-    // (x_off, w, h) — sprite bottom sits on ground, anchor offset applied via Y
+    // Trees — 3 depth layers creating forest-clearing illusion around the well.
+    // Layer A: far background  — tiny, very dark, semi-transparent, slow parallax
+    // Layer B: mid-distance    — medium, dark-tinted, moderate parallax
+    // Layer C: near foreground — large, bright autumn tones, fast parallax
+    //
+    // (x_off, w, h, z_off, parallax_depth, r, g, b, alpha)
     let tree_handle: Handle<Image> = asset_server.load("tree.png");
-    let tree_defs: &[(f32, f32, f32)] = &[
-        (-340.0, 90.0,  110.0),  // outer left  — medium
-        (-240.0, 70.0,   86.0),  // inner left  — small
-        (-155.0, 110.0, 135.0),  // near left   — large
-        ( 155.0, 105.0, 128.0),  // near right  — large
-        ( 245.0,  68.0,  83.0),  // inner right — small
-        ( 345.0,  88.0, 108.0),  // outer right — medium
-    ];
+
     // Autumn canopy palette (used for leaf particles below)
     let autumn_colors: [(f32, f32, f32); 5] = [
         (0.85, 0.40, 0.05),
@@ -410,27 +407,66 @@ fn setup_title(
         (0.72, 0.50, 0.12),
     ];
 
-    for &(x_off, tw, th) in tree_defs {
-        let depth = if x_off.abs() > 290.0 { 0.32 } else { 0.48 };
-        let sway_speed = rng.gen_range(0.3..0.6_f32);
+    // (x, w, h, z, parallax, r, g, b, alpha)
+    #[allow(clippy::type_complexity)]
+    let tree_defs: &[(f32, f32, f32, f32, f32, f32, f32, f32, f32)] = &[
+        // ── Layer A: far background (tiny, very dark, faded) ──────────────
+        (-430.0, 42.0,  52.0, Z_BACKGROUND + 2.2, 0.12, 0.22, 0.10, 0.04, 0.35),
+        (-370.0, 36.0,  44.0, Z_BACKGROUND + 2.2, 0.12, 0.20, 0.09, 0.03, 0.30),
+        (-310.0, 48.0,  58.0, Z_BACKGROUND + 2.3, 0.14, 0.25, 0.11, 0.04, 0.38),
+        (-260.0, 38.0,  46.0, Z_BACKGROUND + 2.2, 0.12, 0.20, 0.09, 0.03, 0.28),
+        (-210.0, 44.0,  54.0, Z_BACKGROUND + 2.3, 0.14, 0.22, 0.10, 0.04, 0.32),
+        ( 210.0, 44.0,  54.0, Z_BACKGROUND + 2.3, 0.14, 0.22, 0.10, 0.04, 0.32),
+        ( 260.0, 38.0,  46.0, Z_BACKGROUND + 2.2, 0.12, 0.20, 0.09, 0.03, 0.28),
+        ( 310.0, 48.0,  58.0, Z_BACKGROUND + 2.3, 0.14, 0.25, 0.11, 0.04, 0.38),
+        ( 370.0, 36.0,  44.0, Z_BACKGROUND + 2.2, 0.12, 0.20, 0.09, 0.03, 0.30),
+        ( 430.0, 42.0,  52.0, Z_BACKGROUND + 2.2, 0.12, 0.22, 0.10, 0.04, 0.35),
+
+        // ── Layer B: mid-distance (medium, dark autumn tint) ──────────────
+        (-390.0, 68.0,  82.0, Z_BACKGROUND + 3.0, 0.25, 0.38, 0.15, 0.03, 0.55),
+        (-330.0, 62.0,  76.0, Z_BACKGROUND + 3.0, 0.25, 0.32, 0.12, 0.04, 0.50),
+        (-275.0, 72.0,  88.0, Z_BACKGROUND + 3.1, 0.28, 0.42, 0.18, 0.05, 0.60),
+        (-225.0, 60.0,  73.0, Z_BACKGROUND + 3.0, 0.25, 0.30, 0.11, 0.03, 0.48),
+        (-180.0, 75.0,  92.0, Z_BACKGROUND + 3.1, 0.28, 0.45, 0.20, 0.06, 0.62),
+        ( 180.0, 75.0,  92.0, Z_BACKGROUND + 3.1, 0.28, 0.45, 0.20, 0.06, 0.62),
+        ( 225.0, 60.0,  73.0, Z_BACKGROUND + 3.0, 0.25, 0.30, 0.11, 0.03, 0.48),
+        ( 275.0, 72.0,  88.0, Z_BACKGROUND + 3.1, 0.28, 0.42, 0.18, 0.05, 0.60),
+        ( 330.0, 62.0,  76.0, Z_BACKGROUND + 3.0, 0.25, 0.32, 0.12, 0.04, 0.50),
+        ( 390.0, 68.0,  82.0, Z_BACKGROUND + 3.0, 0.25, 0.38, 0.15, 0.03, 0.55),
+
+        // ── Layer C: near foreground (large, rich autumn, full opacity) ───
+        (-440.0, 100.0, 122.0, Z_BACKGROUND + 4.0, 0.45, 0.85, 0.40, 0.05, 0.92),
+        (-365.0,  90.0, 110.0, Z_BACKGROUND + 4.0, 0.45, 0.75, 0.18, 0.08, 0.90),
+        (-295.0, 110.0, 134.0, Z_BACKGROUND + 4.1, 0.48, 0.90, 0.70, 0.10, 0.95),
+        (-230.0,  95.0, 116.0, Z_BACKGROUND + 4.0, 0.45, 0.65, 0.28, 0.08, 0.90),
+        (-165.0, 118.0, 144.0, Z_BACKGROUND + 4.2, 0.50, 0.85, 0.40, 0.05, 1.00),
+        ( 165.0, 118.0, 144.0, Z_BACKGROUND + 4.2, 0.50, 0.85, 0.40, 0.05, 1.00),
+        ( 230.0,  95.0, 116.0, Z_BACKGROUND + 4.0, 0.45, 0.65, 0.28, 0.08, 0.90),
+        ( 295.0, 110.0, 134.0, Z_BACKGROUND + 4.1, 0.48, 0.90, 0.70, 0.10, 0.95),
+        ( 365.0,  90.0, 110.0, Z_BACKGROUND + 4.0, 0.45, 0.75, 0.18, 0.08, 0.90),
+        ( 440.0, 100.0, 122.0, Z_BACKGROUND + 4.0, 0.45, 0.85, 0.40, 0.05, 0.92),
+    ];
+
+    for &(x_off, tw, th, z, parallax, tr, tg, tb, ta) in tree_defs {
+        let sway_speed = rng.gen_range(0.25..0.55_f32);
         let sway_phase = rng.gen_range(0.0..std::f32::consts::TAU);
-        let base_angle: f32 = rng.gen_range(-0.012..0.012);
-        // Bottom of sprite on ground — center Y = ground + half height
+        let base_angle: f32 = rng.gen_range(-0.015..0.015);
         let sprite_y = well_base_y + th / 2.0;
 
         commands.spawn((
             Sprite {
                 image: tree_handle.clone(),
+                color: Color::srgba(tr, tg, tb, ta),
                 custom_size: Some(Vec2::new(tw, th)),
                 ..default()
             },
             Transform {
-                translation: Vec3::new(x_off, sprite_y, Z_BACKGROUND + 3.5),
+                translation: Vec3::new(x_off, sprite_y, z),
                 rotation: Quat::from_rotation_z(base_angle),
                 scale: Vec3::ONE,
             },
             TitleEntity,
-            ParallaxLayer { depth, base_x: x_off },
+            ParallaxLayer { depth: parallax, base_x: x_off },
             TreeSway { speed: sway_speed, phase: sway_phase, base_angle },
         ));
     }
