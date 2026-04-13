@@ -76,7 +76,7 @@ impl Plugin for PlayerPlugin {
 
         // Load weapon sprites at startup (path has spaces — exact string required).
         let weapon_base = "Weapons/Weapons Asset 16x16/Weapons Asset 16x16/Weapons Asset 16x16/";
-        let rusty_sword:     Handle<Image> = asset_server.load(format!("{weapon_base}001.png"));
+        let rusty_sword:     Handle<Image> = asset_server.load("sword.png");
         let steel_blade:     Handle<Image> = asset_server.load(format!("{weapon_base}010.png"));
         let flame_edge:      Handle<Image> = asset_server.load(format!("{weapon_base}020.png"));
         let frost_fang:      Handle<Image> = asset_server.load(format!("{weapon_base}050.png"));
@@ -281,13 +281,18 @@ fn spawn_player(
         ));
 
         // Weapon sprite child — initially hidden (no weapon equipped)
+        // Rest rotation: -PI/2 rotates the diagonal sprite so tip points forward-up (~45°)
         p.spawn((
             Sprite {
                 image: weapon_assets.rusty_sword.clone(),
-                custom_size: Some(Vec2::new(32.0, 32.0)),
+                custom_size: Some(Vec2::new(40.0, 40.0)),
                 ..default()
             },
-            Transform::from_xyz(12.0, -2.0, 0.2),
+            Transform {
+                translation: Vec3::new(14.0, 2.0, 0.2),
+                rotation: Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2),
+                scale: Vec3::ONE,
+            },
             Visibility::Hidden,
             WeaponSprite,
         ));
@@ -423,12 +428,12 @@ fn player_input(
             timer: 0.0,
             duration: 0.15,
         });
-        // Trigger weapon swing animation
+        // Trigger weapon swing animation (base_angle = rest rotation)
         if let Ok(weapon_entity) = weapon_sprite_q.get_single() {
             commands.entity(weapon_entity).insert(WeaponSwingAnim {
                 duration: MELEE_COOLDOWN * 0.8,
                 elapsed: 0.0,
-                base_angle: 0.0,
+                base_angle: -std::f32::consts::FRAC_PI_2,
                 direction: player.facing,
             });
         }
@@ -767,7 +772,7 @@ fn animate_weapon_swing(
         tf.rotation = Quat::from_rotation_z(anim.base_angle + angle);
 
         if t >= 1.0 {
-            tf.rotation = Quat::IDENTITY;
+            tf.rotation = Quat::from_rotation_z(anim.base_angle);
             commands.entity(entity).remove::<WeaponSwingAnim>();
         }
     }
