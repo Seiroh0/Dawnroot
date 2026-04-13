@@ -212,36 +212,36 @@ fn setup_title(
         ));
     }
 
-    // Moon (parallax: far) — full circle with soft glow halos
+    // Moon (parallax: far) — sprite with soft glow halos
     let moon_x = 280.0;
     let moon_y = 180.0;
-    // Outer softest glow (120x120)
+    // Outer softest glow
     commands.spawn((
         Sprite {
-            color: Color::srgba(0.8, 0.75, 0.5, 0.03),
-            custom_size: Some(Vec2::new(120.0, 120.0)),
+            color: Color::srgba(0.9, 0.88, 0.7, 0.04),
+            custom_size: Some(Vec2::new(130.0, 130.0)),
             ..default()
         },
         Transform::from_xyz(moon_x, moon_y, Z_BACKGROUND + 0.6),
         TitleEntity,
         ParallaxLayer { depth: 0.15, base_x: moon_x },
     ));
-    // Inner glow (80x80)
+    // Inner glow
     commands.spawn((
         Sprite {
-            color: Color::srgba(1.0, 0.95, 0.7, 0.08),
-            custom_size: Some(Vec2::new(80.0, 80.0)),
+            color: Color::srgba(1.0, 0.97, 0.8, 0.07),
+            custom_size: Some(Vec2::new(88.0, 88.0)),
             ..default()
         },
         Transform::from_xyz(moon_x, moon_y, Z_BACKGROUND + 0.7),
         TitleEntity,
         ParallaxLayer { depth: 0.15, base_x: moon_x },
     ));
-    // Moon disc (40x40)
+    // Moon sprite
     commands.spawn((
         Sprite {
-            color: Color::srgb(1.0, 0.95, 0.7),
-            custom_size: Some(Vec2::new(40.0, 40.0)),
+            image: asset_server.load("moon.png"),
+            custom_size: Some(Vec2::new(72.0, 72.0)),
             ..default()
         },
         Transform::from_xyz(moon_x, moon_y, Z_BACKGROUND + 0.8),
@@ -345,11 +345,7 @@ fn setup_title(
     let well_x = 0.0;
     let well_size = 96.0; // ~2x native sprite size
     let well_sprite_y = well_base_y + well_size / 2.0; // bottom edge sits on ground
-    let well_texture: Handle<Image> = if meta.runs_completed > 0 {
-        asset_server.load("sprites/Well2.png")
-    } else {
-        asset_server.load("sprites/Well1.png")
-    };
+    let well_texture: Handle<Image> = asset_server.load("well.png");
     commands.spawn((
         Sprite {
             image: well_texture,
