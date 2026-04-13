@@ -1,0 +1,5 @@
+[env]
+# Override CC/AR env vars that may be set globally (e.g. CC=clang, AR=llvm-ar)
+# On aarch64-pc-windows-msvc we use the MSVC toolchain which doesn't need these.
+CC = { value = "cl", force = true }
+AR = { value = "lib", force = true }
