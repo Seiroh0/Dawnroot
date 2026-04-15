@@ -43,6 +43,8 @@ impl Plugin for TitlePlugin {
                     tree_sway_animate,
                     star_twinkle_animate,
                     well_glow_animate,
+                    well_bob_animate,
+                    update_falling_leaves,
                 )
                     .run_if(in_state(GameState::WellIntro)),
             );
@@ -1246,7 +1248,7 @@ struct DarknessOverlay;
 
 #[derive(Component)]
 struct IntroWellSprite {
-    target_y: f32,
+    _unused: f32,  // kept so queries don't break; well is now static
 }
 
 /// Animation state for the intro player spritesheet.
@@ -1279,11 +1281,12 @@ struct IntroState {
 
 #[derive(PartialEq)]
 enum IntroPhase {
-    WellSlideIn,
-    WalkToWell,
-    JumpIn,
-    FallDarkness,
-    LandInCave,
+    Opening,       // brief atmospheric hold before player walks in
+    WalkToWell,    // player walks toward the well
+    LookAtWell,    // player pauses at the well edge, glow pulses
+    JumpIn,        // player leaps into the well
+    FallDarkness,  // screen goes dark as player falls
+    LandInCave,    // impact + transition to Playing
 }
 
 fn setup_well_intro(mut commands: Commands, sprite_assets: Res<PlayerSpriteAssets>, asset_server: Res<AssetServer>) {
@@ -1294,7 +1297,7 @@ fn setup_well_intro(mut commands: Commands, sprite_assets: Res<PlayerSpriteAsset
     let well_base_y = ground_y + 52.5;
 
     commands.insert_resource(IntroState {
-        phase: IntroPhase::WellSlideIn,
+        phase: IntroPhase::Opening,
         timer: 0.0,
         player_start_y: well_base_y + 16.0,
         afterimage_timer: 0.0,
@@ -1456,22 +1459,57 @@ fn setup_well_intro(mut commands: Commands, sprite_assets: Res<PlayerSpriteAsset
         WellGlow { timer: 1.5 },
     ));
 
-    // Well — slide in from below screen using well.png
+    // Well — static, already present in the clearing from the start
     let well_size = 96.0;
-    let well_final_y = well_base_y + well_size / 2.0;
-    let well_start_y = -VIEWPORT_H / 2.0 - well_size;
+    let well_y = well_base_y + well_size / 2.0;
     commands.spawn((
         Sprite {
             image: asset_server.load("well.png"),
             custom_size: Some(Vec2::new(well_size, well_size)),
             ..default()
         },
-        Transform::from_xyz(0.0, well_start_y, Z_BACKGROUND + 5.5),
+        Transform::from_xyz(0.0, well_y, Z_BACKGROUND + 5.5),
         IntroEntity,
-        IntroWellSprite { target_y: well_final_y },
+        IntroWellSprite { _unused: 0.0 },
+        WellBob { timer: 0.0, base_y: well_y },
     ));
 
-    // Intro player — hidden until well arrives, then walks in
+    // Falling autumn leaves — same palette as title screen
+    let autumn_colors: [(f32, f32, f32); 5] = [
+        (0.85, 0.40, 0.05), (0.75, 0.18, 0.08), (0.90, 0.70, 0.10),
+        (0.65, 0.28, 0.08), (0.72, 0.50, 0.12),
+    ];
+    for _ in 0..10 {
+        let ci = rng.gen_range(0..autumn_colors.len());
+        let (lr, lg, lb) = autumn_colors[ci];
+        let x = rng.gen_range(-VIEWPORT_W / 2.5..VIEWPORT_W / 2.5);
+        let y = rng.gen_range(-VIEWPORT_H / 4.0..VIEWPORT_H / 2.5);
+        let sz = rng.gen_range(2.5..5.0_f32);
+        let lt = rng.gen_range(5.0..12.0_f32);
+        commands.spawn((
+            Sprite {
+                color: Color::srgba(lr, lg, lb, 0.7),
+                custom_size: Some(Vec2::new(sz, sz * 0.6)),
+                ..default()
+            },
+            Transform {
+                translation: Vec3::new(x, y, Z_BACKGROUND + 6.0),
+                rotation: Quat::from_rotation_z(rng.gen_range(0.0..std::f32::consts::TAU)),
+                scale: Vec3::ONE,
+            },
+            IntroEntity,
+            FallingLeaf {
+                vx: rng.gen_range(-12.0..12.0),
+                vy: rng.gen_range(-18.0..-8.0),
+                spin: rng.gen_range(-1.5..1.5),
+                sway_phase: rng.gen_range(0.0..std::f32::consts::TAU),
+                lifetime: lt,
+                max_lifetime: lt,
+            },
+        ));
+    }
+
+    // Intro player — hidden until Opening phase ends, then walks in
     let run_start_index = 1 * 10;
     let sprite_size = 32.0 * 2.0;
     commands.spawn((
@@ -1514,34 +1552,23 @@ fn update_well_intro(
     mut commands: Commands,
     mut state: ResMut<IntroState>,
     mut player_q: Query<(&mut Transform, &mut Visibility), (With<IntroPlayer>, Without<IntroLegL>, Without<IntroLegR>, Without<IntroWellSprite>)>,
-    mut parts_q: Query<&mut Sprite, (With<IntroPlayerPart>, Without<DarknessOverlay>)>,
+    mut parts_q: Query<&mut Sprite, (With<IntroPlayerPart>, Without<DarknessOverlay>, Without<WellGlow>)>,
     mut legl_q: Query<&mut Transform, (With<IntroLegL>, Without<IntroPlayer>, Without<IntroLegR>, Without<IntroWellSprite>)>,
     mut legr_q: Query<&mut Transform, (With<IntroLegR>, Without<IntroPlayer>, Without<IntroLegL>, Without<IntroWellSprite>)>,
-    mut darkness_q: Query<&mut Sprite, (With<DarknessOverlay>, Without<IntroPlayerPart>)>,
+    mut darkness_q: Query<&mut Sprite, (With<DarknessOverlay>, Without<IntroPlayerPart>, Without<WellGlow>)>,
+    mut glow_q: Query<&mut Sprite, (With<WellGlow>, Without<DarknessOverlay>, Without<IntroPlayerPart>)>,
     mut shake_q: Query<&mut IntroScreenShake>,
-    mut well_sprite_q: Query<(&IntroWellSprite, &mut Transform), (Without<IntroPlayer>, Without<IntroLegL>, Without<IntroLegR>)>,
     mut next_state: ResMut<NextState<GameState>>,
     time: Res<Time>,
 ) {
     let dt = time.delta_secs();
     state.timer += dt;
 
-    // Well slide-in phase: animate well from below screen, player hidden
-    if state.phase == IntroPhase::WellSlideIn {
-        let slide_duration = 0.8;
-        let t = (state.timer / slide_duration).min(1.0);
-        // Cubic ease-out: 1 - (1-t)^3
-        let eased = 1.0 - (1.0 - t).powi(3);
-
-        for (well, mut w_tf) in &mut well_sprite_q {
-            let start_y = -VIEWPORT_H / 2.0 - 96.0;
-            w_tf.translation.y = start_y + (well.target_y - start_y) * eased;
-        }
-
-        if state.timer >= slide_duration + 0.15 {
+    // ── Opening: atmospheric hold, player hidden ─────────────────────
+    if state.phase == IntroPhase::Opening {
+        if state.timer >= 0.8 {
             state.phase = IntroPhase::WalkToWell;
             state.timer = 0.0;
-            // Show the player now
             if let Ok((_, mut vis)) = player_q.get_single_mut() {
                 *vis = Visibility::Visible;
             }
@@ -1552,7 +1579,8 @@ fn update_well_intro(
     let Ok((mut p_tf, _)) = player_q.get_single_mut() else { return };
 
     match state.phase {
-        IntroPhase::WellSlideIn => unreachable!(),
+        IntroPhase::Opening => unreachable!(),
+
         IntroPhase::WalkToWell => {
             p_tf.translation.x += 200.0 * dt;
             let bob = (state.timer * 14.0).sin().abs() * 3.0;
@@ -1568,17 +1596,36 @@ fn update_well_intro(
                 rl.translation = Vec3::new(3.5 + sw_r * 0.3, -12.0 + sw_r.abs() * 0.5, 0.0);
             }
 
-            if p_tf.translation.x >= -5.0 {
-                p_tf.translation.x = 0.0;
-                if let Ok(mut ll) = legl_q.get_single_mut() {
-                    ll.translation = Vec3::new(-3.5, -12.0, 0.0);
-                }
-                if let Ok(mut rl) = legr_q.get_single_mut() {
-                    rl.translation = Vec3::new(3.5, -12.0, 0.0);
-                }
+            // Stop about one body-width left of the well
+            if p_tf.translation.x >= -38.0 {
+                p_tf.translation.x = -38.0;
+                p_tf.translation.y = state.player_start_y;
+                if let Ok(mut ll) = legl_q.get_single_mut() { ll.translation = Vec3::new(-3.5, -12.0, 0.0); }
+                if let Ok(mut rl) = legr_q.get_single_mut() { rl.translation = Vec3::new(3.5, -12.0, 0.0); }
+                state.phase = IntroPhase::LookAtWell;
+                state.timer = 0.0;
+            }
+        }
+
+        // ── Player pauses at the well edge, glow pulses brighter ─────
+        IntroPhase::LookAtWell => {
+            // Subtle idle sway
+            p_tf.translation.y = state.player_start_y + (state.timer * 3.0).sin() * 1.2;
+
+            // Pulse the well glow brighter over 0.8s
+            let glow_t = (state.timer / 0.8).min(1.0);
+            for mut gsp in &mut glow_q {
+                let base = gsp.color.to_srgba();
+                let boosted_alpha = base.alpha + glow_t * 0.12;
+                gsp.color = Color::srgba(base.red, base.green, base.blue, boosted_alpha.min(0.35));
+            }
+
+            if state.timer >= 0.9 {
                 state.phase = IntroPhase::JumpIn;
                 state.timer = 0.0;
                 state.afterimage_timer = 0.0;
+                // Snap to center for the jump
+                p_tf.translation.x = -5.0;
             }
         }
 
