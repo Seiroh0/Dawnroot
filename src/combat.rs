@@ -3,7 +3,8 @@ use crate::{
     constants::*,
     GameState, RunData, PlayingEntity,
     player::{Player, MeleeHitbox, PlayerProjectile, PlayerDamaged, PlayerDied, PlayerBlocked},
-    enemy::{Enemy, EnemyDefeated, EnemyProjectile, EnemySpriteAssets, Intangible, SlimeEnemy},
+    enemy::{Enemy, EnemyDefeated, EnemyProjectile, EnemySpriteAssets, Intangible, SlimeEnemy, EliteEnemy, EliteModifier, BossEnemy},
+    relic::RelicDropEvent,
     spell::{SpellProjectile, LightningStrike},
     camera::{ScreenShake, trigger_shake},
     equipment::PlayerStats,
@@ -20,6 +21,12 @@ pub struct DamageNumberEvent {
     pub kind: DamageNumberKind,
 }
 
+/// Fired when a Vampiric elite lands a hit — carries the enemy entity to heal.
+#[derive(Event)]
+pub struct VampiricHealEvent {
+    pub enemy: Entity,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum DamageNumberKind {
     PlayerHit,
@@ -33,6 +40,7 @@ pub struct CombatPlugin;
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<DamageNumberEvent>()
+           .add_event::<VampiricHealEvent>()
         .add_systems(
             Update,
             (
@@ -43,6 +51,7 @@ impl Plugin for CombatPlugin {
                 player_vs_enemy,
                 enemy_projectile_vs_player,
                 melee_vs_wall,
+                vampiric_heal_system,
             )
                 .run_if(in_state(GameState::Playing)),
         );
@@ -93,12 +102,13 @@ fn apply_lifesteal(player: &mut Player, damage: i32, lifesteal: f32) {
 fn melee_vs_enemy(
     mut commands: Commands,
     mut hitbox_q: Query<(&Transform, &mut MeleeHitbox)>,
-    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite, Option<&Intangible>, Option<&SlimeEnemy>, Option<&crate::enemy::BossEnemy>)>,
+    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite, Option<&Intangible>, Option<&SlimeEnemy>, Option<&BossEnemy>, Option<&EliteEnemy>)>,
     mut ev_defeated: EventWriter<EnemyDefeated>,
     mut ev_dmg: EventWriter<DamageNumberEvent>,
     mut ev_sfx: EventWriter<PlaySfxEvent>,
     mut ev_shake: EventWriter<ShakeEvent>,
     mut ev_hitstop: EventWriter<HitStopEvent>,
+    mut ev_relic_drop: EventWriter<RelicDropEvent>,
     mut run: ResMut<RunData>,
     mut shake_q: Query<&mut ScreenShake>,
     stats: Res<PlayerStats>,
@@ -107,7 +117,7 @@ fn melee_vs_enemy(
     assets: Res<EnemySpriteAssets>,
 ) {
     for (h_tf, mut hitbox) in &mut hitbox_q {
-        for (e_entity, e_tf, mut enemy, sprite, intangible, slime, boss) in &mut enemy_q {
+        for (e_entity, e_tf, mut enemy, sprite, intangible, slime, boss, elite) in &mut enemy_q {
             if intangible.is_some() { continue; }
             // Skip enemies already hit by this swing
             if hitbox.hit_entities.contains(&e_entity) { continue; }
@@ -118,7 +128,13 @@ fn melee_vs_enemy(
                 && dist.y < MELEE_WIDTH / 2.0 + e_size.y / 2.0
             {
                 hitbox.hit_entities.push(e_entity);
-                let (total_dmg, is_crit) = calc_damage(hitbox.damage, &stats);
+                let (raw_dmg, is_crit) = calc_damage(hitbox.damage, &stats);
+                // Armored elites take 50% less damage
+                let total_dmg = if elite.map_or(false, |e| matches!(e.modifier, EliteModifier::Armored)) {
+                    (raw_dmg as f32 * 0.5).max(1.0) as i32
+                } else {
+                    raw_dmg
+                };
                 enemy.health -= total_dmg;
                 ev_sfx.send(PlaySfxEvent(SfxType::MeleeHit));
                 ev_shake.send(ShakeEvent { trauma: 0.15 });
@@ -143,6 +159,10 @@ fn melee_vs_enemy(
                     if let Some(se) = slime {
                         crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run, &assets);
                     }
+                    // Elite: 20% chance to drop a relic
+                    if elite.is_some() && rand::random::<f32>() < 0.20 {
+                        ev_relic_drop.send(RelicDropEvent);
+                    }
                     let pcol = if boss.is_some() { Color::srgb(0.9, 0.15, 0.1) } else { sprite.color };
                     kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy, pcol);
                     if let Ok(mut shake) = shake_q.get_single_mut() {
@@ -157,9 +177,10 @@ fn melee_vs_enemy(
 fn ranged_vs_enemy(
     mut commands: Commands,
     proj_q: Query<(Entity, &Transform, &PlayerProjectile)>,
-    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite, Option<&Intangible>, Option<&SlimeEnemy>)>,
+    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite, Option<&Intangible>, Option<&SlimeEnemy>, Option<&EliteEnemy>)>,
     mut ev_defeated: EventWriter<EnemyDefeated>,
     mut ev_dmg: EventWriter<DamageNumberEvent>,
+    mut ev_relic_drop: EventWriter<RelicDropEvent>,
     mut run: ResMut<RunData>,
     mut shake_q: Query<&mut ScreenShake>,
     stats: Res<PlayerStats>,
@@ -168,13 +189,18 @@ fn ranged_vs_enemy(
     assets: Res<EnemySpriteAssets>,
 ) {
     for (p_entity, p_tf, proj) in &proj_q {
-        for (e_entity, e_tf, mut enemy, sprite, intangible, slime) in &mut enemy_q {
+        for (e_entity, e_tf, mut enemy, sprite, intangible, slime, elite) in &mut enemy_q {
             if intangible.is_some() { continue; }
             let e_size = sprite.custom_size.unwrap_or(Vec2::new(20.0, 20.0));
             let dist = (p_tf.translation.xy() - e_tf.translation.xy()).abs();
 
             if dist.x < 5.0 + e_size.x / 2.0 && dist.y < 3.0 + e_size.y / 2.0 {
-                let (total_dmg, is_crit) = calc_damage(proj.damage, &stats);
+                let (raw_dmg, is_crit) = calc_damage(proj.damage, &stats);
+                let total_dmg = if elite.map_or(false, |e| matches!(e.modifier, EliteModifier::Armored)) {
+                    (raw_dmg as f32 * 0.5).max(1.0) as i32
+                } else {
+                    raw_dmg
+                };
                 enemy.health -= total_dmg;
                 let kind = if is_crit { DamageNumberKind::CritHit } else { DamageNumberKind::EnemyHit };
                 ev_dmg.send(DamageNumberEvent { position: e_tf.translation, amount: total_dmg, kind });
@@ -187,6 +213,10 @@ fn ranged_vs_enemy(
                 if enemy.health <= 0 {
                     if let Some(se) = slime {
                         crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run, &assets);
+                    }
+                    // Elite: 20% chance to drop a relic
+                    if elite.is_some() && rand::random::<f32>() < 0.20 {
+                        ev_relic_drop.send(RelicDropEvent);
                     }
                     kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy, sprite.color);
                     if let Ok(mut shake) = shake_q.get_single_mut() {
@@ -202,9 +232,10 @@ fn ranged_vs_enemy(
 fn spell_vs_enemy(
     mut commands: Commands,
     proj_q: Query<(Entity, &Transform, &SpellProjectile)>,
-    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite, Option<&Intangible>, Option<&SlimeEnemy>)>,
+    mut enemy_q: Query<(Entity, &Transform, &mut Enemy, &Sprite, Option<&Intangible>, Option<&SlimeEnemy>, Option<&EliteEnemy>)>,
     mut ev_defeated: EventWriter<EnemyDefeated>,
     mut ev_dmg: EventWriter<DamageNumberEvent>,
+    mut ev_relic_drop: EventWriter<RelicDropEvent>,
     mut run: ResMut<RunData>,
     mut shake_q: Query<&mut ScreenShake>,
     stats: Res<PlayerStats>,
@@ -213,13 +244,18 @@ fn spell_vs_enemy(
     assets: Res<EnemySpriteAssets>,
 ) {
     for (p_entity, p_tf, proj) in &proj_q {
-        for (e_entity, e_tf, mut enemy, sprite, intangible, slime) in &mut enemy_q {
+        for (e_entity, e_tf, mut enemy, sprite, intangible, slime, elite) in &mut enemy_q {
             if intangible.is_some() { continue; }
             let e_size = sprite.custom_size.unwrap_or(Vec2::new(20.0, 20.0));
             let dist = (p_tf.translation.xy() - e_tf.translation.xy()).abs();
 
             if dist.x < 8.0 + e_size.x / 2.0 && dist.y < 8.0 + e_size.y / 2.0 {
-                let (total_dmg, is_crit) = calc_damage(proj.damage, &stats);
+                let (raw_dmg, is_crit) = calc_damage(proj.damage, &stats);
+                let total_dmg = if elite.map_or(false, |e| matches!(e.modifier, EliteModifier::Armored)) {
+                    (raw_dmg as f32 * 0.5).max(1.0) as i32
+                } else {
+                    raw_dmg
+                };
                 enemy.health -= total_dmg;
                 let kind = if is_crit { DamageNumberKind::CritHit } else { DamageNumberKind::EnemyHit };
                 ev_dmg.send(DamageNumberEvent { position: e_tf.translation, amount: total_dmg, kind });
@@ -232,6 +268,10 @@ fn spell_vs_enemy(
                 if enemy.health <= 0 {
                     if let Some(se) = slime {
                         crate::enemy::slime_split_on_death(&mut commands, e_tf.translation, se.size, room_state.floor, &mut run, &assets);
+                    }
+                    // Elite: 20% chance to drop a relic
+                    if elite.is_some() && rand::random::<f32>() < 0.20 {
+                        ev_relic_drop.send(RelicDropEvent);
                     }
                     kill_enemy(&mut commands, &mut run, &mut ev_defeated, e_entity, e_tf.translation, &enemy, sprite.color);
                     if let Ok(mut shake) = shake_q.get_single_mut() {
@@ -301,7 +341,7 @@ fn apply_block_reduction(raw_dmg: i32, is_blocking: bool) -> i32 {
 fn player_vs_enemy(
     mut commands: Commands,
     mut player_q: Query<(Entity, &Transform, &mut Player)>,
-    enemy_q: Query<(&Transform, &Enemy, &Sprite, Option<&Intangible>), Without<Player>>,
+    enemy_q: Query<(Entity, &Transform, &Enemy, &Sprite, Option<&Intangible>, Option<&EliteEnemy>), Without<Player>>,
     mut ev_damaged: EventWriter<PlayerDamaged>,
     mut ev_died: EventWriter<PlayerDied>,
     mut ev_blocked: EventWriter<PlayerBlocked>,
@@ -309,13 +349,14 @@ fn player_vs_enemy(
     mut ev_sfx: EventWriter<PlaySfxEvent>,
     mut ev_shake: EventWriter<ShakeEvent>,
     mut ev_hitstop: EventWriter<HitStopEvent>,
+    mut ev_vampiric: EventWriter<VampiricHealEvent>,
     mut shake_q: Query<&mut ScreenShake>,
     stats: Res<PlayerStats>,
     player_sprite_q: Query<Entity, With<crate::player::PlayerSprite>>,
 ) {
     let Ok((_player_entity, p_tf, mut player)) = player_q.get_single_mut() else { return };
 
-    for (e_tf, enemy, sprite, intangible) in &enemy_q {
+    for (e_entity, e_tf, enemy, sprite, intangible, elite) in &enemy_q {
         if intangible.is_some() { continue; }
         let e_size = sprite.custom_size.unwrap_or(Vec2::new(20.0, 20.0));
         let diff = p_tf.translation.xy() - e_tf.translation.xy();
@@ -330,6 +371,10 @@ fn player_vs_enemy(
                 }
                 let reduced = apply_block_reduction(raw_dmg, is_blocked);
                 player.health -= reduced;
+                // Vampiric elite heals 2 HP on hit
+                if elite.map_or(false, |e| matches!(e.modifier, EliteModifier::Vampiric)) {
+                    ev_vampiric.send(VampiricHealEvent { enemy: e_entity });
+                }
                 player.invulnerable = INVULN_TIME;
                 let kind = if is_blocked { DamageNumberKind::Blocked } else { DamageNumberKind::PlayerHit };
                 ev_dmg.send(DamageNumberEvent { position: p_tf.translation, amount: reduced, kind });
@@ -503,6 +548,18 @@ fn melee_vs_wall(
                     }
                 }
             }
+        }
+    }
+}
+
+/// Heals Vampiric elite enemies by 2 HP when they land a hit on the player.
+fn vampiric_heal_system(
+    mut ev: EventReader<VampiricHealEvent>,
+    mut enemy_q: Query<&mut Enemy>,
+) {
+    for ev in ev.read() {
+        if let Ok(mut enemy) = enemy_q.get_mut(ev.enemy) {
+            enemy.health = (enemy.health + 2).min(enemy.max_health);
         }
     }
 }

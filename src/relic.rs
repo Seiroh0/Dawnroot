@@ -43,6 +43,10 @@ impl RelicIconAssets {
     }
 }
 
+/// Fired when an elite enemy dies with a 20% chance — adds a random relic to inventory.
+#[derive(Event)]
+pub struct RelicDropEvent;
+
 pub struct RelicPlugin;
 
 impl Plugin for RelicPlugin {
@@ -64,6 +68,7 @@ impl Plugin for RelicPlugin {
         app.insert_resource(icons)
             .insert_resource(RelicInventory::default())
             .insert_resource(RelicChoiceState::default())
+            .add_event::<RelicDropEvent>()
             .add_systems(OnEnter(GameState::Playing), reset_relics)
             .add_systems(
                 Update,
@@ -73,6 +78,7 @@ impl Plugin for RelicPlugin {
                     vampiric_fang_system,
                     chrono_bracelet_system,
                     guardian_amulet_system,
+                    handle_relic_drop,
                 )
                     .run_if(in_state(GameState::Playing)),
             );
@@ -501,6 +507,48 @@ fn guardian_amulet_system(
 // ---------------------------------------------------------------------------
 // Relic icon sprites
 // ---------------------------------------------------------------------------
+
+/// Grants a random relic from the drop event (20% chance drop from elite enemies).
+fn handle_relic_drop(
+    mut ev: EventReader<RelicDropEvent>,
+    mut inventory: ResMut<RelicInventory>,
+    mut player_q: Query<&mut Player>,
+    mut recalc_ev: EventWriter<crate::equipment::RecalcStats>,
+    mut ev_sfx: EventWriter<PlaySfxEvent>,
+) {
+    for _ in ev.read() {
+        let available: Vec<Relic> = Relic::ALL
+            .iter()
+            .copied()
+            .filter(|r| !inventory.has(*r))
+            .collect();
+        if available.is_empty() { continue; }
+
+        // Pick a random relic using a simple random index
+        let idx = (rand::random::<u32>() as usize) % available.len();
+        let relic = available[idx];
+        inventory.relics.push(relic);
+        ev_sfx.send(PlaySfxEvent(SfxType::RelicPickup));
+
+        // Apply immediate effects
+        if let Ok(mut player) = player_q.get_single_mut() {
+            match relic {
+                Relic::IronHeart => {
+                    player.max_health += 2;
+                    player.health += 2;
+                }
+                Relic::SwiftBoots => {
+                    player.bonus_speed += 0.2;
+                }
+                Relic::WarriorsBand => {
+                    player.bonus_attack += 1;
+                }
+                _ => {}
+            }
+        }
+        recalc_ev.send(crate::equipment::RecalcStats);
+    }
+}
 
 fn spawn_relic_icon(parent: &mut ChildBuilder, relic: Relic, icons: &RelicIconAssets) {
     parent.spawn((

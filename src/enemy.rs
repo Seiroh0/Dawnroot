@@ -87,6 +87,7 @@ impl Plugin for EnemyPlugin {
                     ghost_enemy_ai,
                     enemy_projectile_movement,
                     count_alive_enemies,
+                    boss_phase_system,
                 )
                     .run_if(in_state(GameState::Playing)),
             )
@@ -105,6 +106,7 @@ impl Plugin for EnemyPlugin {
                     apply_elite_to_new_enemies,
                     apply_elite_buffs,
                     animate_elite_aura,
+                    apply_berserker_rage,
                 )
                     .run_if(in_state(GameState::Playing)),
             );
@@ -271,25 +273,46 @@ pub struct GhostWisp;
 #[derive(Component)]
 pub struct BossEnemy;
 
+/// Tracks the current phase of a boss enemy.
+#[derive(Component, PartialEq, Clone, Copy)]
+pub enum BossPhase {
+    One,
+    Two,
+    Three,
+}
+
+/// Timer for the boss phase-entry flash effect.
+#[derive(Component)]
+pub struct BossPhaseFlash {
+    pub timer: f32,
+    pub phase: BossPhase,
+}
+
 /// Elite enemy modifier — stronger, glowing variant of a normal enemy.
 #[derive(Component)]
 pub struct EliteEnemy {
     pub modifier: EliteModifier,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum EliteModifier {
     /// Takes 50% less damage
     Armored,
-    /// Moves 60% faster
-    Swift,
-    /// 2x contact damage
-    Brutal,
+    /// Moves 60% faster, attacks 30% faster
+    Fast,
+    /// Heals 2 HP when it lands a hit on the player
+    Vampiric,
+    /// Goes berserk below 40% HP — speed doubles, flashes red
+    Berserker,
 }
 
 /// Marker: elite buffs have been applied to this enemy's stats
 #[derive(Component)]
 struct EliteBuffApplied;
+
+/// Marker: berserker enemy is currently enraged (below 40% HP)
+#[derive(Component)]
+pub struct BerserkerRage;
 
 /// Pulsing glow aura child sprite on elite enemies
 #[derive(Component)]
@@ -743,6 +766,7 @@ fn spawn_boss_mushroom(commands: &mut Commands, floor: i32, assets: &EnemySprite
         Enemy { health: hp, max_health: hp, contact_damage: 2, score_reward: 600 + floor * 120, gold_drop: 60 + floor * 25 },
         GroundEnemy { speed: 70.0 + floor as f32 * 8.0, direction: -1.0, vy: 0.0, detect_range: 350.0, leap_cooldown: 2.0, is_leaping: false },
         BossEnemy,
+        BossPhase::One,
         RoomEntity, PlayingEntity,
     )).with_children(|parent| {
         parent.spawn((
@@ -774,6 +798,7 @@ fn spawn_boss_lava(commands: &mut Commands, floor: i32, assets: &EnemySpriteAsse
         Enemy { health: hp, max_health: hp, contact_damage: 3, score_reward: 700 + floor * 130, gold_drop: 70 + floor * 25 },
         ChargerEnemy { speed: 280.0 + floor as f32 * 15.0, detect_range: 500.0, charging: false, charge_dir: -1.0, cooldown: 0.0, did_stomp: false },
         BossEnemy,
+        BossPhase::One,
         RoomEntity, PlayingEntity,
     )).with_children(|parent| {
         parent.spawn((
@@ -805,6 +830,7 @@ fn spawn_boss_root(commands: &mut Commands, floor: i32, assets: &EnemySpriteAsse
         Enemy { health: hp, max_health: hp, contact_damage: 2, score_reward: 800 + floor * 150, gold_drop: 80 + floor * 30 },
         GroundEnemy { speed: 60.0 + floor as f32 * 6.0, direction: -1.0, vy: 0.0, detect_range: 400.0, leap_cooldown: 3.0, is_leaping: false },
         BossEnemy,
+        BossPhase::One,
         RoomEntity, PlayingEntity,
     )).with_children(|parent| {
         parent.spawn((
@@ -853,6 +879,7 @@ fn spawn_boss_warlord(commands: &mut Commands, floor: i32, assets: &EnemySpriteA
             is_leaping: false,
         },
         BossEnemy,
+        BossPhase::One,
         RoomEntity,
         PlayingEntity,
     )).with_children(|parent| {
@@ -953,7 +980,16 @@ fn ground_enemy_ai(
             }
         }
 
-        let elite_speed = if elite.map_or(false, |e| matches!(e.modifier, EliteModifier::Swift)) { 1.6 } else { 1.0 };
+        let elite_speed = if let Some(e) = elite {
+            match e.modifier {
+                EliteModifier::Fast => 1.6,
+                EliteModifier::Berserker => {
+                    let hp_ratio = enemy.health as f32 / enemy.max_health.max(1) as f32;
+                    if hp_ratio <= 0.4 { 2.0 } else { 1.0 }
+                }
+                _ => 1.0,
+            }
+        } else { 1.0 };
         let speed_mult = if ge.is_leaping { GOBLIN_LEAP_SPEED_MULT } else { 1.0 };
         tf.translation.x += ge.direction * ge.speed * speed_mult * phase_speed_mult * elite_speed * dt;
         tf.translation.y += ge.vy * dt;
@@ -968,6 +1004,69 @@ fn ground_enemy_ai(
             tf.translation.y = TILE_SIZE + 10.0;
             ge.vy = 0.0;
             ge.is_leaping = false;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Boss phase transition system
+// ---------------------------------------------------------------------------
+
+fn boss_phase_system(
+    mut commands: Commands,
+    mut boss_q: Query<(Entity, &Enemy, &mut BossPhase, &Children, Option<&mut BossPhaseFlash>), With<BossEnemy>>,
+    mut sprite_q: Query<&mut Sprite, With<EnemySprite>>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs();
+
+    for (entity, enemy, mut phase, children, flash_opt) in &mut boss_q {
+        // Tick flash effect if present
+        if let Some(mut flash) = flash_opt {
+            flash.timer -= dt;
+            let t = flash.timer;
+            let color = match flash.phase {
+                BossPhase::Two => {
+                    if (t * 12.0).sin() > 0.0 { Color::srgb(1.0, 0.1, 0.05) } else { Color::WHITE }
+                }
+                BossPhase::Three => {
+                    if (t * 16.0).sin() > 0.0 { Color::srgb(1.0, 0.4, 0.0) } else { Color::srgb(1.0, 0.1, 0.05) }
+                }
+                BossPhase::One => Color::WHITE,
+            };
+
+            for &child in children.iter() {
+                if let Ok(mut sprite) = sprite_q.get_mut(child) {
+                    sprite.color = color;
+                }
+            }
+
+            if flash.timer <= 0.0 {
+                for &child in children.iter() {
+                    if let Ok(mut sprite) = sprite_q.get_mut(child) {
+                        sprite.color = Color::WHITE;
+                    }
+                }
+                commands.entity(entity).remove::<BossPhaseFlash>();
+            }
+        }
+
+        // Check for phase transitions
+        let hp_ratio = enemy.health as f32 / enemy.max_health.max(1) as f32;
+        let new_phase = if hp_ratio <= 0.25 {
+            BossPhase::Three
+        } else if hp_ratio <= 0.5 {
+            BossPhase::Two
+        } else {
+            BossPhase::One
+        };
+
+        if new_phase != *phase {
+            *phase = new_phase;
+            commands.entity(entity).insert(BossPhaseFlash {
+                timer: 1.2,
+                phase: new_phase,
+            });
         }
     }
 }
@@ -1019,7 +1118,12 @@ fn flying_enemy_ai(
             }
         }
 
-        let elite_speed = if elite.map_or(false, |e| matches!(e.modifier, EliteModifier::Swift)) { 1.6 } else { 1.0 };
+        let elite_speed = if let Some(e) = elite {
+            match e.modifier {
+                EliteModifier::Fast => 1.6,
+                _ => 1.0,
+            }
+        } else { 1.0 };
         if let Some(pp) = player_pos {
             let dir = if pp.x > tf.translation.x { 1.0 } else { -1.0 };
             let speed = if fe.is_diving { fe.speed_x * 2.0 } else { fe.speed_x };
@@ -1275,20 +1379,16 @@ fn apply_elite_to_new_enemies(
         let hash = entity.index().wrapping_mul(2654435761);
         let roll = (hash % 100) as i32;
         if roll < 15 {
-            let modifier = match hash % 3 {
+            let modifier = match hash % 4 {
                 0 => EliteModifier::Armored,
-                1 => EliteModifier::Swift,
-                _ => EliteModifier::Brutal,
+                1 => EliteModifier::Fast,
+                2 => EliteModifier::Vampiric,
+                _ => EliteModifier::Berserker,
             };
-            let (aura_color, _label) = match modifier {
-                EliteModifier::Armored => (Color::srgba(0.3, 0.5, 0.9, 0.4), "Armored"),
-                EliteModifier::Swift   => (Color::srgba(0.2, 0.9, 0.3, 0.4), "Swift"),
-                EliteModifier::Brutal  => (Color::srgba(0.9, 0.2, 0.1, 0.4), "Brutal"),
-            };
-            // Buff the enemy: Armored gets 2x HP, Brutal gets 2x contact damage
-            // Swift modifier is applied in AI systems
+            // Purple glow for all elite variants
+            let aura_color = Color::srgba(0.7, 0.2, 1.0, 0.6);
             commands.entity(entity).insert(EliteEnemy { modifier });
-            // Add pulsing aura child
+            // Add pulsing purple aura child
             commands.entity(entity).with_children(|parent| {
                 parent.spawn((
                     Sprite {
@@ -1312,23 +1412,62 @@ fn apply_elite_buffs(
     for (entity, elite, mut enemy) in &mut query {
         match elite.modifier {
             EliteModifier::Armored => {
+                // 2x HP
                 enemy.health *= 2;
                 enemy.max_health *= 2;
             }
-            EliteModifier::Brutal => {
-                enemy.contact_damage *= 2;
-                enemy.health = (enemy.health as f32 * 1.5) as i32;
-                enemy.max_health = (enemy.max_health as f32 * 1.5) as i32;
+            EliteModifier::Fast => {
+                // 60% more speed (handled in AI), 2x HP
+                enemy.health *= 2;
+                enemy.max_health *= 2;
             }
-            EliteModifier::Swift => {
-                enemy.health = (enemy.health as f32 * 1.3) as i32;
-                enemy.max_health = (enemy.max_health as f32 * 1.3) as i32;
+            EliteModifier::Vampiric => {
+                // 2x HP
+                enemy.health *= 2;
+                enemy.max_health *= 2;
+            }
+            EliteModifier::Berserker => {
+                // 2x HP
+                enemy.health *= 2;
+                enemy.max_health *= 2;
             }
         }
-        // Elites drop more gold
-        enemy.gold_drop = (enemy.gold_drop as f32 * 1.5) as i32;
+        // All elites drop 3x gold
+        enemy.gold_drop *= 3;
         enemy.score_reward *= 2;
         commands.entity(entity).insert(EliteBuffApplied);
+    }
+}
+
+/// Activates Berserker rage below 40% HP and flashes the sprite red.
+fn apply_berserker_rage(
+    mut commands: Commands,
+    mut query: Query<(Entity, &Enemy, &EliteEnemy, Option<&BerserkerRage>, &Children), Without<BossEnemy>>,
+    mut sprite_q: Query<&mut Sprite, With<EnemySprite>>,
+    time: Res<Time>,
+) {
+    let t = time.elapsed_secs();
+    for (entity, enemy, elite, rage, children) in &mut query {
+        if !matches!(elite.modifier, EliteModifier::Berserker) { continue; }
+        let hp_ratio = enemy.health as f32 / enemy.max_health.max(1) as f32;
+        if hp_ratio <= 0.4 {
+            if rage.is_none() {
+                commands.entity(entity).insert(BerserkerRage);
+            }
+            // Flash sprite between red and white rapidly
+            let flash_color = if (t * 8.0).sin() > 0.0 {
+                Color::srgb(1.0, 0.15, 0.05)
+            } else {
+                Color::WHITE
+            };
+            for &child in children.iter() {
+                if let Ok(mut sprite) = sprite_q.get_mut(child) {
+                    sprite.color = flash_color;
+                }
+            }
+        } else if rage.is_some() {
+            commands.entity(entity).remove::<BerserkerRage>();
+        }
     }
 }
 
