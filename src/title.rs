@@ -1246,10 +1246,9 @@ struct IntroLegR;
 #[derive(Component)]
 struct DarknessOverlay;
 
+/// Marker for the well sprite in the intro sequence (no animation data needed).
 #[derive(Component)]
-struct IntroWellSprite {
-    _unused: f32,  // kept so queries don't break; well is now static
-}
+struct IntroWellSprite;
 
 /// Animation state for the intro player spritesheet.
 #[derive(Component)]
@@ -1470,7 +1469,7 @@ fn setup_well_intro(mut commands: Commands, sprite_assets: Res<PlayerSpriteAsset
         },
         Transform::from_xyz(0.0, well_y, Z_BACKGROUND + 5.5),
         IntroEntity,
-        IntroWellSprite { _unused: 0.0 },
+        IntroWellSprite,
         WellBob { timer: 0.0, base_y: well_y },
     ));
 

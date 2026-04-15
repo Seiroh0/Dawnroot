@@ -10,9 +10,11 @@ use crate::{constants::*, GameState, PlayingEntity, LoadedSave, player::Player, 
 pub struct SpellEffectAssets {
     pub fireball: Vec<Handle<Image>>,         // 18 frames
     pub fireball_impact: Vec<Handle<Image>>,  // 13 frames
-    pub ice: Vec<Handle<Image>>,              // 17 frames
+    #[allow(dead_code)]
+    pub ice: Vec<Handle<Image>>,              // 17 frames (reserved for ice shard animation)
     pub lightning: Vec<Handle<Image>>,        // 7 frames
-    pub shield: Vec<Handle<Image>>,           // 18 frames
+    #[allow(dead_code)]
+    pub shield: Vec<Handle<Image>>,           // 18 frames (reserved for shield cast animation)
 }
 
 pub struct SpellPlugin;
@@ -66,6 +68,7 @@ pub enum SpellId {
 }
 
 impl SpellId {
+    #[allow(dead_code)]
     pub fn name(&self) -> &str {
         match self {
             SpellId::Fireball   => "Fireball",

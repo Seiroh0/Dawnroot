@@ -486,15 +486,15 @@ fn spawn_damage_numbers(
 ) {
     for event in ev.read() {
         let (color, size) = match event.kind {
-            DamageNumberKind::PlayerHit => (Color::srgb(1.0, 0.2, 0.2), 18.0),
-            DamageNumberKind::EnemyHit  => (Color::srgb(1.0, 1.0, 1.0), 16.0),
-            DamageNumberKind::CritHit   => (Color::srgb(1.0, 0.7, 0.1), 22.0),
-            DamageNumberKind::Blocked   => (Color::srgb(0.4, 0.7, 1.0), 14.0),
+            DamageNumberKind::PlayerHit => (Color::srgb(1.0, 0.2, 0.2), 22.0),
+            DamageNumberKind::EnemyHit  => (Color::srgb(1.0, 1.0, 0.85), 22.0),
+            DamageNumberKind::CritHit   => (Color::srgb(1.0, 0.7, 0.1), 26.0),
+            DamageNumberKind::Blocked   => (Color::srgb(0.4, 0.7, 1.0), 18.0),
         };
-        let text = if event.kind == DamageNumberKind::Blocked {
-            "BLOCK".to_string()
-        } else {
-            format!("{}", event.amount)
+        let text = match event.kind {
+            DamageNumberKind::Blocked   => "BLOCK".to_string(),
+            DamageNumberKind::PlayerHit => format!("-{}", event.amount),
+            _                           => format!("{}", event.amount),
         };
         // Slight horizontal jitter so numbers don't stack
         let jitter_x = (event.position.x * 7.3).sin() * 8.0;
@@ -511,16 +511,16 @@ fn spawn_damage_numbers(
             },
             TextColor(Color::srgba(0.0, 0.0, 0.0, 0.85)),
             Transform::from_xyz(x + 1.0, y - 1.0, Z_EFFECTS + 4.9)
-                .with_scale(Vec3::splat(1.5)),
+                .with_scale(Vec3::splat(1.4)),
             DamageNumber {
-                vy: 60.0,
-                lifetime: 0.8,
-                max_lifetime: 0.8,
+                vy: 70.0,
+                lifetime: 0.9,
+                max_lifetime: 0.9,
             },
             PlayingEntity,
         ));
 
-        // Main damage number (spawns at 1.5x scale for pop effect)
+        // Main damage number (spawns at 1.4x scale for pop effect, eases to 1.0x)
         commands.spawn((
             Text2d::new(text),
             TextFont {
@@ -530,11 +530,11 @@ fn spawn_damage_numbers(
             },
             TextColor(color),
             Transform::from_xyz(x, y, Z_EFFECTS + 5.0)
-                .with_scale(Vec3::splat(1.5)),
+                .with_scale(Vec3::splat(1.4)),
             DamageNumber {
-                vy: 60.0,
-                lifetime: 0.8,
-                max_lifetime: 0.8,
+                vy: 70.0,
+                lifetime: 0.9,
+                max_lifetime: 0.9,
             },
             PlayingEntity,
         ));
@@ -558,24 +558,24 @@ fn update_damage_numbers(
 
         let t = 1.0 - (dn.lifetime / dn.max_lifetime); // 0..1 progress
 
-        // Pop-scale: 1.5x → 1.0x in the first 15% of lifetime, then hold 1.0
+        // Pop-scale: 1.4x → 1.0x in the first 15% of lifetime, then hold 1.0
         let scale = if t < 0.15 {
             let pop_t = t / 0.15; // 0..1 within pop phase
-            1.5 - 0.5 * pop_t * pop_t // ease-out shrink
+            1.4 - 0.4 * pop_t * pop_t // ease-out shrink from 1.4 to 1.0
         } else {
             1.0
         };
         tf.scale = Vec3::splat(scale);
 
-        // Ease-out Y movement: velocity decays faster for natural deceleration
+        // Ease-out Y movement: velocity decays for natural deceleration
         tf.translation.y += dn.vy * dt;
-        dn.vy *= 0.92_f32.powf(dt * 60.0);
+        dn.vy *= 0.90_f32.powf(dt * 60.0);
 
-        // Alpha: hold full opacity for first 50%, then fade out smoothly
-        let alpha = if t < 0.5 {
+        // Alpha: hold full opacity for first 60%, fade in last 40%
+        let alpha = if t < 0.6 {
             1.0
         } else {
-            let fade_t = (t - 0.5) / 0.5; // 0..1 in fade phase
+            let fade_t = (t - 0.6) / 0.4; // 0..1 in fade phase
             1.0 - fade_t * fade_t // ease-in fade
         };
         let c = color.0.to_srgba();

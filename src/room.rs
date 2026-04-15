@@ -487,6 +487,7 @@ fn pick_floor_tile(tiles: &TilesetAssets, col: i32, row: i32) -> Handle<Image> {
     tiles.floors[hash % tiles.floors.len()].clone()
 }
 
+#[allow(dead_code)]
 fn spawn_tile_cracked(commands: &mut Commands, x: f32, y: f32, color: Color) {
     spawn_tile(commands, x, y, color);
     commands.spawn((

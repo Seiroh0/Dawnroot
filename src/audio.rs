@@ -98,6 +98,7 @@ pub enum BgmTrack {
 
 #[derive(Component)]
 struct BgmMarker {
+    #[allow(dead_code)]
     track: BgmTrack,
 }
 
