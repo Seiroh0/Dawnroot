@@ -40,6 +40,9 @@ impl Plugin for TitlePlugin {
                     update_intro_dust,
                     intro_camera_shake,
                     animate_intro_sprite,
+                    tree_sway_animate,
+                    star_twinkle_animate,
+                    well_glow_animate,
                 )
                     .run_if(in_state(GameState::WellIntro)),
             );
@@ -416,6 +419,10 @@ fn setup_title(
         (-310.0, 48.0,  58.0, Z_BACKGROUND + 2.3, 0.14, 0.25, 0.11, 0.04, 0.38),
         (-260.0, 38.0,  46.0, Z_BACKGROUND + 2.2, 0.12, 0.20, 0.09, 0.03, 0.28),
         (-210.0, 44.0,  54.0, Z_BACKGROUND + 2.3, 0.14, 0.22, 0.10, 0.04, 0.32),
+        (  -90.0, 40.0, 48.0, Z_BACKGROUND + 2.1, 0.10, 0.20, 0.09, 0.03, 0.25), // behind well L
+        (  -30.0, 34.0, 42.0, Z_BACKGROUND + 2.0, 0.08, 0.18, 0.08, 0.02, 0.20), // behind well C
+        (   30.0, 34.0, 42.0, Z_BACKGROUND + 2.0, 0.08, 0.18, 0.08, 0.02, 0.20), // behind well C
+        (   90.0, 40.0, 48.0, Z_BACKGROUND + 2.1, 0.10, 0.20, 0.09, 0.03, 0.25), // behind well R
         ( 210.0, 44.0,  54.0, Z_BACKGROUND + 2.3, 0.14, 0.22, 0.10, 0.04, 0.32),
         ( 260.0, 38.0,  46.0, Z_BACKGROUND + 2.2, 0.12, 0.20, 0.09, 0.03, 0.28),
         ( 310.0, 48.0,  58.0, Z_BACKGROUND + 2.3, 0.14, 0.25, 0.11, 0.04, 0.38),
@@ -1280,6 +1287,9 @@ enum IntroPhase {
 }
 
 fn setup_well_intro(mut commands: Commands, sprite_assets: Res<PlayerSpriteAssets>, asset_server: Res<AssetServer>) {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+
     let ground_y = -VIEWPORT_H / 2.0 + 50.0;
     let well_base_y = ground_y + 52.5;
 
@@ -1293,10 +1303,47 @@ fn setup_well_intro(mut commands: Commands, sprite_assets: Res<PlayerSpriteAsset
 
     commands.spawn((Camera2d, IntroEntity, IntroScreenShake { strength: 0.0, timer: 0.0 }));
 
-    // Sky
+    // Night sky
     commands.spawn((
         Sprite { color: Color::srgb(0.06, 0.03, 0.02), custom_size: Some(Vec2::new(VIEWPORT_W, VIEWPORT_H)), ..default() },
         Transform::from_xyz(0.0, 0.0, Z_BACKGROUND), IntroEntity,
+    ));
+
+    // Stars
+    for _ in 0..90 {
+        let x = rng.gen_range(-VIEWPORT_W / 2.0..VIEWPORT_W / 2.0);
+        let y = rng.gen_range(0.0..VIEWPORT_H / 2.0);
+        let b = rng.gen_range(0.25..0.9_f32);
+        let roll = rng.gen_range(0.0..1.0_f32);
+        let sz: f32 = if roll < 0.60 { 1.0 } else if roll < 0.85 { 2.0 } else { 3.0 };
+        let speed = rng.gen_range(0.4..1.6_f32);
+        let phase = rng.gen_range(0.0..std::f32::consts::TAU);
+        commands.spawn((
+            Sprite {
+                color: Color::srgba(b, b * 0.9, b * 0.7, b),
+                custom_size: Some(Vec2::new(sz, sz)),
+                ..default()
+            },
+            Transform::from_xyz(x, y, Z_BACKGROUND + 0.5),
+            IntroEntity,
+            TwinklingStar { speed, phase, base_alpha: b },
+        ));
+    }
+
+    // Moon
+    let moon_x = 280.0_f32;
+    let moon_y = 180.0_f32;
+    commands.spawn((
+        Sprite { color: Color::srgba(0.9, 0.88, 0.7, 0.04), custom_size: Some(Vec2::new(130.0, 130.0)), ..default() },
+        Transform::from_xyz(moon_x, moon_y, Z_BACKGROUND + 0.6), IntroEntity,
+    ));
+    commands.spawn((
+        Sprite { color: Color::srgba(1.0, 0.97, 0.8, 0.07), custom_size: Some(Vec2::new(88.0, 88.0)), ..default() },
+        Transform::from_xyz(moon_x, moon_y, Z_BACKGROUND + 0.7), IntroEntity,
+    ));
+    commands.spawn((
+        Sprite { image: asset_server.load("moon.png"), custom_size: Some(Vec2::new(72.0, 72.0)), ..default() },
+        Transform::from_xyz(moon_x, moon_y, Z_BACKGROUND + 0.8), IntroEntity,
     ));
 
     // Ground
@@ -1309,24 +1356,124 @@ fn setup_well_intro(mut commands: Commands, sprite_assets: Res<PlayerSpriteAsset
         Transform::from_xyz(0.0, ground_y + 52.5, Z_BACKGROUND + 3.0), IntroEntity,
     ));
 
-    // Well — slide in from below screen
+    // Forest trees — same 3-layer depth as title screen
+    let tree_handle: Handle<Image> = asset_server.load("tree.png");
+    // (x, w, h, z, r, g, b, alpha)
+    let intro_trees: &[(f32, f32, f32, f32, f32, f32, f32, f32)] = &[
+        // Layer A: far background
+        (-430.0, 42.0, 52.0, Z_BACKGROUND + 2.2, 0.22, 0.10, 0.04, 0.32),
+        (-350.0, 38.0, 46.0, Z_BACKGROUND + 2.2, 0.20, 0.09, 0.03, 0.28),
+        (-270.0, 46.0, 56.0, Z_BACKGROUND + 2.3, 0.25, 0.11, 0.04, 0.35),
+        ( -90.0, 40.0, 48.0, Z_BACKGROUND + 2.1, 0.20, 0.09, 0.03, 0.22),
+        ( -30.0, 34.0, 42.0, Z_BACKGROUND + 2.0, 0.18, 0.08, 0.02, 0.18),
+        (  30.0, 34.0, 42.0, Z_BACKGROUND + 2.0, 0.18, 0.08, 0.02, 0.18),
+        (  90.0, 40.0, 48.0, Z_BACKGROUND + 2.1, 0.20, 0.09, 0.03, 0.22),
+        ( 270.0, 46.0, 56.0, Z_BACKGROUND + 2.3, 0.25, 0.11, 0.04, 0.35),
+        ( 350.0, 38.0, 46.0, Z_BACKGROUND + 2.2, 0.20, 0.09, 0.03, 0.28),
+        ( 430.0, 42.0, 52.0, Z_BACKGROUND + 2.2, 0.22, 0.10, 0.04, 0.32),
+        // Layer B: mid-distance
+        (-390.0, 68.0, 82.0, Z_BACKGROUND + 3.0, 0.38, 0.15, 0.03, 0.52),
+        (-310.0, 64.0, 78.0, Z_BACKGROUND + 3.0, 0.32, 0.12, 0.04, 0.48),
+        (-230.0, 72.0, 88.0, Z_BACKGROUND + 3.1, 0.42, 0.18, 0.05, 0.58),
+        (-160.0, 70.0, 86.0, Z_BACKGROUND + 3.1, 0.40, 0.16, 0.04, 0.55),
+        ( 160.0, 70.0, 86.0, Z_BACKGROUND + 3.1, 0.40, 0.16, 0.04, 0.55),
+        ( 230.0, 72.0, 88.0, Z_BACKGROUND + 3.1, 0.42, 0.18, 0.05, 0.58),
+        ( 310.0, 64.0, 78.0, Z_BACKGROUND + 3.0, 0.32, 0.12, 0.04, 0.48),
+        ( 390.0, 68.0, 82.0, Z_BACKGROUND + 3.0, 0.38, 0.15, 0.03, 0.52),
+        // Layer C: near foreground — full autumn colors
+        (-450.0, 102.0, 124.0, Z_BACKGROUND + 4.0, 0.85, 0.40, 0.05, 0.92),
+        (-370.0,  90.0, 110.0, Z_BACKGROUND + 4.0, 0.75, 0.18, 0.08, 0.90),
+        (-290.0, 112.0, 136.0, Z_BACKGROUND + 4.1, 0.90, 0.70, 0.10, 0.95),
+        (-215.0,  96.0, 118.0, Z_BACKGROUND + 4.0, 0.65, 0.28, 0.08, 0.90),
+        (-148.0, 120.0, 146.0, Z_BACKGROUND + 4.2, 0.85, 0.40, 0.05, 1.00),
+        ( 148.0, 120.0, 146.0, Z_BACKGROUND + 4.2, 0.85, 0.40, 0.05, 1.00),
+        ( 215.0,  96.0, 118.0, Z_BACKGROUND + 4.0, 0.65, 0.28, 0.08, 0.90),
+        ( 290.0, 112.0, 136.0, Z_BACKGROUND + 4.1, 0.90, 0.70, 0.10, 0.95),
+        ( 370.0,  90.0, 110.0, Z_BACKGROUND + 4.0, 0.75, 0.18, 0.08, 0.90),
+        ( 450.0, 102.0, 124.0, Z_BACKGROUND + 4.0, 0.85, 0.40, 0.05, 0.92),
+    ];
+    for &(x_off, tw, th, z, tr, tg, tb, ta) in intro_trees {
+        let sway_speed = rng.gen_range(0.25..0.55_f32);
+        let sway_phase = rng.gen_range(0.0..std::f32::consts::TAU);
+        let base_angle: f32 = rng.gen_range(-0.015..0.015);
+        let sprite_y = well_base_y + th / 2.0;
+        commands.spawn((
+            Sprite {
+                image: tree_handle.clone(),
+                color: Color::srgba(tr, tg, tb, ta),
+                custom_size: Some(Vec2::new(tw, th)),
+                ..default()
+            },
+            Transform {
+                translation: Vec3::new(x_off, sprite_y, z),
+                rotation: Quat::from_rotation_z(base_angle),
+                scale: Vec3::ONE,
+            },
+            IntroEntity,
+            TreeSway { speed: sway_speed, phase: sway_phase, base_angle },
+        ));
+    }
+
+    // Ground decorations: stones and grass tufts
+    let deco_y = well_base_y;
+    for _ in 0..6 {
+        let side = rng.gen_range(0..2_u8);
+        let x: f32 = if side == 0 { rng.gen_range(-VIEWPORT_W / 2.0 + 20.0..-55.0) } else { rng.gen_range(55.0..VIEWPORT_W / 2.0 - 20.0) };
+        let sw = rng.gen_range(3.0..7.0_f32);
+        let sh = rng.gen_range(2.0..5.0_f32);
+        commands.spawn((
+            Sprite { color: Color::srgb(0.18, 0.14, 0.10), custom_size: Some(Vec2::new(sw, sh)), ..default() },
+            Transform::from_xyz(x, deco_y + sh / 2.0 + rng.gen_range(1.0..4.0_f32), Z_BACKGROUND + 3.5),
+            IntroEntity,
+        ));
+    }
+    for _ in 0..8 {
+        let side = rng.gen_range(0..2_u8);
+        let x: f32 = if side == 0 { rng.gen_range(-VIEWPORT_W / 2.0 + 20.0..-55.0) } else { rng.gen_range(55.0..VIEWPORT_W / 2.0 - 20.0) };
+        let gw = rng.gen_range(2.0..5.0_f32);
+        let gh = rng.gen_range(4.0..9.0_f32);
+        let angle = rng.gen_range(-0.25..0.25_f32);
+        commands.spawn((
+            Sprite { color: Color::srgb(0.15, 0.22, 0.08), custom_size: Some(Vec2::new(gw, gh)), ..default() },
+            Transform {
+                translation: Vec3::new(x, deco_y + gh / 2.0 + rng.gen_range(0.5..2.5_f32), Z_BACKGROUND + 3.5),
+                rotation: Quat::from_rotation_z(angle),
+                scale: Vec3::ONE,
+            },
+            IntroEntity,
+        ));
+    }
+
+    // Well glow (behind the sprite)
+    commands.spawn((
+        Sprite { color: Color::srgba(1.0, 0.8, 0.2, 0.06), custom_size: Some(Vec2::new(60.0, 120.0)), ..default() },
+        Transform::from_xyz(0.0, well_base_y + 70.0, Z_BACKGROUND + 4.9), IntroEntity,
+        WellGlow { timer: 0.0 },
+    ));
+    commands.spawn((
+        Sprite { color: Color::srgba(1.0, 0.9, 0.4, 0.04), custom_size: Some(Vec2::new(30.0, 90.0)), ..default() },
+        Transform::from_xyz(0.0, well_base_y + 55.0, Z_BACKGROUND + 4.95), IntroEntity,
+        WellGlow { timer: 1.5 },
+    ));
+
+    // Well — slide in from below screen using well.png
     let well_size = 96.0;
     let well_final_y = well_base_y + well_size / 2.0;
-    let well_start_y = -VIEWPORT_H / 2.0 - well_size; // fully below screen
+    let well_start_y = -VIEWPORT_H / 2.0 - well_size;
     commands.spawn((
         Sprite {
-            image: asset_server.load("sprites/Well1.png"),
+            image: asset_server.load("well.png"),
             custom_size: Some(Vec2::new(well_size, well_size)),
             ..default()
         },
-        Transform::from_xyz(0.0, well_start_y, Z_BACKGROUND + 5.0),
+        Transform::from_xyz(0.0, well_start_y, Z_BACKGROUND + 5.5),
         IntroEntity,
         IntroWellSprite { target_y: well_final_y },
     ));
 
     // Intro player — hidden until well arrives, then walks in
-    let run_start_index = 1 * 10; // RUN_ROW(1) * SATIRO_COLS(10)
-    let sprite_size = 32.0 * 2.0; // SATIRO_FRAME * PLAYER_SPRITE_SCALE
+    let run_start_index = 1 * 10;
+    let sprite_size = 32.0 * 2.0;
     commands.spawn((
         Transform::from_xyz(-280.0, well_base_y + 16.0, Z_PLAYER),
         Visibility::Hidden,
