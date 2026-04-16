@@ -27,6 +27,7 @@ impl Plugin for ShopPlugin {
                     reset_shop_on_transition,
                     spawn_merchant_npc,
                     merchant_interaction,
+                    merchant_anim_system,
                     shop_ui_navigation,
                     shop_ui_purchase,
                     shop_ui_close,
@@ -73,6 +74,45 @@ pub struct MerchantNpc {
 
 #[derive(Component)]
 struct MerchantPrompt;
+
+/// Merchant animation states: Idle(0), Talk(1), Sell(2), Reject(3)
+#[derive(Component)]
+pub struct MerchantAnim {
+    pub state: MerchantAnimState,
+    pub timer: f32,
+    pub bob_t: f32,
+}
+
+#[derive(PartialEq, Clone, Copy)]
+pub enum MerchantAnimState {
+    Idle,
+    Talk,
+    Sell,
+    Reject,
+}
+
+impl MerchantAnimState {
+    fn frame(&self) -> usize {
+        match self {
+            MerchantAnimState::Idle   => 0,
+            MerchantAnimState::Talk   => 1,
+            MerchantAnimState::Sell   => 2,
+            MerchantAnimState::Reject => 3,
+        }
+    }
+    fn duration(&self) -> f32 {
+        match self {
+            MerchantAnimState::Idle   => f32::MAX,
+            MerchantAnimState::Talk   => 1.5,
+            MerchantAnimState::Sell   => 1.2,
+            MerchantAnimState::Reject => 1.0,
+        }
+    }
+}
+
+/// Marker on the sprite child of MerchantNpc for animation updates.
+#[derive(Component)]
+struct MerchantSprite;
 
 // ---------------------------------------------------------------------------
 // Shop item definitions
@@ -439,183 +479,97 @@ fn reset_shop_on_transition(
     }
 }
 
-/// Spawn a multi-part stone merchant NPC in shop rooms.
+/// Spawn the sprite-based merchant NPC in shop rooms.
 fn spawn_merchant_npc(
     mut commands: Commands,
     room_state: Res<RoomState>,
     spawned: Option<Res<MerchantSpawned>>,
+    asset_server: Res<AssetServer>,
+    mut layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
     if room_state.current_type != RoomType::Shop { return; }
     if spawned.map_or(false, |s| s.0) { return; }
     commands.insert_resource(MerchantSpawned(true));
 
-    let x = 480.0;
-    let y = 100.0;
+    // merchant.png: 192x48, 4 frames @ 48x48 (Idle|Talk|Sell|Reject)
+    let layout = layouts.add(TextureAtlasLayout::from_grid(
+        UVec2::new(48, 48), 4, 1, None, None,
+    ));
+    let texture: Handle<Image> = asset_server.load("merchant.png");
+
+    // Display at 2x scale → 96x96 in-game
+    let display_size = 96.0_f32;
+    let x = 480.0_f32;
+    // Place so feet touch the ground line
+    let ground_y = -crate::constants::VIEWPORT_H / 2.0 + 50.0 + 52.5;
+    let y = ground_y + display_size / 2.0;
 
     commands.spawn((
         Sprite {
-            color: Color::srgba(0.0, 0.0, 0.0, 0.0),
-            custom_size: Some(Vec2::new(40.0, 50.0)),
+            color: Color::NONE,
+            custom_size: Some(Vec2::new(display_size, display_size)),
             ..default()
         },
         Transform::from_xyz(x, y, crate::constants::Z_PLAYER - 0.5),
         MerchantNpc { interacted: false },
+        MerchantAnim { state: MerchantAnimState::Idle, timer: 0.0, bob_t: 0.0 },
         RoomEntity,
         PlayingEntity,
     )).with_children(|p| {
+        // Main sprite
         p.spawn((
             Sprite {
-                color: Color::srgb(0.38, 0.34, 0.28),
-                custom_size: Some(Vec2::new(36.0, 30.0)),
+                image: texture,
+                texture_atlas: Some(TextureAtlas { layout, index: 0 }),
+                custom_size: Some(Vec2::new(display_size, display_size)),
                 ..default()
             },
-            Transform::from_xyz(0.0, -2.0, 0.1),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.35, 0.31, 0.25),
-                custom_size: Some(Vec2::new(14.0, 18.0)),
-                ..default()
-            },
-            Transform::from_xyz(-16.0, 2.0, 0.08),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.36, 0.32, 0.26),
-                custom_size: Some(Vec2::new(14.0, 16.0)),
-                ..default()
-            },
-            Transform::from_xyz(16.0, 0.0, 0.08),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.42, 0.38, 0.32),
-                custom_size: Some(Vec2::new(22.0, 18.0)),
-                ..default()
-            },
-            Transform::from_xyz(0.0, 18.0, 0.2),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.32, 0.28, 0.22),
-                custom_size: Some(Vec2::new(24.0, 6.0)),
-                ..default()
-            },
-            Transform::from_xyz(0.0, 24.0, 0.25),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.12, 0.10, 0.08),
-                custom_size: Some(Vec2::new(6.0, 5.0)),
-                ..default()
-            },
-            Transform::from_xyz(-5.0, 19.0, 0.3),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.9, 0.65, 0.2),
-                custom_size: Some(Vec2::new(3.5, 3.0)),
-                ..default()
-            },
-            Transform::from_xyz(-5.0, 19.0, 0.35),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.12, 0.10, 0.08),
-                custom_size: Some(Vec2::new(6.0, 5.0)),
-                ..default()
-            },
-            Transform::from_xyz(5.0, 19.0, 0.3),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.9, 0.65, 0.2),
-                custom_size: Some(Vec2::new(3.5, 3.0)),
-                ..default()
-            },
-            Transform::from_xyz(5.0, 19.0, 0.35),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.15, 0.12, 0.08),
-                custom_size: Some(Vec2::new(10.0, 3.0)),
-                ..default()
-            },
-            Transform::from_xyz(0.0, 12.0, 0.3),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.28, 0.24, 0.18),
-                custom_size: Some(Vec2::new(20.0, 2.0)),
-                ..default()
-            },
-            Transform::from_xyz(3.0, -6.0, 0.15),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.25, 0.40, 0.20),
-                custom_size: Some(Vec2::new(8.0, 4.0)),
-                ..default()
-            },
-            Transform::from_xyz(-10.0, -10.0, 0.15),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.22, 0.35, 0.18),
-                custom_size: Some(Vec2::new(5.0, 3.0)),
-                ..default()
-            },
-            Transform::from_xyz(12.0, 8.0, 0.15),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.30, 0.27, 0.22),
-                custom_size: Some(Vec2::new(44.0, 10.0)),
-                ..default()
-            },
-            Transform::from_xyz(0.0, -18.0, 0.05),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.33, 0.29, 0.23),
-                custom_size: Some(Vec2::new(6.0, 4.0)),
-                ..default()
-            },
-            Transform::from_xyz(-22.0, -20.0, 0.04),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.35, 0.30, 0.24),
-                custom_size: Some(Vec2::new(5.0, 3.0)),
-                ..default()
-            },
-            Transform::from_xyz(24.0, -21.0, 0.04),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.6, 0.45, 0.9),
-                custom_size: Some(Vec2::new(5.0, 7.0)),
-                ..default()
-            },
-            Transform::from_xyz(-8.0, 4.0, 0.2),
-        ));
-        p.spawn((
-            Sprite {
-                color: Color::srgb(0.7, 0.55, 0.95),
-                custom_size: Some(Vec2::new(3.0, 5.0)),
-                ..default()
-            },
-            Transform::from_xyz(-6.0, 6.0, 0.22),
+            Transform::from_xyz(0.0, 0.0, 0.1),
+            MerchantSprite,
         ));
 
+        // Interaction prompt
         p.spawn((
             Text2d::new("[E] Shop"),
             TextFont { font_size: 11.0, ..default() },
             TextColor(Color::srgba(0.9, 0.75, 0.4, 0.0)),
-            Transform::from_xyz(0.0, 38.0, 1.0),
+            Transform::from_xyz(0.0, display_size / 2.0 + 8.0, 1.0),
             MerchantPrompt,
         ));
     });
+}
+
+/// Animate the merchant sprite based on current MerchantAnimState.
+fn merchant_anim_system(
+    time: Res<Time>,
+    mut merchant_q: Query<(&mut MerchantAnim, &mut Transform), With<MerchantNpc>>,
+    mut sprite_q: Query<&mut Sprite, With<MerchantSprite>>,
+) {
+    let dt = time.delta_secs();
+    for (mut anim, mut tf) in &mut merchant_q {
+        anim.timer += dt;
+        anim.bob_t += dt;
+
+        // Idle bob: gentle up-down oscillation
+        if anim.state == MerchantAnimState::Idle {
+            let bob = (anim.bob_t * 1.8).sin() * 1.5;
+            tf.translation.y = tf.translation.y.round() + bob;
+        }
+
+        // Timed states revert to Idle after duration
+        if anim.state != MerchantAnimState::Idle && anim.timer >= anim.state.duration() {
+            anim.state = MerchantAnimState::Idle;
+            anim.timer = 0.0;
+        }
+
+        // Update sprite atlas frame
+        let target_frame = anim.state.frame();
+        for mut sprite in &mut sprite_q {
+            if let Some(ref mut atlas) = sprite.texture_atlas {
+                atlas.index = target_frame;
+            }
+        }
+    }
 }
 
 /// Detect player proximity to merchant and open shop on interaction.
@@ -623,7 +577,7 @@ fn merchant_interaction(
     keys: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     player_q: Query<&Transform, (With<crate::player::Player>, Without<MerchantNpc>)>,
-    mut merchant_q: Query<(&Transform, &mut MerchantNpc), Without<crate::player::Player>>,
+    mut merchant_q: Query<(&Transform, &mut MerchantNpc, &mut MerchantAnim), Without<crate::player::Player>>,
     mut prompt_q: Query<(&Parent, &mut TextColor), With<MerchantPrompt>>,
     mut commands: Commands,
     run: Res<RunData>,
@@ -639,12 +593,14 @@ fn merchant_interaction(
     let interact = keys.just_pressed(KeyCode::KeyE)
         || gamepads.iter().next().map_or(false, |g| g.just_pressed(GamepadButton::West));
 
-    for (m_tf, mut merchant) in &mut merchant_q {
+    for (m_tf, mut merchant, mut anim) in &mut merchant_q {
         let dist = (p_tf.translation.xy() - m_tf.translation.xy()).length();
         let near = dist < 70.0;
 
         if near && interact {
             merchant.interacted = true;
+            anim.state = MerchantAnimState::Talk;
+            anim.timer = 0.0;
 
             let available: Vec<ShopEntry> = all_shop_entries()
                 .into_iter()
@@ -670,7 +626,7 @@ fn merchant_interaction(
     }
 
     for (parent, mut color) in &mut prompt_q {
-        if let Ok((m_tf, _)) = merchant_q.get(parent.get()) {
+        if let Ok((m_tf, _, _)) = merchant_q.get(parent.get()) {
             let dist = (p_tf.translation.xy() - m_tf.translation.xy()).length();
             color.0 = if dist < 70.0 && !shop_state.as_ref().map_or(false, |s| s.active) {
                 Color::srgba(0.9, 0.75, 0.4, 1.0)
@@ -965,6 +921,7 @@ fn shop_ui_purchase(
     merchant_q: Query<&Transform, With<MerchantNpc>>,
     mut merchant_text_q: Query<&mut Text, With<ShopMerchantText>>,
     mut ev_sfx: EventWriter<PlaySfxEvent>,
+    mut merchant_anim_q: Query<&mut MerchantAnim, With<MerchantNpc>>,
 ) {
     let Some(ref mut state) = shop_state else { return };
     if !state.active { return; }
@@ -1009,6 +966,10 @@ fn shop_ui_purchase(
         if let Ok(m_tf) = merchant_q.get_single() {
             spawn_feedback(&mut commands, m_tf.translation, "Nicht genug Gold!", Color::srgb(0.9, 0.3, 0.2), &font);
         }
+        if let Ok(mut anim) = merchant_anim_q.get_single_mut() {
+            anim.state = MerchantAnimState::Reject;
+            anim.timer = 0.0;
+        }
         return;
     }
 
@@ -1029,6 +990,11 @@ fn shop_ui_purchase(
         _ => {}
     }
     ev_sfx.send(PlaySfxEvent(SfxType::ShopBuy));
+
+    if let Ok(mut anim) = merchant_anim_q.get_single_mut() {
+        anim.state = MerchantAnimState::Sell;
+        anim.timer = 0.0;
+    }
 
     if let Ok(m_tf) = merchant_q.get_single() {
         let msg = format!("{} gekauft!", item_name);
