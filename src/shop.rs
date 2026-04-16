@@ -31,6 +31,7 @@ impl Plugin for ShopPlugin {
                     shop_ui_purchase,
                     shop_ui_close,
                     shop_ui_update_visuals,
+                    shop_card_anim_system,
                     purchase_feedback_decay,
                 )
                     .chain()
@@ -56,7 +57,9 @@ fn reset_shop_state(
 #[derive(Resource)]
 pub struct ShopUiState {
     pub active: bool,
+    /// Indexes into `items` (0..4 dealt cards)
     pub selected: usize,
+    /// The 4 dealt items for this visit
     pub items: Vec<ShopEntry>,
     pub purchased: Vec<bool>,
     pub input_cooldown: f32,
@@ -107,6 +110,8 @@ pub enum UnlockReq {
 #[derive(Clone)]
 pub struct ShopEntry {
     pub name: &'static str,
+    pub description: &'static str,
+    pub icon_path: &'static str,
     pub cost: i32,
     pub effect: ShopEffect,
     pub tier: ShopTier,
@@ -117,128 +122,218 @@ fn all_shop_entries() -> Vec<ShopEntry> {
     vec![
         // ── Consumables (always available) ──
         ShopEntry {
-            name: "Heal Full", cost: 30, effect: ShopEffect::HealFull,
+            name: "Heiltrank",
+            description: "Stellt alle Lebenspunkte vollständig wieder her.",
+            icon_path: "healfull.png",
+            cost: 30, effect: ShopEffect::HealFull,
             tier: ShopTier::Tier1, unlock: UnlockReq::None,
         },
         ShopEntry {
-            name: "+1 Max HP", cost: 55, effect: ShopEffect::MaxHpUp,
+            name: "+1 Max LP",
+            description: "Erhöht die maximalen Lebenspunkte dauerhaft um 1.",
+            icon_path: "+1maxhp.png",
+            cost: 55, effect: ShopEffect::MaxHpUp,
             tier: ShopTier::Tier1, unlock: UnlockReq::None,
         },
         ShopEntry {
-            name: "+Mana Pool", cost: 40, effect: ShopEffect::ManaUp,
+            name: "+Mana Vorrat",
+            description: "Vergrößert den Manapool dauerhaft um 20.",
+            icon_path: "+1manapool.png",
+            cost: 40, effect: ShopEffect::ManaUp,
             tier: ShopTier::Tier1, unlock: UnlockReq::None,
         },
         // ── Stat upgrades (Tier 2) ──
         ShopEntry {
-            name: "Attack Up", cost: 50, effect: ShopEffect::AttackUp,
+            name: "Angriff +",
+            description: "Steigert den Angriffswert. Kann mehrfach gekauft werden.",
+            icon_path: "attackup.png",
+            cost: 50, effect: ShopEffect::AttackUp,
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloor(2),
         },
         ShopEntry {
-            name: "Speed Up", cost: 45, effect: ShopEffect::SpeedUp,
+            name: "Tempo +",
+            description: "Erhöht die Bewegungsgeschwindigkeit dauerhaft.",
+            icon_path: "speedup.png",
+            cost: 45, effect: ShopEffect::SpeedUp,
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloor(2),
         },
         ShopEntry {
-            name: "Defense Up", cost: 50, effect: ShopEffect::DefenseUp,
+            name: "Verteidigung +",
+            description: "Erhöht die Verteidigung. Reduziert erlittenen Schaden.",
+            icon_path: "defenseup.png",
+            cost: 50, effect: ShopEffect::DefenseUp,
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloor(2),
         },
         // ── Spells ──
         ShopEntry {
-            name: "Fireball", cost: 50, effect: ShopEffect::UnlockSpell(0, SpellId::Fireball),
+            name: "Feuerball",
+            description: "Schleudere einen explodierenden Feuerball auf Feinde.",
+            icon_path: "fireball.png",
+            cost: 50, effect: ShopEffect::UnlockSpell(0, SpellId::Fireball),
             tier: ShopTier::Tier1, unlock: UnlockReq::None,
         },
         ShopEntry {
-            name: "Ice Shards", cost: 45, effect: ShopEffect::UnlockSpell(1, SpellId::IceShards),
+            name: "Eissplitter",
+            description: "Feuere mehrere Eissplitter aus, die Feinde verlangsamen.",
+            icon_path: "iceshards.png",
+            cost: 45, effect: ShopEffect::UnlockSpell(1, SpellId::IceShards),
             tier: ShopTier::Tier1, unlock: UnlockReq::None,
         },
         ShopEntry {
-            name: "Lightning", cost: 75, effect: ShopEffect::UnlockSpell(2, SpellId::Lightning),
+            name: "Blitz",
+            description: "Ein kraftvoller Blitzschlag trifft alle Feinde in der Nähe.",
+            icon_path: "lightning.png",
+            cost: 75, effect: ShopEffect::UnlockSpell(2, SpellId::Lightning),
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloorOrRuns(2, 1),
         },
         ShopEntry {
-            name: "Shield", cost: 65, effect: ShopEffect::UnlockSpell(3, SpellId::Shield),
+            name: "Schild",
+            description: "Erschaffe einen magischen Schutzschild für kurze Zeit.",
+            icon_path: "shield-spell.png",
+            cost: 65, effect: ShopEffect::UnlockSpell(3, SpellId::Shield),
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloorOrRuns(2, 1),
         },
         // ── Equipment: Tier 1 ──
         ShopEntry {
-            name: "Rusty Sword", cost: 35, effect: ShopEffect::EquipItem(ItemId::RustySword),
+            name: "Rostiges Schwert",
+            description: "Ein altes Schwert. Erhöht den Angriff leicht.",
+            icon_path: "rustysword.png",
+            cost: 35, effect: ShopEffect::EquipItem(ItemId::RustySword),
             tier: ShopTier::Tier1, unlock: UnlockReq::None,
         },
         ShopEntry {
-            name: "Leather Tunic", cost: 40, effect: ShopEffect::EquipItem(ItemId::LeatherTunic),
+            name: "Ledertunika",
+            description: "Einfache Lederrüstung. Gewährt etwas Schutz.",
+            icon_path: "leathertunic.png",
+            cost: 40, effect: ShopEffect::EquipItem(ItemId::LeatherTunic),
             tier: ShopTier::Tier1, unlock: UnlockReq::None,
         },
         ShopEntry {
-            name: "Life Ring", cost: 45, effect: ShopEffect::EquipItem(ItemId::LifeRing),
+            name: "Lebensring",
+            description: "Ein Ring, der die maximalen LP dauerhaft erhöht.",
+            icon_path: "lifering.png",
+            cost: 45, effect: ShopEffect::EquipItem(ItemId::LifeRing),
             tier: ShopTier::Tier1, unlock: UnlockReq::None,
         },
         ShopEntry {
-            name: "Mana Stone", cost: 45, effect: ShopEffect::EquipItem(ItemId::ManaStone),
+            name: "Manastein",
+            description: "Ein Edelstein, der den Manapool vergrößert.",
+            icon_path: "manastone.png",
+            cost: 45, effect: ShopEffect::EquipItem(ItemId::ManaStone),
             tier: ShopTier::Tier1, unlock: UnlockReq::None,
         },
         // ── Equipment: Tier 2 ──
         ShopEntry {
-            name: "Steel Blade", cost: 80, effect: ShopEffect::EquipItem(ItemId::SteelBlade),
+            name: "Stahlklinge",
+            description: "Eine starke Stahlklinge. Deutlich mehr Schaden.",
+            icon_path: "steelblade.png",
+            cost: 80, effect: ShopEffect::EquipItem(ItemId::SteelBlade),
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloor(2),
         },
         ShopEntry {
-            name: "Chain Mail", cost: 85, effect: ShopEffect::EquipItem(ItemId::ChainMail),
+            name: "Kettenhemd",
+            description: "Solides Kettenhemd für besseren Schutz im Kampf.",
+            icon_path: "chainmail.png",
+            cost: 85, effect: ShopEffect::EquipItem(ItemId::ChainMail),
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloor(2),
         },
         ShopEntry {
-            name: "Gold Magnet", cost: 65, effect: ShopEffect::EquipItem(ItemId::GoldMagnet),
+            name: "Goldmagnet",
+            description: "Zieht Gold aus der Ferne automatisch an.",
+            icon_path: "goldmagnet.png",
+            cost: 65, effect: ShopEffect::EquipItem(ItemId::GoldMagnet),
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloor(2),
         },
         ShopEntry {
-            name: "Speed Boots", cost: 70, effect: ShopEffect::EquipItem(ItemId::SpeedBoots),
+            name: "Schnellstiefel",
+            description: "Leichte Stiefel, die die Bewegung spürbar beschleunigen.",
+            icon_path: "speedboots.png",
+            cost: 70, effect: ShopEffect::EquipItem(ItemId::SpeedBoots),
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloor(2),
         },
         ShopEntry {
-            name: "Crit Charm", cost: 75, effect: ShopEffect::EquipItem(ItemId::CritCharm),
+            name: "Krit-Amulett",
+            description: "Erhöht die Chance auf kritische Treffer.",
+            icon_path: "critcharm.png",
+            cost: 75, effect: ShopEffect::EquipItem(ItemId::CritCharm),
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloor(2),
         },
         ShopEntry {
-            name: "Fire Amulet", cost: 60, effect: ShopEffect::EquipItem(ItemId::FireAmulet),
+            name: "Feuer-Amulett",
+            description: "Verstärkt Feuer-Zauber und gibt Feuerresistenz.",
+            icon_path: "",
+            cost: 60, effect: ShopEffect::EquipItem(ItemId::FireAmulet),
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloor(2),
         },
         ShopEntry {
-            name: "Ice Amulet", cost: 60, effect: ShopEffect::EquipItem(ItemId::IceAmulet),
+            name: "Eis-Amulett",
+            description: "Verstärkt Eis-Zauber und gibt Kälteresistenz.",
+            icon_path: "",
+            cost: 60, effect: ShopEffect::EquipItem(ItemId::IceAmulet),
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloor(2),
         },
         ShopEntry {
-            name: "Storm Amulet", cost: 60, effect: ShopEffect::EquipItem(ItemId::StormAmulet),
+            name: "Sturm-Amulett",
+            description: "Verstärkt Blitz-Zauber und gibt Blitzresistenz.",
+            icon_path: "",
+            cost: 60, effect: ShopEffect::EquipItem(ItemId::StormAmulet),
             tier: ShopTier::Tier2, unlock: UnlockReq::MinFloor(2),
         },
         // ── Equipment: Tier 3 ──
         ShopEntry {
-            name: "Flame Edge", cost: 130, effect: ShopEffect::EquipItem(ItemId::FlameEdge),
+            name: "Flammenschneide",
+            description: "Eine legendäre Klinge, die in Flammen gehüllt ist.",
+            icon_path: "",
+            cost: 130, effect: ShopEffect::EquipItem(ItemId::FlameEdge),
             tier: ShopTier::Tier3, unlock: UnlockReq::MinFloorOrRuns(3, 2),
         },
         ShopEntry {
-            name: "Frost Fang", cost: 130, effect: ShopEffect::EquipItem(ItemId::FrostFang),
+            name: "Frostfang",
+            description: "Ein eisiger Reißzahn, der Feinde einfriert.",
+            icon_path: "",
+            cost: 130, effect: ShopEffect::EquipItem(ItemId::FrostFang),
             tier: ShopTier::Tier3, unlock: UnlockReq::MinFloorOrRuns(3, 2),
         },
         ShopEntry {
-            name: "Thunder Cleaver", cost: 150, effect: ShopEffect::EquipItem(ItemId::ThunderCleaver),
+            name: "Donnerbeil",
+            description: "Ein mächtiges Beil, das Blitze entfesselt.",
+            icon_path: "",
+            cost: 150, effect: ShopEffect::EquipItem(ItemId::ThunderCleaver),
             tier: ShopTier::Tier3, unlock: UnlockReq::MinFloorOrRuns(3, 2),
         },
         ShopEntry {
-            name: "Ember Plate", cost: 140, effect: ShopEffect::EquipItem(ItemId::EmberPlate),
+            name: "Glutplatten",
+            description: "Schwere Plattenrüstung mit Feuerresistenz.",
+            icon_path: "",
+            cost: 140, effect: ShopEffect::EquipItem(ItemId::EmberPlate),
             tier: ShopTier::Tier3, unlock: UnlockReq::MinFloorOrRuns(3, 2),
         },
         ShopEntry {
-            name: "Frost Guard", cost: 140, effect: ShopEffect::EquipItem(ItemId::FrostGuard),
+            name: "Frostrüstung",
+            description: "Rüstung aus gefrorenem Stahl mit Kälteresistenz.",
+            icon_path: "",
+            cost: 140, effect: ShopEffect::EquipItem(ItemId::FrostGuard),
             tier: ShopTier::Tier3, unlock: UnlockReq::MinFloorOrRuns(3, 2),
         },
         ShopEntry {
-            name: "Storm Armor", cost: 145, effect: ShopEffect::EquipItem(ItemId::StormArmor),
+            name: "Sturmrüstung",
+            description: "Rüstung, die statische Energie speichert.",
+            icon_path: "",
+            cost: 145, effect: ShopEffect::EquipItem(ItemId::StormArmor),
             tier: ShopTier::Tier3, unlock: UnlockReq::MinFloorOrRuns(3, 2),
         },
         ShopEntry {
-            name: "Vampire Fang", cost: 100, effect: ShopEffect::EquipItem(ItemId::VampireFang),
+            name: "Vampirzahn",
+            description: "Stiehlt beim Angriff Lebenspunkte vom Feind.",
+            icon_path: "vampirefang.png",
+            cost: 100, effect: ShopEffect::EquipItem(ItemId::VampireFang),
             tier: ShopTier::Tier3, unlock: UnlockReq::MinFloorOrRuns(3, 2),
         },
         ShopEntry {
-            name: "Iron Will", cost: 95, effect: ShopEffect::EquipItem(ItemId::IronWill),
+            name: "Eiserner Wille",
+            description: "Erhöht Verteidigung und maximale LP erheblich.",
+            icon_path: "ironheart.png",
+            cost: 95, effect: ShopEffect::EquipItem(ItemId::IronWill),
             tier: ShopTier::Tier3, unlock: UnlockReq::MinFloorOrRuns(3, 2),
         },
     ]
@@ -258,20 +353,22 @@ impl UnlockReq {
 }
 
 impl ShopTier {
-    fn color(&self) -> Color {
+    fn dot_color(&self) -> Color {
         match self {
-            ShopTier::Tier1 => Color::srgb(0.8, 0.7, 0.3),
-            ShopTier::Tier2 => Color::srgb(0.4, 0.7, 0.9),
-            ShopTier::Tier3 => Color::srgb(0.85, 0.5, 0.9),
+            ShopTier::Tier1 => Color::srgb(0.65, 0.65, 0.65),
+            ShopTier::Tier2 => Color::srgb(0.3, 0.55, 0.95),
+            ShopTier::Tier3 => Color::srgb(0.75, 0.35, 0.9),
         }
     }
+}
 
-    fn label(&self) -> &'static str {
-        match self {
-            ShopTier::Tier1 => "",
-            ShopTier::Tier2 => "[T2] ",
-            ShopTier::Tier3 => "[T3] ",
-        }
+fn fallback_icon_color(effect: &ShopEffect) -> Color {
+    match effect {
+        ShopEffect::HealFull | ShopEffect::MaxHpUp => Color::srgb(0.8, 0.2, 0.2),
+        ShopEffect::ManaUp => Color::srgb(0.2, 0.4, 0.9),
+        ShopEffect::AttackUp | ShopEffect::DefenseUp | ShopEffect::SpeedUp => Color::srgb(0.8, 0.6, 0.1),
+        ShopEffect::UnlockSpell(_, _) => Color::srgb(0.2, 0.4, 0.9),
+        ShopEffect::EquipItem(_) => Color::srgb(0.5, 0.5, 0.5),
     }
 }
 
@@ -292,10 +389,6 @@ struct PurchaseFeedback {
 #[derive(Component)]
 struct ShopOverlayUI;
 
-/// Marker for the item list container inside the shop overlay.
-#[derive(Component)]
-struct ShopItemList;
-
 /// Marker for the gold display text in the shop overlay.
 #[derive(Component)]
 struct ShopGoldText;
@@ -304,17 +397,29 @@ struct ShopGoldText;
 #[derive(Component)]
 struct ShopMerchantText;
 
-/// Marker for individual item row in the shop overlay.
+/// Marker for an individual card in the shop overlay.
 #[derive(Component)]
-struct ShopItemRow(usize);
+struct ShopCard(usize);
 
-/// Marker for the item name text within a row.
+/// Marker for the "Gekauft" overlay on a card.
 #[derive(Component)]
-struct ShopItemName(usize);
+struct ShopCardPurchasedOverlay(usize);
 
-/// Marker for the item cost text within a row.
+/// Marker for the price text on a card.
 #[derive(Component)]
-struct ShopItemCost(usize);
+struct ShopCardPrice(usize);
+
+/// Marker for the card name text.
+#[derive(Component)]
+struct ShopCardName(usize);
+
+/// Smooth scale animation for a shop card.
+#[derive(Component)]
+struct ShopCardAnim {
+    card_index: usize,
+    target_scale: f32,
+    current_scale: f32,
+}
 
 // ---------------------------------------------------------------------------
 // Systems
@@ -328,7 +433,6 @@ fn reset_shop_on_transition(
     for _ in ev.read() {
         commands.insert_resource(MerchantSpawned(false));
         commands.remove_resource::<ShopUiState>();
-        // Despawn shop overlay UI on room transition
         for e in &overlay_q {
             commands.entity(e).try_despawn_recursive();
         }
@@ -345,11 +449,10 @@ fn spawn_merchant_npc(
     if spawned.map_or(false, |s| s.0) { return; }
     commands.insert_resource(MerchantSpawned(true));
 
-    let x = 480.0; // center of room
+    let x = 480.0;
     let y = 100.0;
 
     commands.spawn((
-        // Invisible collision root
         Sprite {
             color: Color::srgba(0.0, 0.0, 0.0, 0.0),
             custom_size: Some(Vec2::new(40.0, 50.0)),
@@ -360,7 +463,6 @@ fn spawn_merchant_npc(
         RoomEntity,
         PlayingEntity,
     )).with_children(|p| {
-        // ── Stone body: large rounded boulder base ──
         p.spawn((
             Sprite {
                 color: Color::srgb(0.38, 0.34, 0.28),
@@ -369,7 +471,6 @@ fn spawn_merchant_npc(
             },
             Transform::from_xyz(0.0, -2.0, 0.1),
         ));
-        // Left shoulder bump (rounded stone protrusion)
         p.spawn((
             Sprite {
                 color: Color::srgb(0.35, 0.31, 0.25),
@@ -378,7 +479,6 @@ fn spawn_merchant_npc(
             },
             Transform::from_xyz(-16.0, 2.0, 0.08),
         ));
-        // Right shoulder bump
         p.spawn((
             Sprite {
                 color: Color::srgb(0.36, 0.32, 0.26),
@@ -387,7 +487,6 @@ fn spawn_merchant_npc(
             },
             Transform::from_xyz(16.0, 0.0, 0.08),
         ));
-        // ── Head: smaller stone on top ──
         p.spawn((
             Sprite {
                 color: Color::srgb(0.42, 0.38, 0.32),
@@ -396,7 +495,6 @@ fn spawn_merchant_npc(
             },
             Transform::from_xyz(0.0, 18.0, 0.2),
         ));
-        // Brow ridge (darker overhanging stone)
         p.spawn((
             Sprite {
                 color: Color::srgb(0.32, 0.28, 0.22),
@@ -405,8 +503,6 @@ fn spawn_merchant_npc(
             },
             Transform::from_xyz(0.0, 24.0, 0.25),
         ));
-        // ── Eyes: glowing amber orbs set in stone ──
-        // Left eye socket (dark)
         p.spawn((
             Sprite {
                 color: Color::srgb(0.12, 0.10, 0.08),
@@ -415,7 +511,6 @@ fn spawn_merchant_npc(
             },
             Transform::from_xyz(-5.0, 19.0, 0.3),
         ));
-        // Left eye glow
         p.spawn((
             Sprite {
                 color: Color::srgb(0.9, 0.65, 0.2),
@@ -424,7 +519,6 @@ fn spawn_merchant_npc(
             },
             Transform::from_xyz(-5.0, 19.0, 0.35),
         ));
-        // Right eye socket (dark)
         p.spawn((
             Sprite {
                 color: Color::srgb(0.12, 0.10, 0.08),
@@ -433,7 +527,6 @@ fn spawn_merchant_npc(
             },
             Transform::from_xyz(5.0, 19.0, 0.3),
         ));
-        // Right eye glow
         p.spawn((
             Sprite {
                 color: Color::srgb(0.9, 0.65, 0.2),
@@ -442,7 +535,6 @@ fn spawn_merchant_npc(
             },
             Transform::from_xyz(5.0, 19.0, 0.35),
         ));
-        // ── Mouth: jagged crack ──
         p.spawn((
             Sprite {
                 color: Color::srgb(0.15, 0.12, 0.08),
@@ -451,8 +543,6 @@ fn spawn_merchant_npc(
             },
             Transform::from_xyz(0.0, 12.0, 0.3),
         ));
-        // ── Stone texture details ──
-        // Crack line across body
         p.spawn((
             Sprite {
                 color: Color::srgb(0.28, 0.24, 0.18),
@@ -461,7 +551,6 @@ fn spawn_merchant_npc(
             },
             Transform::from_xyz(3.0, -6.0, 0.15),
         ));
-        // Small moss patch (green tint)
         p.spawn((
             Sprite {
                 color: Color::srgb(0.25, 0.40, 0.20),
@@ -470,7 +559,6 @@ fn spawn_merchant_npc(
             },
             Transform::from_xyz(-10.0, -10.0, 0.15),
         ));
-        // Another moss patch
         p.spawn((
             Sprite {
                 color: Color::srgb(0.22, 0.35, 0.18),
@@ -479,7 +567,6 @@ fn spawn_merchant_npc(
             },
             Transform::from_xyz(12.0, 8.0, 0.15),
         ));
-        // ── Stone base: wide flat foundation ──
         p.spawn((
             Sprite {
                 color: Color::srgb(0.30, 0.27, 0.22),
@@ -488,7 +575,6 @@ fn spawn_merchant_npc(
             },
             Transform::from_xyz(0.0, -18.0, 0.05),
         ));
-        // Small pebbles around base
         p.spawn((
             Sprite {
                 color: Color::srgb(0.33, 0.29, 0.23),
@@ -505,7 +591,6 @@ fn spawn_merchant_npc(
             },
             Transform::from_xyz(24.0, -21.0, 0.04),
         ));
-        // ── Crystal embedded in stone (valuable look) ──
         p.spawn((
             Sprite {
                 color: Color::srgb(0.6, 0.45, 0.9),
@@ -523,7 +608,6 @@ fn spawn_merchant_npc(
             Transform::from_xyz(-6.0, 6.0, 0.22),
         ));
 
-        // Interaction prompt (hidden until player near)
         p.spawn((
             Text2d::new("[E] Shop"),
             TextFont { font_size: 11.0, ..default() },
@@ -546,10 +630,10 @@ fn merchant_interaction(
     meta: Res<MetaProgression>,
     shop_state: Option<Res<ShopUiState>>,
     font: Res<GameFont>,
+    asset_server: Res<AssetServer>,
     overlay_q: Query<Entity, With<ShopOverlayUI>>,
 ) {
     let Ok(p_tf) = player_q.get_single() else { return };
-    // Don't process if shop is already open
     if shop_state.as_ref().map_or(false, |s| s.active) { return; }
 
     let interact = keys.just_pressed(KeyCode::KeyE)
@@ -562,7 +646,6 @@ fn merchant_interaction(
         if near && interact {
             merchant.interacted = true;
 
-            // Build shop inventory
             let available: Vec<ShopEntry> = all_shop_entries()
                 .into_iter()
                 .filter(|e| e.unlock.is_met(run.current_floor, &meta))
@@ -570,13 +653,11 @@ fn merchant_interaction(
             let selected = pick_shop_items(&available, run.current_floor);
             let count = selected.len();
 
-            // Remove old overlay if any
             for e in &overlay_q {
                 commands.entity(e).try_despawn_recursive();
             }
 
-            // Spawn the UI overlay with items and gold populated immediately
-            spawn_shop_overlay(&mut commands, &font, &selected, run.gold);
+            spawn_shop_overlay(&mut commands, &font, &asset_server, &selected, run.gold);
 
             commands.insert_resource(ShopUiState {
                 active: true,
@@ -588,7 +669,6 @@ fn merchant_interaction(
         }
     }
 
-    // Update prompt visibility for all merchant prompts
     for (parent, mut color) in &mut prompt_q {
         if let Ok((m_tf, _)) = merchant_q.get(parent.get()) {
             let dist = (p_tf.translation.xy() - m_tf.translation.xy()).length();
@@ -601,140 +681,244 @@ fn merchant_interaction(
     }
 }
 
-/// Spawn the shop overlay UI (centered panel with item list populated immediately).
-fn spawn_shop_overlay(commands: &mut Commands, font: &GameFont, items: &[ShopEntry], gold: i32) {
+/// Spawn the card-based shop overlay UI.
+fn spawn_shop_overlay(
+    commands: &mut Commands,
+    font: &GameFont,
+    asset_server: &AssetServer,
+    items: &[ShopEntry],
+    gold: i32,
+) {
     let f = font.0.clone();
 
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
-            left: Val::Percent(15.0),
-            right: Val::Percent(15.0),
-            top: Val::Percent(8.0),
-            bottom: Val::Percent(8.0),
+            left: Val::Px(0.0),
+            right: Val::Px(0.0),
+            top: Val::Px(0.0),
+            bottom: Val::Px(0.0),
             flex_direction: FlexDirection::Column,
-            padding: UiRect::all(Val::Px(16.0)),
-            row_gap: Val::Px(8.0),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
             ..default()
         },
-        BackgroundColor(Color::srgba(0.06, 0.04, 0.02, 0.94)),
-        BorderColor(Color::srgb(0.50, 0.35, 0.15)),
-        BorderRadius::all(Val::Px(6.0)),
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.75)),
         ShopOverlayUI,
         PlayingEntity,
     )).with_children(|root| {
-        // ── Header row: title + gold ──
+        // ── Title ──
+        root.spawn((
+            Text::new("Händler"),
+            TextFont { font: f.clone(), font_size: 20.0, ..default() },
+            TextColor(Color::srgb(1.0, 0.82, 0.2)),
+            Node {
+                margin: UiRect::bottom(Val::Px(4.0)),
+                ..default()
+            },
+        ));
+
+        // ── Subtitle ──
+        root.spawn((
+            Text::new("Wähle ein Angebot"),
+            TextFont { font: f.clone(), font_size: 11.0, ..default() },
+            TextColor(Color::srgb(0.55, 0.52, 0.48)),
+            Node {
+                margin: UiRect::bottom(Val::Px(6.0)),
+                ..default()
+            },
+        ));
+
+        // ── Gold display ──
+        root.spawn((
+            Text::new(format!("Gold: {}", gold)),
+            TextFont { font: f.clone(), font_size: 11.0, ..default() },
+            TextColor(Color::srgb(0.95, 0.85, 0.4)),
+            ShopGoldText,
+            Node {
+                margin: UiRect::bottom(Val::Px(16.0)),
+                ..default()
+            },
+        ));
+
+        // ── Cards row ──
         root.spawn(Node {
             flex_direction: FlexDirection::Row,
-            justify_content: JustifyContent::SpaceBetween,
-            margin: UiRect::bottom(Val::Px(4.0)),
+            column_gap: Val::Px(16.0),
+            align_items: AlignItems::Stretch,
             ..default()
         }).with_children(|row| {
-            row.spawn((
-                Text::new("~ Stone Merchant ~"),
-                TextFont { font: f.clone(), font_size: 12.0, ..default() },
-                TextColor(Color::srgb(0.9, 0.65, 0.2)),
-            ));
-            row.spawn((
-                Text::new(format!("Gold: {}", gold)),
-                TextFont { font: f.clone(), font_size: 10.0, ..default() },
-                TextColor(Color::srgb(0.95, 0.85, 0.4)),
-                ShopGoldText,
-            ));
-        });
-
-        // ── Merchant dialogue line ──
-        root.spawn((
-            Text::new("Hmm... take what you need, traveler."),
-            TextFont { font: f.clone(), font_size: 8.0, ..default() },
-            TextColor(Color::srgb(0.65, 0.55, 0.40)),
-            ShopMerchantText,
-        ));
-
-        // ── Divider ──
-        root.spawn((
-            Node {
-                height: Val::Px(2.0),
-                margin: UiRect::vertical(Val::Px(4.0)),
-                ..default()
-            },
-            BackgroundColor(Color::srgb(0.35, 0.25, 0.12)),
-        ));
-
-        // ── Item list container (populated immediately) ──
-        root.spawn((
-            Node {
-                flex_direction: FlexDirection::Column,
-                row_gap: Val::Px(4.0),
-                overflow: Overflow::clip(),
-                flex_grow: 1.0,
-                ..default()
-            },
-            ShopItemList,
-        )).with_children(|list| {
             for (i, entry) in items.iter().enumerate() {
-                let selected = i == 0; // first item selected by default
-
-                let bg = if selected {
-                    Color::srgba(0.3, 0.22, 0.10, 0.6)
+                let is_selected = i == 0;
+                let card_bg = if is_selected {
+                    Color::srgb(0.22, 0.15, 0.09)
                 } else {
-                    Color::srgba(0.0, 0.0, 0.0, 0.0)
+                    Color::srgb(0.15, 0.10, 0.07)
+                };
+                let border_color = if is_selected {
+                    Color::srgb(1.0, 0.82, 0.2)
+                } else {
+                    Color::srgb(0.35, 0.25, 0.15)
                 };
 
-                list.spawn((
+                row.spawn((
                     Node {
-                        flex_direction: FlexDirection::Row,
-                        justify_content: JustifyContent::SpaceBetween,
-                        padding: UiRect::axes(Val::Px(8.0), Val::Px(4.0)),
+                        width: Val::Px(160.0),
+                        min_height: Val::Px(210.0),
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        padding: UiRect::all(Val::Px(10.0)),
+                        border: UiRect::all(Val::Px(if is_selected { 3.0 } else { 2.0 })),
+                        row_gap: Val::Px(6.0),
+                        position_type: PositionType::Relative,
                         ..default()
                     },
-                    BackgroundColor(bg),
-                    ShopItemRow(i),
-                )).with_children(|row| {
-                    let prefix = if selected { "> " } else { "  " };
-                    let tier_label = entry.tier.label();
-                    let name_str = format!("{}{}{}", prefix, tier_label, entry.name);
+                    BackgroundColor(card_bg),
+                    BorderColor(border_color),
+                    BorderRadius::all(Val::Px(4.0)),
+                    ShopCard(i),
+                    ShopCardAnim {
+                        card_index: i,
+                        target_scale: if is_selected { 1.06 } else { 1.0 },
+                        current_scale: if is_selected { 1.06 } else { 1.0 },
+                    },
+                )).with_children(|card| {
+                    // ── Tier badge row (top-right aligned) ──
+                    card.spawn(Node {
+                        width: Val::Percent(100.0),
+                        justify_content: JustifyContent::FlexEnd,
+                        margin: UiRect::bottom(Val::Px(2.0)),
+                        ..default()
+                    }).with_children(|badge_row| {
+                        badge_row.spawn((
+                            Node {
+                                width: Val::Px(10.0),
+                                height: Val::Px(10.0),
+                                border: UiRect::all(Val::Px(0.0)),
+                                ..default()
+                            },
+                            BackgroundColor(entry.tier.dot_color()),
+                            BorderRadius::all(Val::Px(5.0)),
+                        ));
+                    });
 
-                    row.spawn((
-                        Text::new(name_str),
-                        TextFont { font: f.clone(), font_size: 9.0, ..default() },
-                        TextColor(entry.tier.color()),
-                        ShopItemName(i),
-                    ));
-
-                    let cost_color = if gold >= entry.cost {
-                        Color::srgb(0.9, 0.85, 0.4)
+                    // ── Icon area (60x60) ──
+                    if !entry.icon_path.is_empty() {
+                        let img = asset_server.load(entry.icon_path);
+                        card.spawn((
+                            Node {
+                                width: Val::Px(60.0),
+                                height: Val::Px(60.0),
+                                ..default()
+                            },
+                            ImageNode::new(img),
+                        ));
                     } else {
-                        Color::srgb(0.7, 0.3, 0.2)
-                    };
+                        card.spawn((
+                            Node {
+                                width: Val::Px(60.0),
+                                height: Val::Px(60.0),
+                                border: UiRect::all(Val::Px(0.0)),
+                                ..default()
+                            },
+                            BackgroundColor(fallback_icon_color(&entry.effect)),
+                            BorderRadius::all(Val::Px(4.0)),
+                        ));
+                    }
 
-                    row.spawn((
-                        Text::new(format!("{}g", entry.cost)),
-                        TextFont { font: f.clone(), font_size: 9.0, ..default() },
-                        TextColor(cost_color),
-                        ShopItemCost(i),
+                    // ── Item name ──
+                    card.spawn((
+                        Text::new(entry.name),
+                        TextFont { font: f.clone(), font_size: 13.0, ..default() },
+                        TextColor(Color::WHITE),
+                        ShopCardName(i),
+                        Node {
+                            ..default()
+                        },
                     ));
+
+                    // ── Description ──
+                    card.spawn((
+                        Text::new(entry.description),
+                        TextFont { font: f.clone(), font_size: 9.5, ..default() },
+                        TextColor(Color::srgb(0.7, 0.7, 0.65)),
+                        Node {
+                            flex_grow: 1.0,
+                            ..default()
+                        },
+                    ));
+
+                    // ── Divider ──
+                    card.spawn((
+                        Node {
+                            width: Val::Percent(100.0),
+                            height: Val::Px(1.0),
+                            margin: UiRect::vertical(Val::Px(2.0)),
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgb(0.28, 0.20, 0.12)),
+                    ));
+
+                    // ── Price row ──
+                    let effective_cost = entry.cost; // initial display; updated each frame
+                    card.spawn((
+                        Text::new(format!("{} Gold", effective_cost)),
+                        TextFont { font: f.clone(), font_size: 11.0, ..default() },
+                        TextColor(Color::srgb(1.0, 0.85, 0.3)),
+                        ShopCardPrice(i),
+                    ));
+
+                    // ── Purchased overlay (hidden initially — spawned as transparent) ──
+                    card.spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: Val::Px(0.0),
+                            right: Val::Px(0.0),
+                            top: Val::Px(0.0),
+                            bottom: Val::Px(0.0),
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::Center,
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+                        ShopCardPurchasedOverlay(i),
+                    )).with_children(|overlay| {
+                        overlay.spawn((
+                            Text::new("✓ Gekauft"),
+                            TextFont { font: f.clone(), font_size: 14.0, ..default() },
+                            TextColor(Color::srgba(0.3, 0.9, 0.3, 0.0)),
+                        ));
+                    });
                 });
             }
         });
 
         // ── Controls hint ──
         root.spawn((
+            Text::new("A/D Navigieren  ENTER Kaufen  ESC Schließen"),
+            TextFont { font: f.clone(), font_size: 8.0, ..default() },
+            TextColor(Color::srgb(0.42, 0.38, 0.30)),
+            Node {
+                margin: UiRect::top(Val::Px(18.0)),
+                ..default()
+            },
+        ));
+
+        // ── Merchant dialogue text ──
+        root.spawn((
+            Text::new("Hmm... nimm, was du brauchst, Wanderer."),
+            TextFont { font: f.clone(), font_size: 9.0, ..default() },
+            TextColor(Color::srgb(0.55, 0.48, 0.35)),
+            ShopMerchantText,
             Node {
                 margin: UiRect::top(Val::Px(6.0)),
                 ..default()
             },
-        )).with_children(|hint_row| {
-            hint_row.spawn((
-                Text::new("[Up/Down] Select  [E/Enter] Buy  [Esc/B] Close"),
-                TextFont { font: f.clone(), font_size: 6.0, ..default() },
-                TextColor(Color::srgb(0.45, 0.38, 0.28)),
-            ));
-        });
+        ));
     });
 }
 
-/// Navigate the shop item list with Up/Down keys or DPad.
+/// Navigate the shop with A/D (left/right) keys or DPad.
 fn shop_ui_navigation(
     mut shop_state: Option<ResMut<ShopUiState>>,
     keys: Res<ButtonInput<KeyCode>>,
@@ -748,21 +932,21 @@ fn shop_ui_navigation(
     if state.input_cooldown > 0.0 { return; }
 
     let gp = gamepads.iter().next();
-    let up = keys.just_pressed(KeyCode::ArrowUp) || keys.just_pressed(KeyCode::KeyW)
-        || gp.map_or(false, |g| g.just_pressed(GamepadButton::DPadUp));
-    let down = keys.just_pressed(KeyCode::ArrowDown) || keys.just_pressed(KeyCode::KeyS)
-        || gp.map_or(false, |g| g.just_pressed(GamepadButton::DPadDown));
+    let left = keys.just_pressed(KeyCode::ArrowLeft) || keys.just_pressed(KeyCode::KeyA)
+        || gp.map_or(false, |g| g.just_pressed(GamepadButton::DPadLeft));
+    let right = keys.just_pressed(KeyCode::ArrowRight) || keys.just_pressed(KeyCode::KeyD)
+        || gp.map_or(false, |g| g.just_pressed(GamepadButton::DPadRight));
 
-    let count = state.items.len();
+    let count = state.items.len().min(4);
     if count == 0 { return; }
 
-    if up {
+    if left {
         state.selected = if state.selected == 0 { count - 1 } else { state.selected - 1 };
-        state.input_cooldown = 0.08;
+        state.input_cooldown = 0.1;
     }
-    if down {
+    if right {
         state.selected = (state.selected + 1) % count;
-        state.input_cooldown = 0.08;
+        state.input_cooldown = 0.1;
     }
 }
 
@@ -794,10 +978,9 @@ fn shop_ui_purchase(
     let idx = state.selected;
     if idx >= state.items.len() { return; }
 
-    // Already purchased
     if state.purchased[idx] {
         if let Ok(mut text) = merchant_text_q.get_single_mut() {
-            **text = "You already bought that one.".to_string();
+            **text = "Das hast du schon gekauft.".to_string();
         }
         return;
     }
@@ -805,7 +988,6 @@ fn shop_ui_purchase(
     let item_name = state.items[idx].name.to_string();
     let item_effect = state.items[idx].effect.clone();
 
-    // For stat upgrades, cost scales with level; otherwise use static cost
     let item_cost = if is_stat_upgrade(&item_effect) {
         let level = match &item_effect {
             ShopEffect::AttackUp  => run.stat_attack,
@@ -822,10 +1004,10 @@ fn shop_ui_purchase(
 
     if run.gold < item_cost {
         if let Ok(mut text) = merchant_text_q.get_single_mut() {
-            **text = "You don't have enough gold for that...".to_string();
+            **text = "Nicht genug Gold dafür...".to_string();
         }
         if let Ok(m_tf) = merchant_q.get_single() {
-            spawn_feedback(&mut commands, m_tf.translation, "Not enough gold!", Color::srgb(0.9, 0.3, 0.2), &font);
+            spawn_feedback(&mut commands, m_tf.translation, "Nicht genug Gold!", Color::srgb(0.9, 0.3, 0.2), &font);
         }
         return;
     }
@@ -833,13 +1015,11 @@ fn shop_ui_purchase(
     run.gold -= item_cost;
     apply_shop_effect(&item_effect, &mut player_mut, &mut spell_slots_q, &mut equipment_q, &mut recalc_ev);
 
-    // Stat upgrades are infinitely repeatable — do not mark as purchased
     let is_stat = is_stat_upgrade(&item_effect);
     if !is_stat {
         state.purchased[idx] = true;
     }
 
-    // Increment stat level counter
     match &item_effect {
         ShopEffect::AttackUp  => run.stat_attack  += 1,
         ShopEffect::DefenseUp => run.stat_defense += 1,
@@ -850,19 +1030,17 @@ fn shop_ui_purchase(
     }
     ev_sfx.send(PlaySfxEvent(SfxType::ShopBuy));
 
-    // Purchase feedback
     if let Ok(m_tf) = merchant_q.get_single() {
-        let msg = format!("Bought {}!", item_name);
+        let msg = format!("{} gekauft!", item_name);
         spawn_feedback(&mut commands, m_tf.translation, &msg, Color::srgb(0.3, 0.9, 0.3), &font);
     }
 
-    // Update merchant dialogue
     let responses = [
-        "A fine choice.",
-        "That'll serve you well.",
-        "Wise purchase, traveler.",
-        "The roots approve.",
-        "Use it well down there.",
+        "Eine weise Wahl.",
+        "Das wird dir gut dienen.",
+        "Kluge Entscheidung.",
+        "Die Wurzeln sind einverstanden.",
+        "Benutze es wohl dort unten.",
     ];
     let resp = responses[idx % responses.len()];
     if let Ok(mut text) = merchant_text_q.get_single_mut() {
@@ -951,14 +1129,16 @@ fn shop_ui_close(
     }
 }
 
-/// Update the shop overlay visuals each frame (gold, selection highlight, purchased items).
+/// Update the shop overlay visuals each frame.
 fn shop_ui_update_visuals(
     shop_state: Option<Res<ShopUiState>>,
     run: Res<RunData>,
-    mut gold_text_q: Query<&mut Text, (With<ShopGoldText>, Without<ShopMerchantText>, Without<ShopItemName>, Without<ShopItemCost>)>,
-    mut bg_q: Query<(&ShopItemRow, &mut BackgroundColor)>,
-    mut name_q: Query<(&mut Text, &mut TextColor, &ShopItemName), (Without<ShopGoldText>, Without<ShopMerchantText>, Without<ShopItemCost>)>,
-    mut cost_q: Query<(&mut Text, &mut TextColor, &ShopItemCost), (Without<ShopGoldText>, Without<ShopMerchantText>, Without<ShopItemName>)>,
+    mut gold_text_q: Query<&mut Text, (With<ShopGoldText>, Without<ShopMerchantText>, Without<ShopCardName>, Without<ShopCardPrice>)>,
+    mut card_q: Query<(&ShopCard, &mut BackgroundColor, &mut BorderColor), Without<ShopCardPurchasedOverlay>>,
+    mut price_q: Query<(&ShopCardPrice, &mut Text, &mut TextColor), (Without<ShopGoldText>, Without<ShopMerchantText>, Without<ShopCardName>)>,
+    mut name_q: Query<(&ShopCardName, &mut Text, &mut TextColor), (Without<ShopGoldText>, Without<ShopMerchantText>, Without<ShopCardPrice>)>,
+    mut overlay_q: Query<(&ShopCardPurchasedOverlay, &mut BackgroundColor, &Children)>,
+    mut text_color_q: Query<&mut TextColor, (Without<ShopCardName>, Without<ShopCardPrice>, Without<ShopGoldText>, Without<ShopMerchantText>)>,
 ) {
     let Some(ref state) = shop_state else { return };
     if !state.active { return; }
@@ -968,28 +1148,37 @@ fn shop_ui_update_visuals(
         **text = format!("Gold: {}", run.gold);
     }
 
-    // Update row backgrounds based on selection
-    for (row, mut bg) in &mut bg_q {
-        if row.0 == state.selected {
-            bg.0 = Color::srgba(0.3, 0.22, 0.10, 0.6);
+    // Update card backgrounds and borders based on selection
+    for (card, mut bg, mut border) in &mut card_q {
+        let i = card.0;
+        if i >= state.items.len() { continue; }
+        let is_selected = i == state.selected;
+        let is_purchased = state.purchased.get(i).copied().unwrap_or(false);
+
+        if is_purchased {
+            bg.0 = Color::srgba(0.08, 0.06, 0.04, 0.4);
+            border.0 = if is_selected {
+                Color::srgba(1.0, 0.82, 0.2, 0.4)
+            } else {
+                Color::srgba(0.35, 0.25, 0.15, 0.4)
+            };
+        } else if is_selected {
+            bg.0 = Color::srgb(0.22, 0.15, 0.09);
+            border.0 = Color::srgb(1.0, 0.82, 0.2);
         } else {
-            bg.0 = Color::srgba(0.0, 0.0, 0.0, 0.0);
+            bg.0 = Color::srgb(0.15, 0.10, 0.07);
+            border.0 = Color::srgb(0.35, 0.25, 0.15);
         }
     }
 
-    // Update name texts with ">" selection cursor
-    for (mut text, mut color, name) in &mut name_q {
-        let i = name.0;
+    // Update card name texts
+    for (name_comp, mut text, mut color) in &mut name_q {
+        let i = name_comp.0;
         if i >= state.items.len() { continue; }
         let entry = &state.items[i];
-        let purchased = state.purchased[i];
-        let tier_label = entry.tier.label();
-        let prefix = if i == state.selected { "> " } else { "  " };
+        let is_purchased = state.purchased.get(i).copied().unwrap_or(false);
 
-        if purchased {
-            **text = format!("{}{}{} [SOLD]", prefix, tier_label, entry.name);
-        } else if is_stat_upgrade(&entry.effect) {
-            // Show current upgrade level in the name
+        if is_stat_upgrade(&entry.effect) {
             let level = match &entry.effect {
                 ShopEffect::AttackUp  => run.stat_attack,
                 ShopEffect::DefenseUp => run.stat_defense,
@@ -998,36 +1187,25 @@ fn shop_ui_update_visuals(
                 ShopEffect::ManaUp    => run.stat_mana,
                 _ => 0,
             };
-            let stat_label = match &entry.effect {
-                ShopEffect::AttackUp  => "Attack",
-                ShopEffect::DefenseUp => "Defense",
-                ShopEffect::SpeedUp   => "Speed",
-                ShopEffect::MaxHpUp   => "Max HP",
-                ShopEffect::ManaUp    => "Mana",
-                _ => entry.name,
-            };
-            **text = format!("{}{}{} Lv.{}", prefix, tier_label, stat_label, level + 1);
+            **text = format!("{} Lv.{}", entry.name, level + 1);
         } else {
-            **text = format!("{}{}{}", prefix, tier_label, entry.name);
-        };
+            **text = entry.name.to_string();
+        }
 
-        color.0 = if purchased {
-            Color::srgb(0.4, 0.35, 0.28)
-        } else if i == state.selected {
-            Color::srgb(1.0, 0.9, 0.5) // bright highlight for selected
+        color.0 = if is_purchased {
+            Color::srgba(1.0, 1.0, 1.0, 0.35)
         } else {
-            entry.tier.color()
+            Color::WHITE
         };
     }
 
-    // Update cost texts
-    for (mut text, mut color, cost) in &mut cost_q {
-        let i = cost.0;
+    // Update card price texts
+    for (price_comp, mut text, mut color) in &mut price_q {
+        let i = price_comp.0;
         if i >= state.items.len() { continue; }
         let entry = &state.items[i];
-        let purchased = state.purchased[i];
+        let is_purchased = state.purchased.get(i).copied().unwrap_or(false);
 
-        // Compute effective cost (scaled for stat upgrades)
         let effective_cost = if is_stat_upgrade(&entry.effect) {
             let level = match &entry.effect {
                 ShopEffect::AttackUp  => run.stat_attack,
@@ -1042,19 +1220,56 @@ fn shop_ui_update_visuals(
             entry.cost
         };
 
-        **text = if purchased {
-            "---".to_string()
-        } else {
-            format!("{}g", effective_cost)
-        };
+        **text = format!("{} Gold", effective_cost);
 
-        color.0 = if purchased {
-            Color::srgb(0.4, 0.35, 0.28)
+        color.0 = if is_purchased {
+            Color::srgba(1.0, 0.85, 0.3, 0.35)
         } else if run.gold >= effective_cost {
-            Color::srgb(0.9, 0.85, 0.4)
+            Color::srgb(1.0, 0.85, 0.3)
         } else {
-            Color::srgb(0.7, 0.3, 0.2)
+            Color::srgb(0.75, 0.3, 0.2)
         };
+    }
+
+    // Update purchased overlays
+    for (overlay_comp, mut bg, children) in &mut overlay_q {
+        let i = overlay_comp.0;
+        let is_purchased = state.purchased.get(i).copied().unwrap_or(false);
+
+        if is_purchased {
+            bg.0 = Color::srgba(0.0, 0.0, 0.0, 0.55);
+            // Make the "✓ Gekauft" child text visible
+            for &child in children.iter() {
+                if let Ok(mut tc) = text_color_q.get_mut(child) {
+                    tc.0 = Color::srgba(0.3, 0.9, 0.3, 1.0);
+                }
+            }
+        } else {
+            bg.0 = Color::srgba(0.0, 0.0, 0.0, 0.0);
+            for &child in children.iter() {
+                if let Ok(mut tc) = text_color_q.get_mut(child) {
+                    tc.0 = Color::srgba(0.3, 0.9, 0.3, 0.0);
+                }
+            }
+        }
+    }
+}
+
+/// Smoothly animate card scale based on selection state.
+fn shop_card_anim_system(
+    shop_state: Option<Res<ShopUiState>>,
+    mut card_q: Query<(&mut ShopCardAnim, &mut Transform)>,
+    time: Res<Time>,
+) {
+    let Some(ref state) = shop_state else { return };
+    if !state.active { return; }
+
+    let dt = time.delta_secs();
+    for (mut anim, mut tf) in &mut card_q {
+        anim.target_scale = if anim.card_index == state.selected { 1.06 } else { 1.0 };
+        anim.current_scale += (anim.target_scale - anim.current_scale) * (8.0 * dt).min(1.0);
+        let s = anim.current_scale;
+        tf.scale = Vec3::new(s, s, 1.0);
     }
 }
 
@@ -1077,15 +1292,15 @@ fn purchase_feedback_decay(
     let dt = time.delta_secs();
     for (entity, mut fb, mut tf) in &mut q {
         fb.timer -= dt;
-        tf.translation.y += 30.0 * dt; // float up
+        tf.translation.y += 30.0 * dt;
         if fb.timer <= 0.0 {
             commands.entity(entity).try_despawn_recursive();
         }
     }
 }
 
-/// Maximum items shown in a single shop visit.
-const MAX_SHOP_SLOTS: usize = 5;
+/// Maximum items shown in a single shop visit (now 4 for card layout).
+const MAX_SHOP_SLOTS: usize = 4;
 
 /// Pick up to MAX_SHOP_SLOTS items from the available pool.
 fn pick_shop_items(available: &[ShopEntry], _floor: i32) -> Vec<ShopEntry> {
@@ -1093,8 +1308,13 @@ fn pick_shop_items(available: &[ShopEntry], _floor: i32) -> Vec<ShopEntry> {
 
     if available.len() <= MAX_SHOP_SLOTS {
         return available.iter().map(|e| ShopEntry {
-            name: e.name, cost: e.cost, effect: e.effect.clone(),
-            tier: e.tier, unlock: e.unlock.clone(),
+            name: e.name,
+            description: e.description,
+            icon_path: e.icon_path,
+            cost: e.cost,
+            effect: e.effect.clone(),
+            tier: e.tier,
+            unlock: e.unlock.clone(),
         }).collect();
     }
 
@@ -1128,8 +1348,13 @@ fn pick_shop_items(available: &[ShopEntry], _floor: i32) -> Vec<ShopEntry> {
     selected.iter().map(|&i| {
         let e = &available[i];
         ShopEntry {
-            name: e.name, cost: e.cost, effect: e.effect.clone(),
-            tier: e.tier, unlock: e.unlock.clone(),
+            name: e.name,
+            description: e.description,
+            icon_path: e.icon_path,
+            cost: e.cost,
+            effect: e.effect.clone(),
+            tier: e.tier,
+            unlock: e.unlock.clone(),
         }
     }).collect()
 }
