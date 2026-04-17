@@ -1751,6 +1751,343 @@ fn spawn_shop_room(commands: &mut Commands, _seed: u64, tiles: &TilesetAssets) {
         Transform::from_xyz(ROOM_W / 2.0, ROOM_H / 2.0, Z_TILES + 0.01),
         RoomEntity, PlayingEntity,
     ));
+
+    // ── Cuphead-style market stall ──────────────────────────────────────────
+    // Merchant stands at (480, 168), feet at Y=120, head at Y=216.
+    // All stall elements are placed around him without covering his sprite.
+
+    let wood_mid   = Color::srgb(0.38, 0.26, 0.14);
+    let wood_dark  = Color::srgb(0.28, 0.18, 0.08);
+    let wood_light = Color::srgb(0.45, 0.32, 0.18);
+    let cream      = Color::srgb(0.92, 0.86, 0.70);
+    let canopy_red = Color::srgb(0.75, 0.15, 0.10);
+    let gold       = Color::srgb(0.80, 0.60, 0.15);
+
+    // Counter spans cols 8-16: x from 8*40=320 to 17*40=680, centre=500, width=360
+    let counter_cx  = 500.0_f32;
+    let counter_w   = 360.0_f32;
+    let counter_top = 110.0_f32; // just below podest top at 120
+    let counter_bot = 80.0_f32;
+    let counter_face_h = counter_top - counter_bot; // 30
+
+    // 1a. Counter top plank
+    commands.spawn((
+        Sprite { color: wood_light, custom_size: Some(Vec2::new(counter_w, 8.0)), ..default() },
+        Transform::from_xyz(counter_cx, counter_top - 4.0, Z_PICKUPS - 0.22),
+        RoomEntity, PlayingEntity,
+    ));
+    // 1b. Counter front face (vertical board)
+    commands.spawn((
+        Sprite { color: wood_mid, custom_size: Some(Vec2::new(counter_w, counter_face_h)), ..default() },
+        Transform::from_xyz(counter_cx, counter_bot + counter_face_h / 2.0, Z_PICKUPS - 0.23),
+        RoomEntity, PlayingEntity,
+    ));
+    // 1c. Wood-grain vertical dark streaks on the front face (~18px spacing)
+    {
+        let streak_x_start = counter_cx - counter_w / 2.0 + 9.0;
+        let num_streaks = (counter_w / 18.0) as i32;
+        for i in 0..num_streaks {
+            let sx = streak_x_start + i as f32 * 18.0;
+            commands.spawn((
+                Sprite { color: Color::srgba(0.18, 0.10, 0.04, 0.55), custom_size: Some(Vec2::new(1.5, counter_face_h - 4.0)), ..default() },
+                Transform::from_xyz(sx, counter_bot + counter_face_h / 2.0, Z_PICKUPS - 0.21),
+                RoomEntity, PlayingEntity,
+            ));
+        }
+    }
+    // 1d. Dark bottom edge line under front face
+    commands.spawn((
+        Sprite { color: wood_dark, custom_size: Some(Vec2::new(counter_w + 4.0, 3.0)), ..default() },
+        Transform::from_xyz(counter_cx, counter_bot - 1.5, Z_PICKUPS - 0.22),
+        RoomEntity, PlayingEntity,
+    ));
+    // 1e. Small bracket corbels at each end of the counter (tiny right triangles approximated as
+    //     dark diagonal rects)
+    for &side in &[-1.0_f32, 1.0_f32] {
+        let bx = counter_cx + side * (counter_w / 2.0 - 7.0);
+        // Vertical part
+        commands.spawn((
+            Sprite { color: wood_dark, custom_size: Some(Vec2::new(5.0, counter_face_h * 0.55)), ..default() },
+            Transform::from_xyz(bx, counter_bot + counter_face_h * 0.28, Z_PICKUPS - 0.20),
+            RoomEntity, PlayingEntity,
+        ));
+        // Diagonal accent (thin rotated rect)
+        commands.spawn((
+            Sprite { color: wood_dark, custom_size: Some(Vec2::new(12.0, 3.0)), ..default() },
+            Transform::from_xyz(bx - side * 3.0, counter_bot + counter_face_h * 0.55, Z_PICKUPS - 0.20)
+                .with_rotation(Quat::from_rotation_z(side * -0.60)),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // 2. Striped canopy/awning above merchant
+    //    Between head Y=216 and banner Y=300; placed at Y=250, height=28.
+    let canopy_cx  = 480.0_f32;
+    let canopy_y   = 250.0_f32;
+    let canopy_h   = 28.0_f32;
+    let canopy_w   = counter_w; // same width as counter
+    let stripe_w   = 40.0_f32;
+    let num_stripes = (canopy_w / stripe_w) as i32 + 1;
+    let stripe_start_x = canopy_cx - canopy_w / 2.0;
+
+    // 2a. Alternating red/cream vertical stripes
+    for i in 0..num_stripes {
+        let sx = stripe_start_x + i as f32 * stripe_w + stripe_w / 2.0;
+        // Clamp to canopy bounds
+        let visible_w = (sx + stripe_w / 2.0).min(canopy_cx + canopy_w / 2.0)
+            - (sx - stripe_w / 2.0).max(canopy_cx - canopy_w / 2.0);
+        if visible_w <= 0.0 { continue; }
+        let stripe_color = if i % 2 == 0 { canopy_red } else { cream };
+        commands.spawn((
+            Sprite { color: stripe_color, custom_size: Some(Vec2::new(visible_w, canopy_h)), ..default() },
+            Transform::from_xyz(sx.clamp(canopy_cx - canopy_w / 2.0 + visible_w / 2.0, canopy_cx + canopy_w / 2.0 - visible_w / 2.0), canopy_y, Z_TILES + 0.45),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+    // 2b. Scalloped bottom edge: ~9 overlapping red half-circle approximations (small rects)
+    {
+        let scallop_count = 9_i32;
+        let scallop_w = canopy_w / scallop_count as f32;
+        for i in 0..scallop_count {
+            let sx = canopy_cx - canopy_w / 2.0 + (i as f32 + 0.5) * scallop_w;
+            // Outer scallop dome (red, wide)
+            commands.spawn((
+                Sprite { color: canopy_red, custom_size: Some(Vec2::new(scallop_w - 2.0, 12.0)), ..default() },
+                Transform::from_xyz(sx, canopy_y - canopy_h / 2.0 - 4.0, Z_TILES + 0.46),
+                RoomEntity, PlayingEntity,
+            ));
+            // Inner highlight (cream strip across scallop top to suggest curve)
+            commands.spawn((
+                Sprite { color: cream, custom_size: Some(Vec2::new(scallop_w * 0.45, 4.0)), ..default() },
+                Transform::from_xyz(sx, canopy_y - canopy_h / 2.0 - 1.0, Z_TILES + 0.47),
+                RoomEntity, PlayingEntity,
+            ));
+        }
+    }
+    // 2c. Gold trim top edge of canopy
+    commands.spawn((
+        Sprite { color: gold, custom_size: Some(Vec2::new(canopy_w + 4.0, 3.0)), ..default() },
+        Transform::from_xyz(canopy_cx, canopy_y + canopy_h / 2.0 + 1.0, Z_TILES + 0.46),
+        RoomEntity, PlayingEntity,
+    ));
+    // 2d. Angled support poles from canopy corners down to counter ends
+    //     Left pole: from (canopy_cx - canopy_w/2, canopy_y) down to (counter_cx - counter_w/2, counter_top)
+    for &side in &[-1.0_f32, 1.0_f32] {
+        let top_x = canopy_cx + side * canopy_w / 2.0;
+        let bot_x = counter_cx + side * counter_w / 2.0;
+        let mid_x = (top_x + bot_x) / 2.0;
+        let mid_y = (canopy_y + counter_top) / 2.0;
+        let dx = bot_x - top_x;
+        let dy = counter_top - canopy_y;
+        let len = (dx * dx + dy * dy).sqrt();
+        let angle = dy.atan2(dx); // atan2(rise, run) for the Quat
+        commands.spawn((
+            Sprite { color: wood_dark, custom_size: Some(Vec2::new(len, 4.0)), ..default() },
+            Transform::from_xyz(mid_x, mid_y, Z_TILES + 0.44)
+                .with_rotation(Quat::from_rotation_z(angle)),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // 3. Counter wares on the top plank (Y ≈ counter_top + 2 for base of items)
+    let ware_y = counter_top + 5.0;
+
+    // 3a. Red potion bottle at x=430
+    commands.spawn((
+        Sprite { color: Color::srgb(0.80, 0.15, 0.15), custom_size: Some(Vec2::new(7.0, 10.0)), ..default() },
+        Transform::from_xyz(430.0, ware_y, Z_PICKUPS - 0.18),
+        RoomEntity, PlayingEntity,
+    ));
+    commands.spawn((  // cork
+        Sprite { color: wood_dark, custom_size: Some(Vec2::new(5.0, 3.0)), ..default() },
+        Transform::from_xyz(430.0, ware_y + 6.0, Z_PICKUPS - 0.17),
+        RoomEntity, PlayingEntity,
+    ));
+
+    // 3b. Blue potion bottle at x=445
+    commands.spawn((
+        Sprite { color: Color::srgb(0.15, 0.35, 0.90), custom_size: Some(Vec2::new(7.0, 10.0)), ..default() },
+        Transform::from_xyz(445.0, ware_y, Z_PICKUPS - 0.18),
+        RoomEntity, PlayingEntity,
+    ));
+    commands.spawn((  // cork
+        Sprite { color: wood_dark, custom_size: Some(Vec2::new(5.0, 3.0)), ..default() },
+        Transform::from_xyz(445.0, ware_y + 6.0, Z_PICKUPS - 0.17),
+        RoomEntity, PlayingEntity,
+    ));
+
+    // 3c. Green potion bottle at x=460
+    commands.spawn((
+        Sprite { color: Color::srgb(0.15, 0.65, 0.20), custom_size: Some(Vec2::new(7.0, 10.0)), ..default() },
+        Transform::from_xyz(460.0, ware_y, Z_PICKUPS - 0.18),
+        RoomEntity, PlayingEntity,
+    ));
+    commands.spawn((  // cork
+        Sprite { color: wood_dark, custom_size: Some(Vec2::new(5.0, 3.0)), ..default() },
+        Transform::from_xyz(460.0, ware_y + 6.0, Z_PICKUPS - 0.17),
+        RoomEntity, PlayingEntity,
+    ));
+
+    // 3d. Stack of gold coins at x=510 (3 stacked golden rects with dark outlines)
+    for i in 0..3_i32 {
+        commands.spawn((
+            Sprite { color: gold, custom_size: Some(Vec2::new(10.0, 4.0)), ..default() },
+            Transform::from_xyz(510.0, ware_y + i as f32 * 3.5, Z_PICKUPS - 0.18),
+            RoomEntity, PlayingEntity,
+        ));
+        commands.spawn((  // dark outline ring
+            Sprite { color: Color::srgba(0.20, 0.12, 0.02, 0.75), custom_size: Some(Vec2::new(10.0, 4.0)), ..default() },
+            Transform::from_xyz(510.0, ware_y + i as f32 * 3.5, Z_PICKUPS - 0.19),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // 3e. Open scroll at x=545
+    commands.spawn((  // scroll body
+        Sprite { color: cream, custom_size: Some(Vec2::new(14.0, 10.0)), ..default() },
+        Transform::from_xyz(545.0, ware_y, Z_PICKUPS - 0.18),
+        RoomEntity, PlayingEntity,
+    ));
+    // Dark wavy lines on scroll (3 horizontal streaks)
+    for i in 0..3_i32 {
+        commands.spawn((
+            Sprite { color: Color::srgba(0.20, 0.15, 0.08, 0.65), custom_size: Some(Vec2::new(10.0, 1.5)), ..default() },
+            Transform::from_xyz(545.0, ware_y - 3.0 + i as f32 * 3.5, Z_PICKUPS - 0.17),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+    // Scroll end rolls (darker rounded edges)
+    commands.spawn((
+        Sprite { color: Color::srgb(0.75, 0.68, 0.52), custom_size: Some(Vec2::new(14.0, 3.0)), ..default() },
+        Transform::from_xyz(545.0, ware_y + 5.0, Z_PICKUPS - 0.17),
+        RoomEntity, PlayingEntity,
+    ));
+    commands.spawn((
+        Sprite { color: Color::srgb(0.75, 0.68, 0.52), custom_size: Some(Vec2::new(14.0, 3.0)), ..default() },
+        Transform::from_xyz(545.0, ware_y - 5.0, Z_PICKUPS - 0.17),
+        RoomEntity, PlayingEntity,
+    ));
+
+    // 4. Back shelf display — mounted on back wall behind merchant, above the banner
+    //    Shelf plank at Y=370, spanning cols 9-14 (x=360..580, cx=470)
+    let shelf_back_cx = 470.0_f32;
+    let shelf_back_y  = 370.0_f32;
+    let shelf_back_w  = 220.0_f32;
+    let shelf_dark    = Color::srgb(0.30, 0.20, 0.10);
+
+    // Shelf plank
+    commands.spawn((
+        Sprite { color: shelf_dark, custom_size: Some(Vec2::new(shelf_back_w, 6.0)), ..default() },
+        Transform::from_xyz(shelf_back_cx, shelf_back_y, Z_TILES + 0.38),
+        RoomEntity, PlayingEntity,
+    ));
+    // Shelf bracket supports (2 under-supports)
+    for &bx in &[shelf_back_cx - shelf_back_w / 2.0 + 14.0, shelf_back_cx + shelf_back_w / 2.0 - 14.0] {
+        commands.spawn((
+            Sprite { color: wood_dark, custom_size: Some(Vec2::new(5.0, 14.0)), ..default() },
+            Transform::from_xyz(bx, shelf_back_y - 10.0, Z_TILES + 0.37),
+            RoomEntity, PlayingEntity,
+        ));
+    }
+
+    // Silhouette items on the back shelf (item_y = shelf_back_y + 3 + half_height)
+    let item_y_base = shelf_back_y + 3.0;
+
+    // Sword silhouette (long thin rect with pommel nub) at x=380
+    commands.spawn((
+        Sprite { color: wood_dark, custom_size: Some(Vec2::new(4.0, 22.0)), ..default() },
+        Transform::from_xyz(383.0, item_y_base + 11.0, Z_TILES + 0.39),
+        RoomEntity, PlayingEntity,
+    ));
+    commands.spawn((  // crossguard
+        Sprite { color: wood_dark, custom_size: Some(Vec2::new(10.0, 3.0)), ..default() },
+        Transform::from_xyz(383.0, item_y_base + 7.0, Z_TILES + 0.39),
+        RoomEntity, PlayingEntity,
+    ));
+    commands.spawn((  // pommel
+        Sprite { color: wood_dark, custom_size: Some(Vec2::new(6.0, 5.0)), ..default() },
+        Transform::from_xyz(383.0, item_y_base + 2.0, Z_TILES + 0.39),
+        RoomEntity, PlayingEntity,
+    ));
+
+    // Helmet silhouette (rounded rect with visor slit) at x=410
+    commands.spawn((
+        Sprite { color: wood_dark, custom_size: Some(Vec2::new(14.0, 12.0)), ..default() },
+        Transform::from_xyz(410.0, item_y_base + 7.0, Z_TILES + 0.39),
+        RoomEntity, PlayingEntity,
+    ));
+    commands.spawn((  // visor slit (cream gap)
+        Sprite { color: cream, custom_size: Some(Vec2::new(10.0, 2.0)), ..default() },
+        Transform::from_xyz(410.0, item_y_base + 5.0, Z_TILES + 0.40),
+        RoomEntity, PlayingEntity,
+    ));
+
+    // Ring (small circle outline approximation — thin square border) at x=435
+    commands.spawn((
+        Sprite { color: gold, custom_size: Some(Vec2::new(10.0, 10.0)), ..default() },
+        Transform::from_xyz(435.0, item_y_base + 6.0, Z_TILES + 0.39),
+        RoomEntity, PlayingEntity,
+    ));
+    commands.spawn((  // inner cutout
+        Sprite { color: Color::srgba(0.20, 0.12, 0.06, 0.90), custom_size: Some(Vec2::new(6.0, 6.0)), ..default() },
+        Transform::from_xyz(435.0, item_y_base + 6.0, Z_TILES + 0.40),
+        RoomEntity, PlayingEntity,
+    ));
+
+    // Book (rect with spine line) at x=455
+    commands.spawn((
+        Sprite { color: canopy_red, custom_size: Some(Vec2::new(10.0, 14.0)), ..default() },
+        Transform::from_xyz(455.0, item_y_base + 8.0, Z_TILES + 0.39),
+        RoomEntity, PlayingEntity,
+    ));
+    commands.spawn((  // spine vertical line
+        Sprite { color: wood_dark, custom_size: Some(Vec2::new(2.0, 14.0)), ..default() },
+        Transform::from_xyz(450.5, item_y_base + 8.0, Z_TILES + 0.40),
+        RoomEntity, PlayingEntity,
+    ));
+
+    // Bottle silhouette at x=476
+    commands.spawn((
+        Sprite { color: Color::srgb(0.30, 0.55, 0.45), custom_size: Some(Vec2::new(7.0, 14.0)), ..default() },
+        Transform::from_xyz(476.0, item_y_base + 8.0, Z_TILES + 0.39),
+        RoomEntity, PlayingEntity,
+    ));
+    commands.spawn((  // bottle neck
+        Sprite { color: Color::srgb(0.25, 0.45, 0.38), custom_size: Some(Vec2::new(4.0, 5.0)), ..default() },
+        Transform::from_xyz(476.0, item_y_base + 18.0, Z_TILES + 0.39),
+        RoomEntity, PlayingEntity,
+    ));
+
+    // 5. Hanging sign "WARES" dangling from the awning
+    let sign_x = 480.0_f32;
+    let sign_y = canopy_y - canopy_h / 2.0 - 22.0; // below canopy bottom
+
+    // Rope thread (thin, from canopy bottom down to sign top)
+    commands.spawn((
+        Sprite { color: Color::srgb(0.45, 0.35, 0.20), custom_size: Some(Vec2::new(2.0, 18.0)), ..default() },
+        Transform::from_xyz(sign_x, canopy_y - canopy_h / 2.0 - 9.0, Z_TILES + 0.48),
+        RoomEntity, PlayingEntity,
+    ));
+    // Sign board (wooden rect with dark border)
+    commands.spawn((
+        Sprite { color: wood_mid, custom_size: Some(Vec2::new(52.0, 16.0)), ..default() },
+        Transform::from_xyz(sign_x, sign_y, Z_TILES + 0.48),
+        RoomEntity, PlayingEntity,
+    ));
+    // Sign border (dark outline)
+    commands.spawn((
+        Sprite { color: wood_dark, custom_size: Some(Vec2::new(54.0, 18.0)), ..default() },
+        Transform::from_xyz(sign_x, sign_y, Z_TILES + 0.47),
+        RoomEntity, PlayingEntity,
+    ));
+    // Gold stud corners (2x2 squares in each corner)
+    for &(ox, oy) in &[(-22.0_f32, 5.0_f32), (22.0, 5.0), (-22.0, -5.0), (22.0, -5.0)] {
+        commands.spawn((
+            Sprite { color: gold, custom_size: Some(Vec2::new(3.0, 3.0)), ..default() },
+            Transform::from_xyz(sign_x + ox, sign_y + oy, Z_TILES + 0.49),
+            RoomEntity, PlayingEntity,
+        ));
+    }
 }
 
 fn spawn_treasure_room(commands: &mut Commands, seed: u64, tiles: &TilesetAssets) {
