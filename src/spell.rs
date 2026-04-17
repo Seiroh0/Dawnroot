@@ -144,6 +144,7 @@ pub struct LightningStrike {
     pub damage: i32,
     pub radius: f32,
     pub lifetime: f32,
+    pub hit: bevy::utils::HashSet<Entity>,
 }
 
 /// Tracks the buff duration; the visual ring is attached as children.
@@ -390,6 +391,7 @@ fn spell_input(
                         damage: LIGHTNING_DAMAGE,
                         radius: LIGHTNING_RADIUS,
                         lifetime: 0.15,
+                        hit: bevy::utils::HashSet::new(),
                     },
                     SpellAnimState {
                         frames: spell_assets.lightning.clone(),

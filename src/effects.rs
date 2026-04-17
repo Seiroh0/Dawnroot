@@ -163,6 +163,7 @@ fn on_player_damaged(
     mut commands: Commands,
     mut ev: EventReader<PlayerDamaged>,
     player_q: Query<&Transform, With<crate::player::Player>>,
+    camera_q: Query<Entity, With<crate::camera::GameCamera>>,
 ) {
     for _event in ev.read() {
         let Ok(p_tf) = player_q.get_single() else { continue };
@@ -190,24 +191,27 @@ fn on_player_damaged(
             ));
         }
 
-        // --- Screen-edge red vignette: large translucent red rect centred on
-        //     player that fades out rapidly. Gives a "blood splatter" feel. ---
-        commands.spawn((
-            Sprite {
-                color: Color::srgba(0.9, 0.05, 0.05, 0.55),
-                custom_size: Some(Vec2::new(
-                    crate::constants::VIEWPORT_W,
-                    crate::constants::VIEWPORT_H,
-                )),
-                ..default()
-            },
-            Transform::from_xyz(pos.x, pos.y, crate::constants::Z_HUD - 5.0),
-            FlashSprite {
-                lifetime: 0.35,
-                max_lifetime: 0.35,
-            },
-            PlayingEntity,
-        ));
+        // --- Screen-edge red vignette as camera child so it stays screen-locked
+        //     regardless of camera follow / screen shake during its fade. ---
+        if let Ok(camera_entity) = camera_q.get_single() {
+            let vignette = commands.spawn((
+                Sprite {
+                    color: Color::srgba(0.9, 0.05, 0.05, 0.55),
+                    custom_size: Some(Vec2::new(
+                        crate::constants::VIEWPORT_W,
+                        crate::constants::VIEWPORT_H,
+                    )),
+                    ..default()
+                },
+                Transform::from_xyz(0.0, 0.0, crate::constants::Z_HUD - 5.0),
+                FlashSprite {
+                    lifetime: 0.35,
+                    max_lifetime: 0.35,
+                },
+                PlayingEntity,
+            )).id();
+            commands.entity(camera_entity).add_child(vignette);
+        }
     }
 }
 

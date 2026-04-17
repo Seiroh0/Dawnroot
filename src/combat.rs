@@ -286,7 +286,7 @@ fn spell_vs_enemy(
 
 fn lightning_vs_enemy(
     mut commands: Commands,
-    strike_q: Query<(&Transform, &LightningStrike)>,
+    mut strike_q: Query<(&Transform, &mut LightningStrike)>,
     mut enemy_q: Query<(Entity, &Transform, &mut Enemy, Option<&Intangible>, Option<&SlimeEnemy>)>,
     mut ev_defeated: EventWriter<EnemyDefeated>,
     mut ev_dmg: EventWriter<DamageNumberEvent>,
@@ -297,14 +297,16 @@ fn lightning_vs_enemy(
     mut player_q: Query<&mut Player>,
     assets: Res<EnemySpriteAssets>,
 ) {
-    for (s_tf, strike) in &strike_q {
+    for (s_tf, mut strike) in &mut strike_q {
         if strike.lifetime < 0.12 { continue; }
 
         for (e_entity, e_tf, mut enemy, intangible, slime) in &mut enemy_q {
             if intangible.is_some() { continue; }
+            if strike.hit.contains(&e_entity) { continue; }
             let dist = (s_tf.translation.xy() - e_tf.translation.xy()).length();
 
             if dist < strike.radius {
+                strike.hit.insert(e_entity);
                 let (total_dmg, is_crit) = calc_damage(strike.damage, &stats);
                 enemy.health -= total_dmg;
                 let kind = if is_crit { DamageNumberKind::CritHit } else { DamageNumberKind::EnemyHit };

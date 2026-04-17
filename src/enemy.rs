@@ -76,7 +76,7 @@ impl Plugin for EnemyPlugin {
             .add_systems(
                 Update,
                 (
-                    on_room_transition,
+                    on_room_transition.before(spawn_room_enemies),
                     spawn_room_enemies,
                     ground_enemy_ai,
                     flying_enemy_ai,
@@ -94,10 +94,6 @@ impl Plugin for EnemyPlugin {
             .add_systems(
                 Update,
                 (
-                    animate_ground_enemies,
-                    animate_flying_enemies,
-                    animate_charger_enemies,
-                    animate_turret_eye,
                     animate_mage_staff,
                     animate_ghost_wisps,
                     animate_slime_enemies,
@@ -191,36 +187,6 @@ pub struct EnemyProjectile {
     pub lifetime: f32,
     pub damage: i32,
 }
-
-// ---------------------------------------------------------------------------
-// Child-part marker components (kept for backwards-compat, now dead code)
-// ---------------------------------------------------------------------------
-
-/// Left leg of a GroundEnemy (Goblin).
-#[derive(Component)]
-pub struct GoblinLegLeft;
-
-/// Right leg of a GroundEnemy (Goblin).
-#[derive(Component)]
-pub struct GoblinLegRight;
-
-/// Left wing of a FlyingEnemy (Bat).
-#[derive(Component)]
-pub struct BatWingLeft;
-
-/// Right wing of a FlyingEnemy (Bat).
-#[derive(Component)]
-pub struct BatWingRight;
-
-/// Horn part of a ChargerEnemy (Bull/Boar). `side`: -1.0 = left, 1.0 = right.
-#[derive(Component)]
-pub struct BoarHorn {
-    pub side: f32,
-}
-
-/// Rotating eye/barrel of a TurretEnemy.
-#[derive(Component)]
-pub struct TurretEye;
 
 // --- New enemy types (Sprint 3) ---
 
@@ -1511,100 +1477,6 @@ fn animate_enemy_sprites(
             }
             let frames = if moving && anim.has_run_anim { &anim.run_frames } else { &anim.frames };
             sprite.image = frames[anim.frame].clone();
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Legacy animation systems (dead code — child parts no longer spawned)
-// ---------------------------------------------------------------------------
-
-/// Bob goblin legs up/down when the parent GroundEnemy is moving.
-fn animate_ground_enemies(
-    ground_q: Query<(&GroundEnemy, &Children)>,
-    mut leg_q: Query<(&mut Transform, Option<&GoblinLegLeft>, Option<&GoblinLegRight>)>,
-    time: Res<Time>,
-) {
-    let t = time.elapsed_secs();
-    for (ge, children) in &ground_q {
-        let moving = ge.speed > 0.1;
-        for &child in children.iter() {
-            if let Ok((mut tf, is_left, is_right)) = leg_q.get_mut(child) {
-                if is_left.is_some() || is_right.is_some() {
-                    if moving {
-                        let phase = if is_left.is_some() { 0.0f32 } else { std::f32::consts::PI };
-                        let bob = (t * 8.0 + phase).sin() * 3.0;
-                        tf.translation.y = -8.0 + bob;
-                    } else {
-                        tf.translation.y = -8.0;
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Flap bat wings by rotating them back and forth.
-fn animate_flying_enemies(
-    flying_q: Query<(&FlyingEnemy, &Children)>,
-    mut wing_q: Query<(&mut Transform, Option<&BatWingLeft>, Option<&BatWingRight>)>,
-    time: Res<Time>,
-) {
-    let t = time.elapsed_secs();
-    for (_fe, children) in &flying_q {
-        for &child in children.iter() {
-            if let Ok((mut tf, is_left, is_right)) = wing_q.get_mut(child) {
-                if is_left.is_some() {
-                    let angle = (t * 6.0).sin() * 0.5;
-                    tf.rotation = Quat::from_rotation_z(angle);
-                } else if is_right.is_some() {
-                    let angle = -(t * 6.0).sin() * 0.5;
-                    tf.rotation = Quat::from_rotation_z(angle);
-                }
-            }
-        }
-    }
-}
-
-/// Tilt boar horns forward when the charger is charging.
-fn animate_charger_enemies(
-    charger_q: Query<(&ChargerEnemy, &Children)>,
-    mut horn_q: Query<(&mut Transform, &BoarHorn)>,
-    time: Res<Time>,
-) {
-    let t = time.elapsed_secs();
-    for (charger, children) in &charger_q {
-        for &child in children.iter() {
-            if let Ok((mut tf, horn)) = horn_q.get_mut(child) {
-                if charger.charging {
-                    let vib = (t * 20.0).sin() * 0.04;
-                    let tilt = -0.35 + vib;
-                    tf.rotation = Quat::from_rotation_z(tilt * charger.charge_dir * horn.side);
-                } else {
-                    tf.rotation = Quat::from_rotation_z(0.0);
-                }
-            }
-        }
-    }
-}
-
-/// Rotate the turret eye to point toward the player.
-fn animate_turret_eye(
-    turret_q: Query<(&Transform, &Children), With<TurretEnemy>>,
-    mut eye_q: Query<&mut Transform, (With<TurretEye>, Without<TurretEnemy>, Without<Player>)>,
-    player_q: Query<&Transform, (With<Player>, Without<TurretEnemy>, Without<TurretEye>)>,
-) {
-    let player_pos = player_q.get_single().map(|t| t.translation).ok();
-
-    for (turret_tf, children) in &turret_q {
-        for &child in children.iter() {
-            if let Ok(mut eye_tf) = eye_q.get_mut(child) {
-                if let Some(pp) = player_pos {
-                    let diff = pp - turret_tf.translation;
-                    let angle = diff.y.atan2(diff.x);
-                    eye_tf.rotation = Quat::from_rotation_z(angle);
-                }
-            }
         }
     }
 }

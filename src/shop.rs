@@ -81,6 +81,7 @@ pub struct MerchantAnim {
     pub state: MerchantAnimState,
     pub timer: f32,
     pub bob_t: f32,
+    pub base_y: f32,
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -499,10 +500,10 @@ fn spawn_merchant_npc(
 
     // Display at 2x scale → 96x96 in-game
     let display_size = 96.0_f32;
-    let x = 480.0_f32;
-    // Place so feet touch the ground line
-    let ground_y = -crate::constants::VIEWPORT_H / 2.0 + 50.0 + 52.5;
-    let y = ground_y + display_size / 2.0;
+    let x = crate::constants::ROOM_W / 2.0;
+    // Stand on top of the center podest (row 2, height 1 tile): top surface = 3 * TILE_SIZE
+    let podest_top = 3.0 * crate::constants::TILE_SIZE;
+    let y = podest_top + display_size / 2.0;
 
     commands.spawn((
         Sprite {
@@ -512,7 +513,7 @@ fn spawn_merchant_npc(
         },
         Transform::from_xyz(x, y, crate::constants::Z_PLAYER - 0.5),
         MerchantNpc { interacted: false },
-        MerchantAnim { state: MerchantAnimState::Idle, timer: 0.0, bob_t: 0.0 },
+        MerchantAnim { state: MerchantAnimState::Idle, timer: 0.0, bob_t: 0.0, base_y: y },
         RoomEntity,
         PlayingEntity,
     )).with_children(|p| {
@@ -542,18 +543,19 @@ fn spawn_merchant_npc(
 /// Animate the merchant sprite based on current MerchantAnimState.
 fn merchant_anim_system(
     time: Res<Time>,
-    mut merchant_q: Query<(&mut MerchantAnim, &mut Transform), With<MerchantNpc>>,
+    mut merchant_q: Query<(&mut MerchantAnim, &mut Transform, &Children), With<MerchantNpc>>,
     mut sprite_q: Query<&mut Sprite, With<MerchantSprite>>,
 ) {
     let dt = time.delta_secs();
-    for (mut anim, mut tf) in &mut merchant_q {
+    let bob_period = std::f32::consts::TAU / 1.8;
+    for (mut anim, mut tf, children) in &mut merchant_q {
         anim.timer += dt;
-        anim.bob_t += dt;
+        anim.bob_t = (anim.bob_t + dt) % bob_period;
 
-        // Idle bob: gentle up-down oscillation
+        // Idle bob: gentle up-down oscillation around fixed base_y (no drift)
         if anim.state == MerchantAnimState::Idle {
             let bob = (anim.bob_t * 1.8).sin() * 1.5;
-            tf.translation.y = tf.translation.y.round() + bob;
+            tf.translation.y = anim.base_y + bob;
         }
 
         // Timed states revert to Idle after duration
@@ -562,11 +564,13 @@ fn merchant_anim_system(
             anim.timer = 0.0;
         }
 
-        // Update sprite atlas frame
+        // Update sprite atlas frame on this merchant's own MerchantSprite child only
         let target_frame = anim.state.frame();
-        for mut sprite in &mut sprite_q {
-            if let Some(ref mut atlas) = sprite.texture_atlas {
-                atlas.index = target_frame;
+        for &child in children.iter() {
+            if let Ok(mut sprite) = sprite_q.get_mut(child) {
+                if let Some(ref mut atlas) = sprite.texture_atlas {
+                    atlas.index = target_frame;
+                }
             }
         }
     }
@@ -912,8 +916,8 @@ fn shop_ui_purchase(
     keys: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     mut run: ResMut<RunData>,
-    mut player_mut: Query<&mut crate::player::Player, Without<crate::spell::SpellSlots>>,
-    mut spell_slots_q: Query<&mut crate::spell::SpellSlots, Without<crate::player::Player>>,
+    mut player_mut: Query<&mut crate::player::Player>,
+    mut spell_slots_q: Query<&mut crate::spell::SpellSlots>,
     mut equipment_q: Query<&mut Equipment, With<crate::player::Player>>,
     mut recalc_ev: EventWriter<RecalcStats>,
     mut commands: Commands,
@@ -1017,8 +1021,8 @@ fn shop_ui_purchase(
 /// Apply a shop effect to the player.
 fn apply_shop_effect(
     effect: &ShopEffect,
-    player_mut: &mut Query<&mut crate::player::Player, Without<crate::spell::SpellSlots>>,
-    spell_slots_q: &mut Query<&mut crate::spell::SpellSlots, Without<crate::player::Player>>,
+    player_mut: &mut Query<&mut crate::player::Player>,
+    spell_slots_q: &mut Query<&mut crate::spell::SpellSlots>,
     equipment_q: &mut Query<&mut Equipment, With<crate::player::Player>>,
     recalc_ev: &mut EventWriter<RecalcStats>,
 ) {
